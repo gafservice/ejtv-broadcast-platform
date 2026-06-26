@@ -1,217 +1,198 @@
-# Visión General del Sistema
+# Visión General del Sistema (System Overview)
 
-> *"Antes de comprender cada componente, primero debemos comprender el sistema completo."*
+> *"Toda plataforma comienza como una idea. La arquitectura convierte esa idea en un sistema. La ingeniería la convierte en una realidad."*
+
+---
+
+# Resumen Ejecutivo
+
+**EJTV Broadcast Platform** es una plataforma abierta para la distribución profesional de contenido audiovisual sobre redes IP.
+
+El proyecto nace con el propósito de construir una infraestructura modular, escalable y mantenible capaz de administrar, distribuir y supervisar flujos audiovisuales utilizando tecnologías abiertas y hardware estándar.
+
+Desde su concepción, la plataforma ha sido diseñada para separar claramente las responsabilidades de cada uno de sus componentes, permitiendo que cada servicio evolucione de forma independiente sin comprometer el funcionamiento general del sistema.
+
+Este documento presenta una visión global de la plataforma, describiendo su propósito, alcance y funcionamiento general.
+
+Su objetivo consiste en proporcionar una comprensión integral del sistema antes de abordar aspectos específicos relacionados con su arquitectura, implementación o configuración.
 
 ---
 
 # Introducción
 
-Todo sistema complejo resulta más fácil de comprender cuando primero se observa
-desde una perspectiva general.
+El desarrollo de una plataforma tecnológica requiere mucho más que la instalación de aplicaciones o la configuración de servidores.
 
-Intentar estudiar cada componente de manera aislada suele dificultar la
-comprensión de la plataforma y hace más complicado entender la relación que
-existe entre los diferentes servicios.
+Antes de seleccionar herramientas específicas es necesario comprender cuál será el propósito del sistema, cuáles problemas pretende resolver y cómo interactuarán sus diferentes componentes para alcanzar dicho objetivo.
 
-Por esta razón, antes de profundizar en aspectos como la instalación del
-sistema operativo, la configuración de la red o la implementación de los
-distintos servicios, es importante comprender cómo funciona la plataforma en su
-conjunto.
+Esta visión general constituye el punto de partida de **EJTV Broadcast Platform**.
 
-Este documento presenta una visión general de **EJTV Broadcast Platform** y
-describe el recorrido que realiza un flujo audiovisual desde que ingresa al
-servidor hasta que es entregado a un operador autorizado.
+Aquí no se describen configuraciones particulares ni procedimientos de instalación.
+
+El propósito de este documento consiste en explicar qué es la plataforma, cuál es su función dentro del ecosistema de distribución audiovisual y cuál será la filosofía que orientará su evolución durante los próximos años.
+
+Los aspectos relacionados con la arquitectura detallada, la infraestructura de red, los mecanismos de seguridad y la implementación de servicios se desarrollarán posteriormente en documentos especializados.
 
 ---
 
 # ¿Qué es EJTV Broadcast Platform?
 
-EJTV Broadcast Platform es una plataforma diseñada para recibir, administrar y
-distribuir contenido audiovisual utilizando infraestructura basada en redes IP.
+**EJTV Broadcast Platform** es una plataforma diseñada para administrar la distribución de contenido audiovisual utilizando infraestructura basada en redes IP.
 
-Su objetivo consiste en reemplazar el modelo tradicional de distribución
-mediante enlaces satelitales por una arquitectura moderna, abierta y
-completamente documentada.
+Su función principal consiste en recibir señales provenientes de diferentes fuentes, administrarlas de forma centralizada y distribuirlas hacia clientes autorizados mediante protocolos modernos de transporte de video.
 
-La plataforma ha sido diseñada para operar de forma continua, ofrecer altos
-niveles de disponibilidad y facilitar el mantenimiento mediante una
-arquitectura modular.
+La plataforma ha sido concebida para operar como el núcleo de un sistema de distribución profesional, incorporando progresivamente mecanismos de monitoreo, seguridad, administración y supervisión que permitan garantizar la continuidad del servicio.
 
-Durante la primera etapa del proyecto la distribución se realizará utilizando
-el protocolo **SRT (Secure Reliable Transport)**.
+Aunque durante las primeras etapas del proyecto la plataforma se concentrará en la distribución mediante el protocolo SRT, su diseño contempla desde el inicio la posibilidad de incorporar nuevos protocolos y servicios conforme evolucionen las necesidades operativas.
 
-En el futuro podrán incorporarse otros protocolos sin modificar la filosofía
-general de la plataforma.
+En consecuencia, EJTV Broadcast Platform no debe entenderse como un servidor dedicado a ejecutar una única aplicación, sino como una infraestructura capaz de integrar diferentes componentes especializados dentro de una arquitectura coherente y escalable.
 
 ---
 
-# Nuestro objetivo
+# El problema que buscamos resolver
 
-La plataforma tiene una única responsabilidad.
+Durante muchos años la distribución profesional de contenido audiovisual se apoyó principalmente en enlaces satelitales y redes privadas especialmente diseñadas para este propósito.
 
-Recibir contenido audiovisual ya codificado.
+Aunque estas soluciones ofrecieron elevados niveles de disponibilidad, también implicaron altos costos de implementación, dependencia de infraestructura especializada y una capacidad limitada para adaptarse rápidamente a nuevas tecnologías.
 
-Administrarlo de forma segura.
+El crecimiento de las redes IP, la aparición de protocolos de transporte confiables y la disponibilidad de hardware de alto desempeño han permitido desarrollar una nueva generación de plataformas de distribución audiovisual basadas en tecnologías abiertas.
 
-Distribuirlo hacia operadores autorizados.
+Sin embargo, disponer de un protocolo de transporte no es suficiente para construir una plataforma profesional.
 
-Nada más.
+También resulta necesario administrar el acceso a los contenidos, supervisar permanentemente el estado del sistema, registrar eventos relevantes, facilitar el mantenimiento y permitir la incorporación de nuevas capacidades sin afectar la operación existente.
 
-Una decisión importante del proyecto consiste en no utilizar el servidor para
-realizar procesos de codificación o transcodificación.
+EJTV Broadcast Platform surge precisamente como respuesta a esta necesidad.
 
-Estas tareas ya son ejecutadas por equipos especializados que forman parte de
-la infraestructura de producción.
+Su propósito consiste en integrar todos estos elementos dentro de una única plataforma organizada, modular y preparada para evolucionar conforme cambien las necesidades tecnológicas.
 
-Esta decisión permite reducir considerablemente el consumo de recursos y mejora
-la estabilidad del sistema.
+---
+
+# Objetivos de la plataforma
+
+La plataforma fue concebida con los siguientes objetivos generales.
+
+* Administrar la distribución profesional de contenido audiovisual sobre redes IP.
+* Facilitar la incorporación progresiva de nuevos protocolos de transporte.
+* Proporcionar mecanismos de administración centralizada.
+* Incorporar monitoreo permanente del estado operativo.
+* Implementar mecanismos de seguridad desde las primeras etapas del proyecto.
+* Facilitar el mantenimiento y la evolución futura del sistema.
+* Favorecer el uso de tecnologías abiertas y ampliamente documentadas.
+
+Estos objetivos constituyen la base sobre la cual se desarrollarán todos los componentes de la plataforma.
+
+---
+
+# Visión general del funcionamiento
+
+Desde una perspectiva funcional, el comportamiento general de la plataforma puede resumirse mediante una secuencia sencilla.
+
+El contenido audiovisual es recibido desde una fuente externa.
+
+Posteriormente, la plataforma organiza los diferentes flujos disponibles, aplica las políticas de administración correspondientes y prepara la información para su distribución hacia los clientes autorizados.
+
+Durante todo este proceso, diferentes servicios supervisan permanentemente el estado de operación del sistema, registran eventos relevantes y permiten administrar la plataforma mediante herramientas especializadas.
+
+Este funcionamiento puede representarse conceptualmente mediante el siguiente flujo general.
+
+```text
+Fuente de contenido
+         │
+         ▼
+ Recepción del flujo
+         │
+         ▼
+ Administración
+         │
+         ▼
+ Distribución
+         │
+         ▼
+ Clientes autorizados
+
+        ▲
+        │
+ Monitoreo y Administración
+```
+
+Este diagrama representa únicamente una visión conceptual del funcionamiento de la plataforma.
+
+La arquitectura detallada de cada uno de estos bloques será desarrollada en los documentos especializados correspondientes.
 
 ---
 
 # Componentes principales
 
-Desde una perspectiva funcional, la plataforma está formada por seis grandes
-componentes.
+Desde una perspectiva general, EJTV Broadcast Platform se organiza alrededor de cinco grandes componentes funcionales.
 
-## Fuente de contenido
+**Recepción**
 
-Corresponde al origen de la señal audiovisual.
+Representa el punto de ingreso de los diferentes flujos audiovisuales hacia la plataforma.
 
-Puede tratarse de un codificador profesional, un equipo Magewell o cualquier
-otro dispositivo capaz de generar un flujo SRT compatible con la plataforma.
+**Administración**
 
----
+Coordina el funcionamiento general del sistema, organiza los flujos disponibles y administra los recursos necesarios para su operación.
 
-## Servidor EJTV
+**Distribución**
 
-Constituye el núcleo operativo de la plataforma.
+Entrega el contenido hacia los diferentes clientes utilizando los protocolos habilitados por la plataforma.
 
-Su responsabilidad consiste en recibir los diferentes flujos audiovisuales,
-administrarlos y ponerlos a disposición de los clientes autorizados.
+**Monitoreo**
 
-Durante este proyecto utilizaremos una estación de trabajo Apple Mac Pro 5,1
-equipada con Ubuntu LTS como sistema operativo.
+Supervisa permanentemente el estado operativo del sistema, facilitando la detección temprana de fallas y el análisis del comportamiento de la plataforma.
 
----
+**Administración del sistema**
 
-## Plataforma de distribución
+Proporciona las herramientas necesarias para configurar, supervisar y mantener la infraestructura durante todo su ciclo de vida.
 
-Sobre el servidor se ejecutarán los servicios responsables de administrar y
-distribuir los flujos audiovisuales.
+Cada uno de estos componentes constituye una responsabilidad funcional claramente definida.
 
-Cada servicio cumplirá una función específica dentro de la arquitectura.
-
-La filosofía del proyecto consiste en evitar que un mismo componente asuma
-múltiples responsabilidades.
+La implementación específica de cada uno será desarrollada en documentos independientes.
 
 ---
 
-## Seguridad
+# Alcance
 
-Todos los accesos hacia la plataforma serán controlados mediante mecanismos de
-autenticación y políticas de seguridad.
+La presente versión de EJTV Broadcast Platform se concentrará inicialmente en la distribución profesional de contenido mediante el protocolo SRT.
 
-El objetivo consiste en garantizar que únicamente operadores previamente
-autorizados puedan acceder al contenido distribuido.
+No obstante, la plataforma ha sido concebida para facilitar la incorporación progresiva de nuevos protocolos, herramientas de monitoreo, mecanismos de seguridad y servicios administrativos conforme evolucionen los requerimientos del proyecto.
 
----
-
-## Monitoreo
-
-La plataforma incorporará herramientas que permitirán supervisar
-permanentemente el estado del servidor, los servicios y la disponibilidad de
-los flujos audiovisuales.
-
-El monitoreo constituye una herramienta fundamental para garantizar la
-continuidad del servicio.
+Esta estrategia permite desarrollar una plataforma preparada para crecer sin necesidad de rediseñar continuamente su estructura general.
 
 ---
 
-## Clientes
+# Evolución prevista
 
-Finalmente, los operadores de televisión por cable establecerán conexión con
-la plataforma para recibir los diferentes canales disponibles.
+La arquitectura conceptual de EJTV Broadcast Platform ha sido diseñada pensando en su evolución a largo plazo.
 
-Cada cliente accederá únicamente a los recursos para los cuales haya sido
-autorizado.
+En sus primeras etapas la plataforma operará sobre un único servidor físico, incorporando únicamente los servicios esenciales para la distribución del contenido.
 
----
+Posteriormente podrán añadirse nuevos componentes destinados a mejorar la disponibilidad, incrementar la capacidad de procesamiento, incorporar mecanismos de redundancia y facilitar la administración de infraestructuras más complejas.
 
-# Flujo general de operación
-
-El funcionamiento de la plataforma puede resumirse mediante el siguiente
-recorrido.
-
-```text
-                 Fuente de contenido
-                         │
-                         ▼
-               Recepción del flujo SRT
-                         │
-                         ▼
-                 Servidor EJTV
-                         │
-                         ▼
-              Administración del servicio
-                         │
-                         ▼
-               Control de acceso y seguridad
-                         │
-                         ▼
-               Distribución mediante SRT
-                         │
-                         ▼
-          Operadores de televisión por cable
-```
-
-Este flujo representa el comportamiento general de la plataforma y servirá
-como referencia para comprender los documentos técnicos que se desarrollarán en
-los capítulos siguientes.
+Esta evolución se realizará preservando siempre la organización general del sistema, permitiendo que nuevas tecnologías se integren sin alterar los principios fundamentales definidos para la plataforma.
 
 ---
 
-# Filosofía de operación
+# Documentos relacionados
 
-La plataforma ha sido diseñada siguiendo una idea muy sencilla.
+La información presentada en este documento constituye una visión general del proyecto.
 
-Cada componente realiza únicamente la función para la cual fue incorporado.
+Los aspectos específicos serán desarrollados en los siguientes documentos.
 
-Esta filosofía permite reducir la complejidad del sistema y facilita su
-mantenimiento.
-
-Como consecuencia, el servidor no realizará tareas que correspondan a otros
-equipos de la infraestructura audiovisual.
-
-Esta separación de responsabilidades constituye uno de los principios
-fundamentales de EJTV Broadcast Platform.
-
----
-
-# Evolución de la plataforma
-
-Aunque la primera versión se concentrará exclusivamente en la distribución de
-contenido mediante SRT, la arquitectura ha sido diseñada para facilitar su
-crecimiento.
-
-En futuras etapas podrán incorporarse nuevos protocolos, herramientas de
-monitoreo, mecanismos avanzados de seguridad y funciones de administración sin
-modificar la estructura general del sistema.
-
-Esta capacidad de evolución constituye uno de los principales objetivos del
-proyecto.
+* **ARCHITECTURE.md** — Arquitectura detallada de la plataforma.
+* **NETWORK_ARCHITECTURE.md** — Infraestructura y organización de la red.
+* **DATA_FLOW.md** — Flujo interno de la información.
+* **SECURITY_ARCHITECTURE.md** — Modelo de seguridad.
+* **installation/** — Procedimientos de instalación.
+* **services/** — Configuración y operación de cada servicio.
 
 ---
 
 # Conclusión
 
-Comprender la plataforma desde una perspectiva general facilita el estudio de
-cada uno de sus componentes.
+EJTV Broadcast Platform representa una visión de largo plazo para la construcción de una plataforma profesional de distribución audiovisual basada en tecnologías abiertas.
 
-Los documentos que siguen desarrollarán en detalle aspectos como la
-arquitectura, la red, la seguridad, los servicios y los procedimientos de
-instalación.
+Más que una colección de aplicaciones o servicios independientes, la plataforma constituye un sistema organizado alrededor de responsabilidades claramente definidas, preparado para evolucionar conforme cambien las necesidades operativas y aparezcan nuevas tecnologías.
 
-Sin embargo, todos ellos describen diferentes partes de una misma plataforma.
+Este documento establece la visión general del proyecto y proporciona el contexto necesario para comprender los documentos especializados que describirán posteriormente la arquitectura, la infraestructura, los servicios y los procedimientos de operación.
 
-Esa visión integral constituye el fundamento sobre el cual se desarrollará
-todo el proyecto **EJTV Broadcast Platform**.
+A partir de este punto, el desarrollo de la plataforma se apoyará en una arquitectura coherente que permitirá incorporar nuevas capacidades sin perder la simplicidad, modularidad y mantenibilidad que constituyen los principios fundamentales de **EJTV Broadcast Platform**.
