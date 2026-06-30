@@ -1,0 +1,51 @@
+Jun 29 09:28:53 ejtv-01 systemd[1]: Started mediamtx.service - MediaMTX streaming server.
+Jun 29 09:28:53 ejtv-01 mediamtx[103749]: 2026/06/29 09:28:53 INF MediaMTX v1.19.0, linux, amd64
+Jun 29 09:28:53 ejtv-01 mediamtx[103749]: 2026/06/29 09:28:53 INF configuration loaded from /opt/ejtv/mediamtx/config/mediamtx.yml
+Jun 29 09:28:53 ejtv-01 mediamtx[103749]: 2026/06/29 09:28:53 INF [RTSP] started with listeners on :8554 (TCP/RTSP), :8000 (UDP/RTP), :8001 (UDP/RTCP)
+Jun 29 09:28:53 ejtv-01 mediamtx[103749]: 2026/06/29 09:28:53 INF [RTMP] started with listener on :1935 (TCP/RTMP)
+Jun 29 09:28:53 ejtv-01 mediamtx[103749]: 2026/06/29 09:28:53 INF [HLS] started with listener on :8888 (TCP/HTTP)
+Jun 29 09:28:53 ejtv-01 mediamtx[103749]: 2026/06/29 09:28:53 INF [WebRTC] started with listeners on :8889 (TCP/HTTP), :8189 (UDP/ICE)
+Jun 29 09:28:53 ejtv-01 mediamtx[103749]: 2026/06/29 09:28:53 INF [SRT] started with listener on :8890 (UDP/SRT)
+Jun 29 09:28:53 ejtv-01 mediamtx[103749]: 2026/06/29 09:28:53 INF [MoQ] started with listeners on :8892 (TCP/HTTPS2), :8892 (UDP/HTTP3)
+Jun 29 16:17:39 ejtv-01 mediamtx[103749]: 2026/06/29 16:17:39 INF [RTMP] [conn 127.0.0.1:39332] opened
+Jun 29 16:17:41 ejtv-01 mediamtx[103749]: 2026/06/29 16:17:41 INF [path live/test] stream is available and online, 2 tracks (H264, MPEG-4 Audio)
+Jun 29 16:17:41 ejtv-01 mediamtx[103749]: 2026/06/29 16:17:41 INF [RTMP] [conn 127.0.0.1:39332] is publishing to path 'live/test'
+Jun 29 16:19:50 ejtv-01 mediamtx[103749]: 2026/06/29 16:19:50 INF [RTSP] [conn 127.0.0.1:35256] opened
+Jun 29 16:19:50 ejtv-01 mediamtx[103749]: 2026/06/29 16:19:50 INF [RTSP] [session 5dce1f98] created by 127.0.0.1:35256
+Jun 29 16:19:50 ejtv-01 mediamtx[103749]: 2026/06/29 16:19:50 INF [RTSP] [session 5dce1f98] is reading from path 'live/test', with UDP, 2 tracks (H264, MPEG-4 Audio)
+Jun 29 16:21:20 ejtv-01 mediamtx[103749]: 2026/06/29 16:21:20 INF [RTMP] [conn 127.0.0.1:39332] closed: EOF
+Jun 29 16:21:20 ejtv-01 mediamtx[103749]: 2026/06/29 16:21:20 INF [RTSP] [conn 127.0.0.1:35256] closed: terminated
+Jun 29 16:21:20 ejtv-01 mediamtx[103749]: 2026/06/29 16:21:20 INF [RTSP] [session 5dce1f98] destroyed: terminated
+Jun 29 16:23:39 ejtv-01 mediamtx[103749]: 2026/06/29 16:23:39 INF [RTSP] [conn 127.0.0.1:36564] opened
+Jun 29 16:23:39 ejtv-01 mediamtx[103749]: 2026/06/29 16:23:39 INF [RTSP] [conn 127.0.0.1:36564] closed: no stream is available on path 'live/test'
+Jun 29 16:24:11 ejtv-01 mediamtx[103749]: 2026/06/29 16:24:11 INF [RTSP] [conn 127.0.0.1:49916] opened
+Jun 29 16:24:11 ejtv-01 mediamtx[103749]: 2026/06/29 16:24:11 INF [RTSP] [conn 127.0.0.1:49916] closed: no stream is available on path 'live/test'
+Jun 29 16:24:34 ejtv-01 mediamtx[103749]: 2026/06/29 16:24:34 INF [RTMP] [conn 127.0.0.1:49984] opened
+Jun 29 16:24:35 ejtv-01 mediamtx[103749]: 2026/06/29 16:24:35 INF [path live/test] stream is available and online, 2 tracks (H264, MPEG-4 Audio)
+Jun 29 16:24:35 ejtv-01 mediamtx[103749]: 2026/06/29 16:24:35 INF [RTMP] [conn 127.0.0.1:49984] is publishing to path 'live/test'
+Jun 29 16:24:39 ejtv-01 mediamtx[103749]: 2026/06/29 16:24:39 INF [RTSP] [conn 127.0.0.1:37284] opened
+Jun 29 16:24:39 ejtv-01 mediamtx[103749]: 2026/06/29 16:24:39 INF [RTSP] [session 6266d243] created by 127.0.0.1:37284
+Jun 29 16:24:39 ejtv-01 mediamtx[103749]: 2026/06/29 16:24:39 INF [RTSP] [session 6266d243] is reading from path 'live/test', with UDP, 2 tracks (H264, MPEG-4 Audio)
+Jun 29 16:24:40 ejtv-01 mediamtx[103749]: 2026/06/29 16:24:40 INF [RTSP] [session 6266d243] destroyed: torn down by 127.0.0.1:37284
+Jun 29 16:24:40 ejtv-01 mediamtx[103749]: 2026/06/29 16:24:40 INF [RTSP] [conn 127.0.0.1:37284] closed: EOF
+Jun 29 16:25:15 ejtv-01 mediamtx[103749]: 2026/06/29 16:25:15 INF [RTMP] [conn 127.0.0.1:49984] closed: EOF
+Jun 29 16:25:19 ejtv-01 mediamtx[103749]: 2026/06/29 16:25:19 INF [RTSP] [conn 127.0.0.1:55688] opened
+Jun 29 16:25:19 ejtv-01 mediamtx[103749]: 2026/06/29 16:25:19 INF [RTSP] [conn 127.0.0.1:55688] closed: no stream is available on path 'live/test'
+Jun 29 16:25:24 ejtv-01 mediamtx[103749]: 2026/06/29 16:25:24 INF [RTSP] [conn 127.0.0.1:55704] opened
+Jun 29 16:25:24 ejtv-01 mediamtx[103749]: 2026/06/29 16:25:24 INF [RTSP] [conn 127.0.0.1:55704] closed: no stream is available on path 'live/test'
+Jun 29 16:25:42 ejtv-01 mediamtx[103749]: 2026/06/29 16:25:42 INF [RTMP] [conn 127.0.0.1:50630] opened
+Jun 29 16:25:43 ejtv-01 mediamtx[103749]: 2026/06/29 16:25:43 INF [path live/test] stream is available and online, 2 tracks (H264, MPEG-4 Audio)
+Jun 29 16:25:43 ejtv-01 mediamtx[103749]: 2026/06/29 16:25:43 INF [RTMP] [conn 127.0.0.1:50630] is publishing to path 'live/test'
+Jun 29 16:26:04 ejtv-01 mediamtx[103749]: 2026/06/29 16:26:04 INF [RTSP] [conn 127.0.0.1:47592] opened
+Jun 29 16:26:04 ejtv-01 mediamtx[103749]: 2026/06/29 16:26:04 INF [RTSP] [session d9c238fd] created by 127.0.0.1:47592
+Jun 29 16:26:04 ejtv-01 mediamtx[103749]: 2026/06/29 16:26:04 INF [RTSP] [session d9c238fd] is reading from path 'live/test', with UDP, 2 tracks (H264, MPEG-4 Audio)
+Jun 29 16:26:06 ejtv-01 mediamtx[103749]: 2026/06/29 16:26:06 INF [RTSP] [session d9c238fd] destroyed: torn down by 127.0.0.1:47592
+Jun 29 16:26:06 ejtv-01 mediamtx[103749]: 2026/06/29 16:26:06 INF [RTSP] [conn 127.0.0.1:47592] closed: EOF
+Jun 29 16:26:22 ejtv-01 mediamtx[103749]: 2026/06/29 16:26:22 INF [RTSP] [conn 127.0.0.1:42214] opened
+Jun 29 16:26:22 ejtv-01 mediamtx[103749]: 2026/06/29 16:26:22 INF [RTSP] [session defcae0b] created by 127.0.0.1:42214
+Jun 29 16:26:22 ejtv-01 mediamtx[103749]: 2026/06/29 16:26:22 INF [RTSP] [session defcae0b] is reading from path 'live/test', with UDP, 2 tracks (H264, MPEG-4 Audio)
+Jun 29 16:26:24 ejtv-01 mediamtx[103749]: 2026/06/29 16:26:24 INF [RTSP] [session defcae0b] destroyed: torn down by 127.0.0.1:42214
+Jun 29 16:26:24 ejtv-01 mediamtx[103749]: 2026/06/29 16:26:24 INF [RTSP] [conn 127.0.0.1:42214] closed: EOF
+Jun 29 17:18:09 ejtv-01 mediamtx[103749]: 2026/06/29 17:18:09 INF [RTMP] [conn 127.0.0.1:50630] closed: EOF
+Jun 29 17:18:39 ejtv-01 mediamtx[103749]: 2026/06/29 17:18:39 INF [RTSP] [conn 127.0.0.1:38286] opened
+Jun 29 17:18:39 ejtv-01 mediamtx[103749]: 2026/06/29 17:18:39 INF [RTSP] [conn 127.0.0.1:38286] closed: no stream is available on path 'live/test'

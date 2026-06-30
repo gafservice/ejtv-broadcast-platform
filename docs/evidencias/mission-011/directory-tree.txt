@@ -1,0 +1,22 @@
+/opt/ejtv/mediamtx
+├── auto.crt
+├── auto.key
+├── backup
+├── bin
+│   └── mediamtx
+├── config
+│   └── mediamtx.yml
+├── logs
+├── recordings
+├── releases
+│   ├── checksums.sha256
+│   ├── installed_versions.log
+│   ├── mediamtx_v1.19.0_linux_amd64.tar.gz
+│   └── v1.19.0
+│       ├── LICENSE
+│       ├── mediamtx
+│       └── mediamtx.yml
+├── scripts
+└── tests
+
+10 directories, 10 files

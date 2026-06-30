@@ -1,0 +1,97 @@
+===== DATE =====
+Mon Jun 29 05:40:23 PM CST 2026
+
+===== HOST =====
+ Static hostname: ejtv-01
+       Icon name: computer-desktop
+         Chassis: desktop 🖥️
+      Machine ID: 7a25d96551054d1098ef4a9030109547
+         Boot ID: 460ecc3cffed47a38ac48cb151e318af
+Operating System: Ubuntu 24.04.4 LTS
+          Kernel: Linux 6.17.0-35-generic
+    Architecture: x86-64
+ Hardware Vendor: Apple Inc.
+  Hardware Model: MacPro5,1
+Firmware Version:     MP51.88Z.007F.B03.1010071432
+
+===== KERNEL =====
+Linux ejtv-01 6.17.0-35-generic #35~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Tue May 26 19:30:42 UTC 2 x86_64 x86_64 x86_64 GNU/Linux
+
+===== CPU =====
+Architecture:                            x86_64
+CPU op-mode(s):                          32-bit, 64-bit
+Address sizes:                           36 bits physical, 48 bits virtual
+Byte Order:                              Little Endian
+CPU(s):                                  8
+On-line CPU(s) list:                     0-7
+Vendor ID:                               GenuineIntel
+Model name:                              Intel(R) Xeon(R) CPU           W3530  @ 2.80GHz
+CPU family:                              6
+Model:                                   26
+Thread(s) per core:                      2
+Core(s) per socket:                      4
+Socket(s):                               1
+Stepping:                                5
+Frequency boost:                         enabled
+CPU(s) scaling MHz:                      100%
+CPU max MHz:                             2926.0000
+CPU min MHz:                             1596.0000
+BogoMIPS:                                5585.64
+Flags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ht tm pbe syscall nx rdtscp lm constant_tsc arch_perfmon pebs bts nopl xtopology nonstop_tsc cpuid aperfmperf pni dtes64 monitor ds_cpl vmx est tm2 ssse3 cx16 xtpr pdcm dca sse4_1 sse4_2 popcnt lahf_lm pti ssbd ibrs ibpb stibp tpr_shadow flexpriority ept vpid dtherm ida vnmi flush_l1d
+Virtualization:                          VT-x
+L1d cache:                               128 KiB (4 instances)
+L1i cache:                               128 KiB (4 instances)
+L2 cache:                                1 MiB (4 instances)
+L3 cache:                                8 MiB (1 instance)
+NUMA node(s):                            1
+NUMA node0 CPU(s):                       0-7
+Vulnerability Gather data sampling:      Not affected
+Vulnerability Ghostwrite:                Not affected
+Vulnerability Indirect target selection: Not affected
+Vulnerability Itlb multihit:             KVM: Mitigation: Split huge pages
+Vulnerability L1tf:                      Mitigation; PTE Inversion; VMX conditional cache flushes, SMT vulnerable
+Vulnerability Mds:                       Vulnerable: Clear CPU buffers attempted, no microcode; SMT vulnerable
+Vulnerability Meltdown:                  Mitigation; PTI
+Vulnerability Mmio stale data:           Not affected
+Vulnerability Old microcode:             Not affected
+Vulnerability Reg file data sampling:    Not affected
+Vulnerability Retbleed:                  Not affected
+Vulnerability Spec rstack overflow:      Not affected
+Vulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl
+Vulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization
+Vulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; IBRS_FW; STIBP conditional; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected
+Vulnerability Srbds:                     Not affected
+Vulnerability Tsa:                       Not affected
+Vulnerability Tsx async abort:           Not affected
+Vulnerability Vmscape:                   Not affected
+
+===== MEMORY =====
+               total        used        free      shared  buff/cache   available
+Mem:           7.7Gi       5.1Gi       999Mi        42Mi       2.1Gi       2.7Gi
+Swap:          4.0Gi       288Mi       3.7Gi
+
+===== DISK =====
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/sda2       468G   23G  422G   5% /
+
+===== MEDIAMTX =====
+● mediamtx.service - MediaMTX streaming server
+     Loaded: loaded (/etc/systemd/system/mediamtx.service; enabled; preset: enabled)
+     Active: active (running) since Mon 2026-06-29 09:28:53 CST; 8h ago
+   Main PID: 103749 (mediamtx)
+      Tasks: 13 (limit: 9355)
+     Memory: 14.9M (peak: 24.3M)
+        CPU: 43.486s
+     CGroup: /system.slice/mediamtx.service
+             └─103749 /opt/ejtv/mediamtx/bin/mediamtx /opt/ejtv/mediamtx/config/mediamtx.yml
+
+Jun 29 16:26:22 ejtv-01 mediamtx[103749]: 2026/06/29 16:26:22 INF [RTSP] [session defcae0b] is reading from path 'live/test', with UDP, 2 tracks (H264, MPEG-4 Audio)
+Jun 29 16:26:24 ejtv-01 mediamtx[103749]: 2026/06/29 16:26:24 INF [RTSP] [session defcae0b] destroyed: torn down by 127.0.0.1:42214
+Jun 29 16:26:24 ejtv-01 mediamtx[103749]: 2026/06/29 16:26:24 INF [RTSP] [conn 127.0.0.1:42214] closed: EOF
+Jun 29 17:18:09 ejtv-01 mediamtx[103749]: 2026/06/29 17:18:09 INF [RTMP] [conn 127.0.0.1:50630] closed: EOF
+Jun 29 17:18:39 ejtv-01 mediamtx[103749]: 2026/06/29 17:18:39 INF [RTSP] [conn 127.0.0.1:38286] opened
+Jun 29 17:18:39 ejtv-01 mediamtx[103749]: 2026/06/29 17:18:39 INF [RTSP] [conn 127.0.0.1:38286] closed: no stream is available on path 'live/test'
+Jun 29 17:37:08 ejtv-01 mediamtx[103749]: 2026/06/29 17:37:08 INF [RTMP] [conn 127.0.0.1:45072] opened
+Jun 29 17:37:09 ejtv-01 mediamtx[103749]: 2026/06/29 17:37:09 INF [path live/test] stream is available and online, 2 tracks (H264, MPEG-4 Audio)
+Jun 29 17:37:09 ejtv-01 mediamtx[103749]: 2026/06/29 17:37:09 INF [RTMP] [conn 127.0.0.1:45072] is publishing to path 'live/test'
+Jun 29 17:37:27 ejtv-01 mediamtx[103749]: 2026/06/29 17:37:27 INF [RTMP] [conn 127.0.0.1:45072] closed: EOF
