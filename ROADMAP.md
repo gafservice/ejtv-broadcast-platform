@@ -2,9 +2,14 @@
 
 ## EJTV Broadcast Platform
 
+
+Estado del proyecto:
+Fase II completada
+
 **Estado del proyecto:** Fase II en desarrollo
 
-**Última actualización:** 2026-06-30
+**Última actualización:** 2026-07-01
+
 
 ---
 
@@ -20,23 +25,28 @@ El ROADMAP no sustituye las Misiones, los Baselines, los CHANGELOG ni la documen
 
 # 2. Estado actual
 
-Al cierre de la **MISSION-013**, la plataforma dispone de una infraestructura multimedia funcional compuesta por:
+Al cierre de la MISSION-016..., la plataforma dispone de una infraestructura multimedia funcional compuesta por:
 
 * Ubuntu Server 24.04.4 LTS.
 * Servicio SSH.
 * Cockpit.
 * Firewall UFW.
 * Sincronización horaria mediante `systemd-timesyncd`.
-* MediaMTX v1.19.0.
+* MediaMTX v1.19.2.
 * FFmpeg 6.1.1.
 * RTMP completamente implementado y validado.
 * SRT completamente implementado y validado.
+* HLS completamente implementado y validado.
+* WebRTC completamente implementado y validado.
 * Documentación técnica estructurada.
 * CHANGELOG por misión.
 * Baselines por misión.
 * Acceptance Tests.
 * Scripts de mantenimiento.
 * Arquitectura documental consolidada.
+* Validación End-to-End completada.
+* Validación de interoperabilidad entre protocolos.
+* Plataforma multimedia completamente integrada.
 
 ---
 
@@ -66,7 +76,7 @@ Construir la base operativa del servidor Ubuntu, incluyendo administración remo
 
 ## Fase II — Infraestructura multimedia
 
-**Estado:** 🚧 En desarrollo
+**Estado:** ✅ Completada
 
 **Objetivo**
 
@@ -74,13 +84,13 @@ Implementar los protocolos de contribución y distribución multimedia soportado
 
 | Misión      | Estado | Descripción                  |
 | ----------- | :----: | ---------------------------- |
-| MISSION-010 |    ✅   | MediaMTX                     |
-| MISSION-011 |    ✅   | FFmpeg                       |
-| MISSION-012 |    ✅   | RTMP                         |
-| MISSION-013 |    ✅   | SRT                          |
-| MISSION-014 |    ⏳   | HLS                          |
-| MISSION-015 |    ⏳   | WebRTC                       |
-| MISSION-016 |    ⏳   | Validación extremo a extremo |
+| MISSION-010 |   ✅   | MediaMTX                     |
+| MISSION-011 |   ✅   | FFmpeg                       |
+| MISSION-012 |   ✅   | RTMP                         |
+| MISSION-013 |   ✅   | SRT                          |
+| MISSION-014 |   ✅   | HLS                          |
+| MISSION-015 |   ✅   | WebRTC                       |
+| MISSION-016 |   ✅   | Validación extremo a extremo |
 
 ---
 
@@ -123,28 +133,30 @@ Preparar la plataforma para operación continua y despliegue estable.
 
 # 4. Componentes implementados
 
-| Componente    | Estado | Documento                   |
-| ------------- | :----: | --------------------------- |
-| Ubuntu Server |    ✅   | `docs/installation/`        |
-| SSH           |    ✅   | `docs/services/ssh.md`      |
-| Cockpit       |    ✅   | `docs/services/cockpit.md`  |
-| Firewall UFW  |    ✅   | `docs/network/firewall.md`  |
-| NTP           |    ✅   | `docs/services/ntp.md`      |
-| MediaMTX      |    ✅   | `docs/services/mediamtx.md` |
-| FFmpeg        |    ✅   | `docs/services/ffmpeg.md`   |
-| RTMP          |    ✅   | `docs/services/rtmp.md`     |
-| SRT           |    ✅   | `docs/services/srt.md`      |
+| Componente    | Estado | Documento                      |
+| ------------- | :----: | ------------------------------ |
+| Ubuntu Server |   ✅   | `docs/installation/`           |
+| SSH           |   ✅   | `docs/services/ssh.md`         |
+| Cockpit       |   ✅   | `docs/services/cockpit.md`     |
+| Firewall UFW  |   ✅   | `docs/network/firewall.md`     |
+| NTP           |   ✅   | `docs/services/ntp.md`         |
+| MediaMTX      |   ✅   | `docs/services/mediamtx.md`    |
+| FFmpeg        |   ✅   | `docs/services/ffmpeg.md`      |
+| RTMP          |   ✅   | `docs/services/rtmp.md`        |
+| SRT           |   ✅   | `docs/services/srt.md`         |
+| HLS           |   ✅   | `docs/services/hls.md`         |
+| WebRTC        |   ✅   | `docs/services/webrtc.md`      |
 
 # 5. Estado de los protocolos multimedia
 
-| Protocolo | Estado |                Disponible desde                |
-| --------- | :----: | :--------------------------------------------: |
-| RTSP      |    ✅   |             MISSION-010 (MediaMTX)             |
-| RTMP      |    ✅   |                   MISSION-012                  |
-| SRT       |    ✅   |                   MISSION-013                  |
-| HLS       |    ⏳   |                   MISSION-014                  |
-| WebRTC    |    ⏳   |                   MISSION-015                  |
-| MoQ       |    ⏳   | Soportado por MediaMTX (Implementación futura) |
+| Protocolo | Estado | Disponible desde |
+| --------- | :----: | :--------------: |
+| RTSP      |   ✅   | MISSION-010 (MediaMTX) |
+| RTMP      |   ✅   | MISSION-012 |
+| SRT       |   ✅   | MISSION-013 |
+| HLS       |   ✅   | MISSION-014 |
+| WebRTC    |   ✅   | MISSION-015 |
+| MoQ       |   ⏳   | Implementación futura |
 
 ---
 
@@ -181,25 +193,25 @@ Una misión únicamente se considera finalizada cuando cumple satisfactoriamente
 
 ---
 
+
 # 8. Próxima misión
 
-## MISSION-014 — HLS
+## MISSION-017 — Seguridad y endurecimiento de la plataforma
 
 **Objetivo preliminar**
 
-Implementar, configurar, validar y documentar completamente el protocolo **HTTP Live Streaming (HLS)** sobre MediaMTX, incorporando:
+Iniciar la tercera fase del proyecto incorporando mecanismos de protección y operación segura para la plataforma multimedia.
 
-* implementación funcional;
-* validación técnica;
-* documentación del servicio;
+La misión contempla:
+
+* implementación de Fail2ban;
+* endurecimiento de servicios;
+* protección contra intentos de acceso no autorizados;
+* documentación técnica;
 * Acceptance Test;
-* script de mantenimiento;
 * actualización del CHANGELOG;
 * actualización del ROADMAP;
-* Baseline correspondiente;
-* revisión técnica final.
-
----
+* Baseline correspondiente.
 
 # 9. Notas de ingeniería
 
@@ -218,25 +230,30 @@ Debe actualizarse al cierre de cada misión para reflejar:
 
 # 10. Hitos alcanzados
 
-Al cierre de la **MISSION-013** se han alcanzado los siguientes hitos principales:
+Al cierre de la MISSION-016 se han alcanzado los siguientes hitos principales:
 
 | Hito                                | Estado |
 | ----------------------------------- | :----: |
-| Plataforma Ubuntu instalada         |    ✅   |
-| Arquitectura documental consolidada |    ✅   |
-| Metodología basada en Misiones      |    ✅   |
-| Sistema de Baselines                |    ✅   |
-| CHANGELOG por misión                |    ✅   |
-| Acceptance Tests                    |    ✅   |
-| SSH operativo                       |    ✅   |
-| Cockpit operativo                   |    ✅   |
-| Firewall documentado                |    ✅   |
-| NTP operativo                       |    ✅   |
-| MediaMTX operativo                  |    ✅   |
-| FFmpeg integrado                    |    ✅   |
-| RTMP operativo                      |    ✅   |
-| SRT operativo                       |    ✅   |
-| Scripts de mantenimiento            |    ✅   |
+| Plataforma Ubuntu instalada         |   ✅   |
+| Arquitectura documental consolidada |   ✅   |
+| Metodología basada en Misiones      |   ✅   |
+| Sistema de Baselines                |   ✅   |
+| CHANGELOG por misión                |   ✅   |
+| Acceptance Tests                    |   ✅   |
+| SSH operativo                       |   ✅   |
+| Cockpit operativo                   |   ✅   |
+| Firewall documentado                |   ✅   |
+| NTP operativo                       |   ✅   |
+| MediaMTX operativo                  |   ✅   |
+| FFmpeg integrado                    |   ✅   |
+| RTMP operativo                      |   ✅   |
+| SRT operativo                       |   ✅   |
+| HLS operativo                       |   ✅   |
+| WebRTC operativo                    |   ✅   |
+| Scripts de mantenimiento            |   ✅   |
+| Validación End-to-End               |   ✅   |
+| Interoperabilidad multiprotocolo    |   ✅   |
+| Plataforma multimedia integrada     |   ✅   |
 
 Estos hitos constituyen la línea base funcional sobre la cual continuará evolucionando la plataforma.
 
@@ -249,8 +266,6 @@ La **EJTV Broadcast Platform** evolucionará de forma incremental hasta converti
 Entre los componentes previstos para futuras etapas se encuentran:
 
 * OBS Studio.
-* HLS.
-* WebRTC.
 * NGINX.
 * PostgreSQL.
 * Grafana.
@@ -280,14 +295,19 @@ Como mínimo deberán reflejarse:
 
 Ninguna misión podrá considerarse oficialmente cerrada sin verificar que este documento refleja correctamente el estado de la plataforma.
 
----
+# Estado de integración
 
-# Estado del ROADMAP
+La plataforma ha completado exitosamente la validación integrada de los protocolos RTSP, RTMP, SRT, HLS y WebRTC.
 
-**Versión:** 1.3
+La distribución de un único flujo multimedia mediante MediaMTX fue validada de extremo a extremo utilizando clientes representativos para cada protocolo, confirmando la interoperabilidad de la arquitectura implementada.
 
-**Estado:** Vigente
+## Estado de validación de fuentes
 
-**Última misión incorporada:** MISSION-013
-
-**Próxima revisión:** Al cierre de la MISSION-014.
+| Fuente | Estado |
+|---------|:------:|
+| FFmpeg | ✅ |
+| OBS Remoto | ✅ |
+| OBS Local | ✅ |
+| Cámaras RTSP | ⏳ |
+| Capturadora HDMI | ⏳ |
+| DeckLink Capture | ⏳ |

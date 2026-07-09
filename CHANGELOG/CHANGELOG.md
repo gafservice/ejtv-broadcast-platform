@@ -47,3 +47,82 @@ Cada archivo de CHANGELOG correspondiente a una misión documenta, cuando aplica
 * Estado final de la misión.
 
 Esta organización permite consultar de forma independiente la evolución técnica de cada etapa del proyecto, facilita la trazabilidad de los cambios realizados y proporciona un historial cronológico de la evolución de la plataforma **EJTV Broadcast Platform**.
+
+
+# Versión 1.15
+
+## MISSION-015 — WebRTC
+
+### Fecha
+
+30 de junio de 2026
+
+### Nuevas funcionalidades
+
+- Implementación oficial del servicio WebRTC sobre MediaMTX.
+- Validación de distribución multimedia con latencia ultrabaja.
+- Publicación RTSP mediante FFmpeg y conversión automática hacia WebRTC.
+- Validación de negociación ICE.
+- Validación de Peer Connection.
+- Validación de transmisión de video H.264.
+- Validación de transmisión de audio Opus.
+- Actualización de MediaMTX desde la versión 1.19.0 hacia la versión 1.19.2.
+- Incorporación del documento `docs/services/webrtc.md`.
+- Incorporación del Acceptance Test `tests/mission-015-webrtc.md`.
+- Incorporación del script `scripts/maintenance/webrtc-status.sh`.
+
+### Estado
+
+MISSION-015 completada satisfactoriamente.
+
+
+
+## [MISSION-016] — Validación extremo a extremo
+
+**Fecha:** 2026-07-01
+
+### Agregado
+
+- Validación integral de la plataforma multimedia EJTV Broadcast Platform.
+- Verificación del funcionamiento conjunto de RTSP, RTMP, SRT, HLS y WebRTC.
+- Validación de interoperabilidad entre todos los protocolos.
+- Pruebas de operación simultánea utilizando un único flujo multimedia.
+- Verificación de estabilidad operativa de MediaMTX y FFmpeg.
+- Medición y registro del consumo de recursos del servidor.
+- Acceptance Test de integración completado.
+- Validación funcional mediante clientes RTSP, RTMP, SRT, HLS y WebRTC.
+- Documentación técnica de la validación End-to-End.
+- Baseline BL-016 incorporada.
+
+### Observaciones
+
+- RTMP distribuye únicamente el flujo de video cuando la fuente utiliza audio Opus; para producción se recomienda AAC.
+- La validación HLS se realizó exitosamente mediante `ffprobe` en modo Low-Latency HLS.
+- Se efectuó una validación complementaria con flujo HEVC 1920×1080 y audio AAC sobre RTSP y SRT, como referencia para futuras pruebas con señales broadcast reales.
+
+
+
+## [MISSION-016] - Validación de OBS como fuente RTMP
+
+### Agregado
+
+- Validada la integración de OBS Studio como fuente de publicación RTMP hacia MediaMTX.
+- Se verificó la publicación desde un equipo remoto (Ubuntu) y desde el propio servidor.
+- Se definió el procedimiento estándar de configuración de OBS para la plataforma EJTV.
+- Se validó la interoperabilidad con los protocolos RTMP, HLS, SRT y WebRTC.
+
+### Validaciones realizadas
+
+| Protocolo | Estado |
+|-----------|:------:|
+| RTMP | ✅ |
+| HLS | ✅ |
+| SRT | ✅ |
+| WebRTC | ⚠ Video correcto, audio pendiente de revisión |
+| RTSP | ⚠ Servicio operativo; pendiente apertura del puerto 8554/TCP en UFW |
+
+### Incidencias encontradas
+
+- OBS en Ubuntu presentaba cierre inesperado al agregar dispositivos V4L2 en ausencia de dispositivos `/dev/video*`.
+- Se confirmó que la tarjeta DeckLink Mini Monitor corresponde únicamente a salida de video y no puede utilizarse como fuente de captura.
+- Se detectó la ausencia de la regla UFW para el puerto 8554/TCP, impidiendo el acceso RTSP desde otros equipos de la red.
