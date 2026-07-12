@@ -1,0 +1,111 @@
+# EJTV Control Center
+
+# ROADMAP
+
+Versión: 1.0
+
+---
+
+# Objetivo
+
+Definir la estrategia de construcción del EJTV Control Center.
+
+---
+
+# Filosofía
+
+Construir primero una plataforma funcional.
+
+Después una plataforma cómoda.
+
+Finalmente una plataforma inteligente.
+
+---
+
+# FASE 1
+
+Infraestructura
+
+Backend
+
+Frontend
+
+Autenticación
+
+Base de datos
+
+API
+
+---
+
+# FASE 2
+
+Dashboard
+
+Canales
+
+Servicios
+
+Monitoreo
+
+Logs
+
+---
+
+# FASE 3
+
+Clientes
+
+Usuarios
+
+Roles
+
+Permisos
+
+Reportes
+
+---
+
+# FASE 4
+
+Configuración
+
+Backups
+
+Nodos
+
+Interfaces
+
+---
+
+# FASE 5
+
+Publicidad
+
+Programación
+
+Facturación
+
+IA
+
+Automatización
+
+---
+
+# Estado
+
+□ Backend
+
+□ Frontend
+
+□ Dashboard
+
+□ Channels
+
+□ Services
+
+□ Monitoring
+
+□ Reports
+
+...
