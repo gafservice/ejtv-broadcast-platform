@@ -126,3 +126,65 @@ MISSION-015 completada satisfactoriamente.
 - OBS en Ubuntu presentaba cierre inesperado al agregar dispositivos V4L2 en ausencia de dispositivos `/dev/video*`.
 - Se confirmó que la tarjeta DeckLink Mini Monitor corresponde únicamente a salida de video y no puede utilizarse como fuente de captura.
 - Se detectó la ausencia de la regla UFW para el puerto 8554/TCP, impidiendo el acceso RTSP desde otros equipos de la red.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# MISSION-017 — Diseño Arquitectónico del EJTV Control Center
+
+**Estado:** Finalizada
+
+## Added
+
+- Creación del subproyecto **EJTV Control Center**.
+- Definición de la arquitectura general del sistema.
+- Diseño del modelo de dominio.
+- Definición de la API REST versión 1.
+- Diseño del modelo inicial de roles y permisos.
+- Definición de la navegación del sistema.
+- Elaboración de la guía de estilo.
+- Creación del README, ROADMAP y CHANGELOG propios del Control Center.
+- Incorporación de la documentación técnica del Control Center.
+
+## Changed
+
+- La plataforma EJTV Broadcast Platform incorpora oficialmente una segunda línea de desarrollo orientada a la administración de la infraestructura multimedia.
+- Se establece una separación formal entre la Plataforma Multimedia y el Control Center.
+
+## Documentation
+
+Se incorporaron los siguientes documentos:
+
+```text
+control-center/README.md
+control-center/ROADMAP.md
+control-center/CHANGELOG.md
+
+control-center/docs/
+
+ARCHITECTURE.md
+MODULES.md
+USER_STORIES.md
+DATA_MODEL.md
+API.md
+PERMISSIONS.md
+NAVIGATION.md
+STYLE_GUIDE.md
+```
+
+## Next
+
+MISSION-018
+
+Fundación del Backend del EJTV Control Center.

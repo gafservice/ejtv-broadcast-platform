@@ -1,0 +1,137 @@
+2026-07-12 19:22:53,763 | INFO | httpx | HTTP Request: GET http://testserver/ "HTTP/1.1 200 OK"
+2026-07-12 19:22:53,770 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/health "HTTP/1.1 200 OK"
+2026-07-12 19:22:53,774 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/nonexistent "HTTP/1.1 404 Not Found"
+2026-07-12 19:22:53,781 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/health "HTTP/1.1 200 OK"
+2026-07-12 19:26:11,400 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 19:26:11,400 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 19:52:26,558 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 19:52:27,568 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 19:52:27,568 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 19:53:26,264 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 19:53:27,234 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 19:53:27,234 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 19:53:54,629 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 19:53:55,657 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 19:53:55,658 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 19:55:38,070 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 19:55:39,067 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 19:55:39,068 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 19:56:22,502 | INFO | httpx | HTTP Request: GET http://testserver/ "HTTP/1.1 200 OK"
+2026-07-12 19:56:22,512 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/health "HTTP/1.1 200 OK"
+2026-07-12 19:56:22,518 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/nonexistent "HTTP/1.1 404 Not Found"
+2026-07-12 19:56:22,524 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/health "HTTP/1.1 200 OK"
+2026-07-12 20:01:30,735 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 20:01:31,694 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 20:01:31,694 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 20:02:16,741 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 20:02:17,678 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 20:02:17,679 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 20:02:29,092 | INFO | httpx | HTTP Request: GET http://testserver/ "HTTP/1.1 200 OK"
+2026-07-12 20:02:29,100 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/health "HTTP/1.1 200 OK"
+2026-07-12 20:02:29,108 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/nonexistent "HTTP/1.1 404 Not Found"
+2026-07-12 20:02:29,116 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/health "HTTP/1.1 200 OK"
+2026-07-12 20:08:06,751 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 20:08:07,548 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 20:08:07,548 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 20:08:52,675 | INFO | httpx | HTTP Request: GET http://testserver/ "HTTP/1.1 200 OK"
+2026-07-12 20:08:52,682 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/health "HTTP/1.1 200 OK"
+2026-07-12 20:08:52,687 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/nonexistent "HTTP/1.1 404 Not Found"
+2026-07-12 20:08:52,691 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/health "HTTP/1.1 200 OK"
+2026-07-12 20:14:18,767 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 20:14:19,732 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 20:14:19,732 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 20:25:34,917 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 20:25:35,898 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 20:25:35,899 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 20:26:15,616 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 20:26:16,591 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 20:26:16,592 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 20:26:24,313 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 20:26:25,342 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 20:26:25,343 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 20:26:39,201 | INFO | httpx | HTTP Request: GET http://testserver/ "HTTP/1.1 200 OK"
+2026-07-12 20:26:39,212 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/health "HTTP/1.1 200 OK"
+2026-07-12 20:26:39,217 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/nonexistent "HTTP/1.1 404 Not Found"
+2026-07-12 20:26:39,223 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/health "HTTP/1.1 200 OK"
+2026-07-12 20:42:06,609 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 20:42:07,555 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 20:42:07,555 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 20:42:16,087 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 20:42:17,098 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 20:42:17,098 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 20:42:29,134 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 20:42:30,125 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 20:42:30,125 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 20:42:39,256 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 20:42:40,233 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 20:42:40,233 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 20:43:04,604 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 20:43:05,542 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 20:43:05,543 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 20:43:17,586 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 20:43:18,487 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 20:43:18,487 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 20:43:52,608 | INFO | httpx | HTTP Request: GET http://testserver/ "HTTP/1.1 200 OK"
+2026-07-12 20:43:52,617 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/health "HTTP/1.1 200 OK"
+2026-07-12 20:43:52,624 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/nonexistent "HTTP/1.1 404 Not Found"
+2026-07-12 20:43:52,632 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/health "HTTP/1.1 200 OK"
+2026-07-12 20:58:04,195 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 20:58:05,173 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 20:58:05,173 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 20:58:33,257 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 20:58:34,199 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 20:58:34,199 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 20:58:58,070 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 20:58:58,997 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 20:58:58,997 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 20:59:15,751 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 20:59:16,798 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 20:59:16,798 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 20:59:33,046 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 20:59:34,049 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 20:59:34,049 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 20:59:53,305 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 20:59:54,269 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 20:59:54,270 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 21:00:01,791 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 21:00:02,797 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 21:00:02,798 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 21:00:12,780 | INFO | httpx | HTTP Request: GET http://testserver/ "HTTP/1.1 200 OK"
+2026-07-12 21:00:12,788 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/health "HTTP/1.1 200 OK"
+2026-07-12 21:00:12,793 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/nonexistent "HTTP/1.1 404 Not Found"
+2026-07-12 21:00:12,799 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/health "HTTP/1.1 200 OK"
+2026-07-12 21:00:12,807 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/system/info "HTTP/1.1 200 OK"
+2026-07-12 21:00:12,814 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/system/info "HTTP/1.1 200 OK"
+2026-07-12 21:00:58,067 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 21:01:14,649 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 21:01:14,649 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 21:08:04,930 | INFO | httpx | HTTP Request: GET http://testserver/ "HTTP/1.1 200 OK"
+2026-07-12 21:08:04,939 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/health "HTTP/1.1 200 OK"
+2026-07-12 21:08:04,945 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/nonexistent "HTTP/1.1 404 Not Found"
+2026-07-12 21:08:04,953 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/health "HTTP/1.1 200 OK"
+2026-07-12 21:08:04,964 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/system/info "HTTP/1.1 200 OK"
+2026-07-12 21:08:04,974 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/system/info "HTTP/1.1 200 OK"
+2026-07-12 22:19:18,090 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 22:19:19,057 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 22:19:19,057 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 22:19:32,697 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 22:19:33,652 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 22:19:33,653 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 22:19:46,793 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 22:19:47,834 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 22:19:47,834 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 22:19:58,869 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 22:19:59,829 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 22:19:59,830 | INFO | app.core.startup | Entorno activo: development.
+2026-07-12 22:22:01,283 | INFO | httpx | HTTP Request: GET http://testserver/ "HTTP/1.1 200 OK"
+2026-07-12 22:22:01,292 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/health "HTTP/1.1 200 OK"
+2026-07-12 22:22:01,297 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/nonexistent "HTTP/1.1 404 Not Found"
+2026-07-12 22:22:01,302 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/health "HTTP/1.1 200 OK"
+2026-07-12 22:22:01,310 | INFO | httpx | HTTP Request: GET http://testserver/openapi.json "HTTP/1.1 200 OK"
+2026-07-12 22:22:01,317 | INFO | httpx | HTTP Request: GET http://testserver/openapi.json "HTTP/1.1 200 OK"
+2026-07-12 22:22:01,324 | INFO | httpx | HTTP Request: GET http://testserver/openapi.json "HTTP/1.1 200 OK"
+2026-07-12 22:22:01,331 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/system/info "HTTP/1.1 200 OK"
+2026-07-12 22:22:01,336 | INFO | httpx | HTTP Request: GET http://testserver/api/v1/system/info "HTTP/1.1 200 OK"
+2026-07-12 22:23:33,487 | INFO | app.core.shutdown | Finalizando EJTV Control Center Backend.
+2026-07-12 22:24:46,967 | INFO | app.core.startup | Iniciando EJTV Control Center versión 0.2.0.
+2026-07-12 22:24:46,968 | INFO | app.core.startup | Entorno activo: development.
