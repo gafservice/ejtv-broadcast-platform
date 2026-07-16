@@ -1,0 +1,506 @@
+# Coding Standard (EDS-003)
+
+**Código del estándar:** EDS-003
+
+**Nombre:**
+Coding Standard
+
+**Proyecto:**
+EJTV Broadcast Platform
+
+**Subproyecto:**
+EJTV Control Center
+
+**Versión:**
+1.0
+
+**Estado:**
+Vigente
+
+**Autor:**
+Gerardo Araya Fallas
+
+---
+
+# 1. Introducción
+
+El presente documento establece el estándar oficial de programación utilizado durante el desarrollo del proyecto EJTV Broadcast Platform y del EJTV Control Center.
+
+Su propósito consiste en garantizar que todo el código fuente mantenga un estilo uniforme, una arquitectura consistente y un alto nivel de legibilidad.
+
+Este estándar no reemplaza PEP 8.
+
+Lo complementa mediante reglas específicas adaptadas a la arquitectura del proyecto.
+
+---
+
+# 2. Objetivos
+
+Este estándar busca:
+
+- mejorar la legibilidad;
+- facilitar el mantenimiento;
+- reducir errores;
+- favorecer la reutilización;
+- disminuir el acoplamiento;
+- aumentar la trazabilidad;
+- mantener una arquitectura consistente.
+
+---
+
+# 3. Filosofía
+
+El código constituye un medio para expresar una solución de ingeniería.
+
+No se escribe para la computadora.
+
+Se escribe para que otro ingeniero pueda comprenderlo.
+
+Un programa correcto pero difícil de entender se considera un programa de baja calidad.
+
+---
+
+# 4. Principios Fundamentales
+
+Todo desarrollo deberá cumplir los siguientes principios.
+
+## 4.1 La claridad tiene prioridad sobre la brevedad
+
+Se prefiere:
+
+```python
+current_channel = service.get_active_channel()
+```
+
+en lugar de:
+
+```python
+c = s.get()
+```
+
+El objetivo consiste en facilitar la lectura.
+
+---
+
+## 4.2 Un archivo posee una única responsabilidad
+
+Cada archivo implementa una única idea.
+
+Ejemplos:
+
+system_service.py
+
+linux_system_adapter.py
+
+system.py
+
+No mezclar múltiples responsabilidades.
+
+---
+
+## 4.3 Una clase posee una única responsabilidad
+
+Cada clase resuelve un único problema.
+
+Si una clase comienza a realizar múltiples tareas deberá dividirse.
+
+---
+
+## 4.4 Una función realiza una única tarea
+
+Las funciones deben ser pequeñas.
+
+Idealmente una función debe responder una única pregunta.
+
+---
+
+## 4.5 Evitar duplicación
+
+Antes de escribir código nuevo debe verificarse si existe una implementación equivalente.
+
+La reutilización tiene prioridad.
+
+---
+
+# 5. Organización del Proyecto
+
+La estructura oficial es:
+
+backend/
+
+↓
+
+app/
+
+↓
+
+adapters/
+
+api/
+
+core/
+
+domain/
+
+services/
+
+Cada componente posee responsabilidades claramente definidas.
+
+Nunca deberán mezclarse.
+
+---
+
+# 6. Nombres
+
+Los nombres deben expresar intención.
+
+Se recomienda utilizar nombres completos.
+
+Ejemplo:
+
+```python
+system_information
+```
+
+en lugar de
+
+```python
+si
+```
+
+---
+
+## Clases
+
+Utilizar PascalCase.
+
+Ejemplos:
+
+SystemService
+
+LinuxSystemAdapter
+
+MediaMTXService
+
+---
+
+## Funciones
+
+Utilizar snake_case.
+
+Ejemplos:
+
+get_system_information()
+
+validate_request()
+
+create_channel()
+
+---
+
+## Variables
+
+Utilizar snake_case.
+
+Evitar abreviaturas.
+
+---
+
+## Constantes
+
+Utilizar MAYÚSCULAS.
+
+Ejemplos:
+
+API_VERSION
+
+DEFAULT_PORT
+
+MAX_CLIENTS
+
+---
+
+# 7. Tipado
+
+Todo código nuevo deberá utilizar type hints.
+
+Ejemplo:
+
+```python
+def hostname() -> str:
+```
+
+No se recomienda omitir tipos.
+
+---
+
+# 8. Documentación del Código
+
+Toda clase pública deberá incluir un docstring.
+
+Toda función pública deberá explicar:
+
+- propósito;
+- parámetros;
+- valor retornado.
+
+Ejemplo:
+
+```python
+def hostname() -> str:
+    """Obtiene el nombre del equipo."""
+```
+
+---
+
+# 9. Manejo de Errores
+
+Nunca ignorar excepciones.
+
+Incorrecto:
+
+```python
+except:
+    pass
+```
+
+Correcto:
+
+```python
+except OSError as error:
+    logger.error(...)
+```
+
+Toda excepción importante debe registrarse.
+
+---
+
+# 10. Logging
+
+Nunca utilizar print() para depuración permanente.
+
+Toda información relevante deberá registrarse mediante el sistema oficial de logging.
+
+---
+
+# 11. Dependencias
+
+Las dependencias siempre apuntan hacia el dominio.
+
+API
+
+↓
+
+Services
+
+↓
+
+Domain
+
+↓
+
+Adapters
+
+Nunca al contrario.
+
+---
+
+# 12. Adaptadores
+
+Todo acceso al sistema operativo deberá realizarse mediante un Adapter.
+
+Nunca utilizar:
+
+platform
+
+socket
+
+subprocess
+
+psutil
+
+directamente dentro de:
+
+- API
+- Domain
+- Services
+
+---
+
+# 13. Servicios
+
+Los Services contienen reglas de negocio.
+
+No contienen llamadas directas a Linux.
+
+No contienen lógica HTTP.
+
+No contienen código de FastAPI.
+
+---
+
+# 14. Dominio
+
+El Domain representa conocimiento.
+
+Nunca debe depender de:
+
+Linux
+
+FastAPI
+
+MediaMTX
+
+FFmpeg
+
+HTTP
+
+JSON
+
+Frameworks
+
+---
+
+# 15. API
+
+La API únicamente expone capacidades.
+
+No implementa lógica de negocio.
+
+No consulta directamente al sistema operativo.
+
+---
+
+# 16. Comentarios
+
+Los comentarios explican decisiones.
+
+No describen código evidente.
+
+Incorrecto:
+
+```python
+x += 1
+# Incrementa x
+```
+
+Correcto:
+
+```python
+# Se incrementa el contador para evitar
+# reutilizar identificadores previamente asignados.
+```
+
+---
+
+# 17. Importaciones
+
+Orden oficial.
+
+1.
+
+Biblioteca estándar.
+
+2.
+
+Bibliotecas externas.
+
+3.
+
+Módulos del proyecto.
+
+Ejemplo:
+
+```python
+import platform
+
+from fastapi import APIRouter
+
+from app.services.system_service import SystemService
+```
+
+---
+
+# 18. Complejidad
+
+Cuando una función requiera múltiples niveles de indentación deberá analizarse su división.
+
+El objetivo consiste en mantener funciones simples.
+
+---
+
+# 19. Pruebas
+
+Toda funcionalidad nueva deberá incorporar pruebas.
+
+Como mínimo:
+
+- unitarias;
+- integración;
+- arquitectura cuando aplique.
+
+---
+
+# 20. Calidad
+
+Todo código nuevo deberá cumplir simultáneamente:
+
+✓ Arquitectura correcta.
+
+✓ Tipado.
+
+✓ Docstrings.
+
+✓ Logging.
+
+✓ Pruebas.
+
+✓ Documentación.
+
+---
+
+# 21. Revisión
+
+Antes de aceptar una implementación deberá verificarse:
+
+□ La arquitectura.
+
+□ La legibilidad.
+
+□ Los nombres.
+
+□ El tipado.
+
+□ Las pruebas.
+
+□ La documentación.
+
+□ El cumplimiento de los estándares.
+
+---
+
+# 22. Filosofía Institucional
+
+El código constituye únicamente una representación de una solución.
+
+La verdadera solución se encuentra en la arquitectura.
+
+Por esta razón:
+
+La arquitectura gobierna al código.
+
+El código implementa capacidades.
+
+La documentación preserva conocimiento.
+
+---
+
+# 23. Conclusión
+
+El presente estándar define la forma oficial de escribir código dentro del proyecto EJTV Broadcast Platform.
+
+Toda implementación futura deberá respetar las reglas aquí establecidas.
+
+El objetivo no consiste únicamente en producir software funcional.
+
+El objetivo consiste en construir un código claro, mantenible, reutilizable y capaz de evolucionar durante muchos años.

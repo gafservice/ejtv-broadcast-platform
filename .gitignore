@@ -1,0 +1,10 @@
+
+# EJTV Control Center - Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.env
+
+# Logs generados en ejecución
+control-center/logs/*.log

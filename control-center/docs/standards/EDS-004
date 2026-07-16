@@ -1,0 +1,447 @@
+# Git Workflow Standard (EDS-004)
+
+**Código del estándar:** EDS-004
+
+**Nombre:**
+Git Workflow Standard
+
+**Proyecto:**
+EJTV Broadcast Platform
+
+**Subproyecto:**
+EJTV Control Center
+
+**Versión:**
+1.0
+
+**Estado:**
+Vigente
+
+**Autor:**
+Gerardo Araya Fallas
+
+---
+
+# 1. Introducción
+
+El presente documento establece el estándar oficial para el uso de Git durante el desarrollo del proyecto EJTV Broadcast Platform y del EJTV Control Center.
+
+Su propósito consiste en garantizar que la evolución del software pueda reconstruirse completamente a partir del historial del repositorio.
+
+Cada commit representa una evidencia técnica del desarrollo realizado.
+
+Git constituye una herramienta de ingeniería, no únicamente un mecanismo de respaldo.
+
+---
+
+# 2. Objetivos
+
+Este estándar busca:
+
+- preservar la historia del proyecto;
+- facilitar la trazabilidad;
+- documentar la evolución del software;
+- permitir la recuperación de versiones anteriores;
+- respaldar el proceso de ingeniería;
+- facilitar auditorías técnicas.
+
+---
+
+# 3. Filosofía
+
+Cada commit representa una decisión de ingeniería.
+
+No se realizan commits para guardar trabajo temporal.
+
+Se realizan commits cuando una unidad de trabajo alcanza un estado estable y verificable.
+
+El historial del repositorio debe contar la historia del proyecto.
+
+---
+
+# 4. Principios Fundamentales
+
+Todo cambio deberá cumplir los siguientes principios.
+
+## 4.1 Un commit representa una única idea
+
+Cada commit debe contener una única modificación lógica.
+
+Incorrecto:
+
+- corregir un error;
+- agregar una funcionalidad;
+- modificar documentación;
+- cambiar estilos.
+
+Todo en el mismo commit.
+
+Correcto:
+
+Un commit para cada cambio independiente.
+
+---
+
+## 4.2 Nunca realizar commits incompletos
+
+No deben almacenarse cambios parcialmente implementados.
+
+Antes de realizar un commit deberán cumplirse:
+
+- el código compila;
+- las pruebas pasan;
+- la documentación está actualizada.
+
+---
+
+## 4.3 El repositorio siempre debe permanecer estable
+
+En cualquier momento deberá ser posible recuperar la última versión del repositorio y ejecutarla correctamente.
+
+---
+
+# 5. Flujo Oficial de Trabajo
+
+Toda nueva capacidad seguirá el siguiente flujo.
+
+```
+ROADMAP
+
+↓
+
+Diseño
+
+↓
+
+Implementación
+
+↓
+
+Pruebas
+
+↓
+
+Documentación
+
+↓
+
+Baseline
+
+↓
+
+Commit
+
+↓
+
+Push
+```
+
+No deberán omitirse etapas.
+
+---
+
+# 6. Organización del Trabajo
+
+Cada Sprint representa una unidad completa de desarrollo.
+
+Un Sprint finaliza únicamente cuando:
+
+- la capacidad fue implementada;
+- las pruebas fueron satisfactorias;
+- la documentación quedó completa;
+- el CHANGELOG fue actualizado;
+- el ROADMAP fue actualizado;
+- el Baseline fue generado.
+
+Sólo entonces se realizará el commit.
+
+---
+
+# 7. Commits
+
+Los mensajes deberán ser claros, descriptivos y escritos en tiempo presente.
+
+Formato recomendado:
+
+```
+MISSION-018: Implement Infrastructure Abstraction Layer
+
+MISSION-018: Add System Information API
+
+MISSION-019: Create MediaMTX Adapter
+
+MISSION-020: Implement FFmpeg Service
+```
+
+Evitar mensajes como:
+
+```
+Cambios
+
+Correcciones
+
+Update
+
+Prueba
+
+asd
+
+Version nueva
+```
+
+---
+
+# 8. Baselines
+
+Cada misión genera un Baseline.
+
+El Baseline documenta:
+
+- capacidades implementadas;
+- arquitectura alcanzada;
+- pruebas realizadas;
+- estado del proyecto.
+
+El Baseline constituye una referencia técnica permanente.
+
+---
+
+# 9. CHANGELOG
+
+Todo cambio funcional deberá registrarse en el CHANGELOG.
+
+El CHANGELOG resume la evolución del proyecto.
+
+No sustituye al historial de Git.
+
+Ambos se complementan.
+
+---
+
+# 10. ROADMAP
+
+El ROADMAP representa la planificación oficial del proyecto.
+
+Al finalizar una misión deberá actualizarse indicando:
+
+- misión completada;
+- capacidades incorporadas;
+- siguiente objetivo.
+
+---
+
+# 11. Documentación
+
+Antes del commit deberán actualizarse:
+
+- documentación permanente;
+- documentación de la misión;
+- estándares cuando corresponda.
+
+Nunca realizar commits con documentación desactualizada.
+
+---
+
+# 12. Archivos Excluidos
+
+No deberán almacenarse en el repositorio archivos generados automáticamente.
+
+Ejemplos:
+
+```
+__pycache__/
+
+.pytest_cache/
+
+.venv/
+
+*.pyc
+
+.env
+
+logs/
+```
+
+Estos elementos pertenecen al entorno local de desarrollo.
+
+---
+
+# 13. Evidencias
+
+Toda misión deberá conservar evidencias verificables.
+
+Ejemplos:
+
+- respuestas HTTP;
+- capturas de pantalla;
+- resultados de pruebas;
+- diagramas;
+- archivos de configuración;
+- registros de ejecución.
+
+Las evidencias complementan al código.
+
+---
+
+# 14. Versionado
+
+El proyecto utiliza versionado incremental.
+
+Ejemplo:
+
+```
+0.1.0
+
+0.2.0
+
+0.3.0
+
+...
+
+1.0.0
+```
+
+El incremento de versión dependerá del impacto de los cambios realizados.
+
+---
+
+# 15. Criterios para realizar un Commit
+
+Antes de ejecutar:
+
+```
+git commit
+```
+
+deberá verificarse:
+
+✓ Código compilando.
+
+✓ Arquitectura consistente.
+
+✓ Pruebas satisfactorias.
+
+✓ Documentación completa.
+
+✓ CHANGELOG actualizado.
+
+✓ ROADMAP actualizado.
+
+✓ Baseline generado.
+
+✓ Repositorio limpio.
+
+---
+
+# 16. Criterios para realizar un Push
+
+Antes de ejecutar:
+
+```
+git push
+```
+
+deberá verificarse nuevamente:
+
+- pruebas;
+- documentación;
+- estado del repositorio.
+
+El repositorio remoto constituye el respaldo oficial del proyecto.
+
+---
+
+# 17. Recuperación
+
+Todo commit debe permitir regresar a un estado funcional del proyecto.
+
+No deberán existir commits que impidan compilar o ejecutar el sistema.
+
+---
+
+# 18. Filosofía del Historial
+
+El historial de Git debe leerse como un libro técnico.
+
+Cada commit responde una pregunta.
+
+Cada misión cuenta una historia.
+
+Cada Sprint representa un capítulo.
+
+La evolución completa del proyecto debe poder reconstruirse únicamente leyendo el historial.
+
+---
+
+# 19. Relación con otros estándares
+
+Este documento complementa:
+
+EDS-001
+Engineering Documentation Standard
+
+EDS-002
+Engineering Standard
+
+EDS-003
+Coding Standard
+
+Los cuatro estándares conforman la base metodológica del proyecto.
+
+---
+
+# 20. Reglas de Oro
+
+1.
+
+Nunca realizar un commit apresurado.
+
+2.
+
+Un commit representa una única idea.
+
+3.
+
+Todo commit debe poder compilar.
+
+4.
+
+Toda misión genera un Baseline.
+
+5.
+
+Toda capacidad queda documentada.
+
+6.
+
+El CHANGELOG resume.
+
+Git conserva la historia.
+
+7.
+
+El ROADMAP muestra hacia dónde vamos.
+
+Git muestra cómo llegamos.
+
+8.
+
+El repositorio remoto constituye el respaldo oficial.
+
+9.
+
+Cada commit deja una evidencia.
+
+10.
+
+El historial de Git debe contar la historia completa del proyecto.
+
+---
+
+# 21. Conclusión
+
+El presente estándar establece la metodología oficial para el uso de Git dentro del proyecto EJTV Broadcast Platform.
+
+El objetivo no consiste únicamente en almacenar código fuente.
+
+El objetivo consiste en preservar la evolución técnica del proyecto, garantizar la trazabilidad de todas las decisiones de ingeniería y convertir el historial del repositorio en una fuente permanente de conocimiento.

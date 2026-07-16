@@ -1,0 +1,465 @@
+# Technical Communication Standard (EDS-007)
+
+**Código del estándar:**
+EDS-007
+
+**Nombre:**
+Technical Communication Standard
+
+**Proyecto:**
+EJTV Broadcast Platform
+
+**Subproyecto:**
+EJTV Control Center
+
+**Versión:**
+1.0
+
+**Estado:**
+Vigente
+
+**Autor:**
+Gerardo Araya Fallas
+
+---
+
+# 1. Introducción
+
+El presente documento establece el estándar oficial para la comunicación técnica utilizada durante el desarrollo del proyecto EJTV Broadcast Platform y del EJTV Control Center.
+
+Su propósito consiste en garantizar que toda la información técnica sea presentada de manera uniforme, clara y fácilmente comprensible.
+
+La comunicación constituye una parte esencial del proceso de ingeniería.
+
+Un sistema correctamente implementado pierde gran parte de su valor si no puede ser comprendido por otros ingenieros.
+
+---
+
+# 2. Objetivos
+
+Este estándar busca:
+
+- mejorar la comprensión técnica;
+- unificar la documentación;
+- facilitar el aprendizaje;
+- reducir ambigüedades;
+- mantener una identidad visual consistente;
+- preservar el conocimiento generado.
+
+---
+
+# 3. Filosofía
+
+La documentación técnica debe enseñar.
+
+No debe impresionar.
+
+Todo documento debe escribirse pensando en una persona que está aprendiendo.
+
+La claridad tiene prioridad sobre la complejidad.
+
+---
+
+# 4. Principios Fundamentales
+
+Toda comunicación técnica deberá cumplir los siguientes principios.
+
+## 4.1 Explicar antes de profundizar
+
+Cada nuevo concepto deberá introducirse de forma gradual.
+
+Nunca se asumirá que el lector conoce previamente el tema.
+
+---
+
+## 4.2 Un concepto por sección
+
+Cada sección desarrolla una única idea.
+
+Evitar mezclar múltiples conceptos en un mismo apartado.
+
+---
+
+## 4.3 El texto acompaña al diagrama
+
+Los diagramas nunca sustituyen la explicación.
+
+Cada figura deberá estar acompañada por un texto que explique:
+
+- qué representa;
+- por qué existe;
+- cómo debe interpretarse.
+
+---
+
+## 4.4 Los diagramas complementan al texto
+
+Los diagramas ayudan a comprender.
+
+No deben convertirse en el único medio de explicación.
+
+---
+
+# 5. Organización de los Documentos
+
+Todo documento deberá seguir una estructura lógica.
+
+Ejemplo:
+
+Introducción
+
+↓
+
+Objetivos
+
+↓
+
+Conceptos
+
+↓
+
+Desarrollo
+
+↓
+
+Ejemplos
+
+↓
+
+Conclusiones
+
+---
+
+# 6. Estilo de Escritura
+
+Se utilizarán:
+
+- oraciones cortas;
+- párrafos breves;
+- vocabulario técnico claro;
+- lenguaje formal.
+
+Evitar frases excesivamente largas.
+
+---
+
+# 7. Lenguaje
+
+Siempre que sea posible:
+
+primero se explica el concepto.
+
+Luego se introduce el término técnico.
+
+Ejemplo.
+
+Incorrecto:
+
+"El Adapter implementa Dependency Inversion."
+
+Correcto:
+
+"El Adapter permite aislar la infraestructura del resto del sistema.
+
+Este patrón corresponde al principio conocido como Dependency Inversion."
+
+---
+
+# 8. Diagramas
+
+Los diagramas deberán:
+
+- explicar una única idea;
+- mantener una estructura limpia;
+- utilizar pocos colores;
+- evitar cruces innecesarios;
+- respetar la dirección del flujo.
+
+---
+
+# 9. Flujo Visual
+
+La dirección oficial será:
+
+Superior
+
+↓
+
+Inferior
+
+o bien
+
+Izquierda
+
+↓
+
+Derecha
+
+Nunca ambos sentidos simultáneamente.
+
+---
+
+# 10. Colores
+
+Se utilizará una paleta reducida.
+
+Cada color tendrá un significado.
+
+Ejemplo.
+
+Azul.
+
+Componentes.
+
+Verde.
+
+Servicios activos.
+
+Rojo.
+
+Errores.
+
+Gris.
+
+Infraestructura.
+
+Evitar colores decorativos.
+
+---
+
+# 11. Tipografía
+
+Utilizar fuentes legibles.
+
+Evitar múltiples familias tipográficas en un mismo documento.
+
+La prioridad es la lectura.
+
+No el diseño gráfico.
+
+---
+
+# 12. Iconografía
+
+Los iconos deberán representar conceptos técnicos.
+
+No deberán utilizarse como elementos decorativos.
+
+Todos los iconos deberán mantener el mismo estilo gráfico.
+
+---
+
+# 13. Diagramas SVG
+
+El formato oficial será SVG.
+
+Ventajas.
+
+- escalable;
+- editable;
+- independiente de resolución;
+- compatible con LaTeX;
+- compatible con Inkscape;
+- compatible con Illustrator;
+- compatible con Affinity Designer.
+
+---
+
+# 14. Nomenclatura
+
+Toda imagen deberá poseer un nombre descriptivo.
+
+Ejemplos.
+
+system-architecture.svg
+
+service-flow.svg
+
+mediamtx-topology.svg
+
+Evitar.
+
+imagen1.svg
+
+nuevo.svg
+
+final-final.svg
+
+---
+
+# 15. Tablas
+
+Las tablas deberán utilizarse únicamente cuando mejoren la comprensión.
+
+No deberán reemplazar explicaciones.
+
+---
+
+# 16. Capturas de Pantalla
+
+Toda captura deberá:
+
+- ser necesaria;
+- estar actualizada;
+- incluir únicamente la información relevante;
+- acompañarse de una explicación.
+
+---
+
+# 17. Ejemplos
+
+Todo concepto importante deberá acompañarse de un ejemplo.
+
+Los ejemplos facilitan el aprendizaje.
+
+---
+
+# 18. Código Fuente
+
+Los fragmentos de código deberán:
+
+- ser pequeños;
+- centrarse en una única idea;
+- mantener formato consistente.
+
+No utilizar ejemplos excesivamente largos.
+
+---
+
+# 19. Convenciones Visuales
+
+Durante todo el proyecto:
+
+Rectángulos.
+
+Componentes.
+
+Flechas.
+
+Flujo.
+
+Línea punteada.
+
+Dependencia.
+
+Línea continua.
+
+Comunicación.
+
+---
+
+# 20. Consistencia
+
+Todos los documentos deberán mantener:
+
+- mismo estilo;
+- misma terminología;
+- misma organización;
+- misma identidad visual.
+
+La consistencia mejora el aprendizaje.
+
+---
+
+# 21. Reutilización
+
+Los diagramas deberán diseñarse para ser reutilizados.
+
+Un mismo diagrama podrá aparecer en:
+
+- documentación;
+- README;
+- presentaciones;
+- manuales;
+- artículos.
+
+---
+
+# 22. Relación con otros estándares
+
+Este documento complementa:
+
+EDS-001
+
+Documentación.
+
+EDS-002
+
+Ingeniería.
+
+EDS-003
+
+Código.
+
+EDS-004
+
+Git.
+
+EDS-005
+
+Pruebas.
+
+EDS-006
+
+Arquitectura.
+
+---
+
+# 23. Reglas de Oro
+
+1.
+
+Toda figura debe enseñar.
+
+2.
+
+Toda imagen debe tener un propósito.
+
+3.
+
+Primero explicar.
+
+Después diagramar.
+
+4.
+
+Un diagrama comunica una única idea.
+
+5.
+
+Los colores tienen significado.
+
+No decoración.
+
+6.
+
+Los ejemplos facilitan el aprendizaje.
+
+7.
+
+La documentación debe poder leerse de principio a fin.
+
+8.
+
+Todo documento debe ser comprensible para alguien que inicia en el proyecto.
+
+9.
+
+La claridad tiene prioridad sobre la estética.
+
+10.
+
+El conocimiento compartido constituye el mayor activo del proyecto.
+
+---
+
+# 24. Conclusión
+
+El presente estándar establece la metodología oficial para la comunicación técnica del proyecto EJTV Broadcast Platform.
+
+Toda explicación, diagrama, figura, tabla y ejemplo deberá respetar los principios aquí definidos.
+
+El objetivo no consiste únicamente en documentar el proyecto.
+
+El objetivo consiste en construir una base de conocimiento clara, uniforme y capaz de formar a futuros ingenieros que participen en la evolución de la plataforma.
+

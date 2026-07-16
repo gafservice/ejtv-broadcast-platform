@@ -1,0 +1,434 @@
+# Architecture Standard (EDS-006)
+
+**Código del estándar:**
+EDS-006
+
+**Nombre:**
+Architecture Standard
+
+**Proyecto:**
+EJTV Broadcast Platform
+
+**Subproyecto:**
+EJTV Control Center
+
+**Versión:**
+1.0
+
+**Estado:**
+Vigente
+
+**Autor:**
+Gerardo Araya Fallas
+
+---
+
+# 1. Introducción
+
+El presente documento establece la arquitectura oficial utilizada durante el desarrollo del EJTV Control Center.
+
+La arquitectura constituye la estructura permanente del sistema.
+
+El código podrá evolucionar.
+
+Las tecnologías podrán cambiar.
+
+La arquitectura deberá permanecer estable.
+
+---
+
+# 2. Objetivos
+
+Este estándar busca:
+
+- reducir el acoplamiento;
+- facilitar el mantenimiento;
+- permitir el crecimiento del sistema;
+- proteger el dominio;
+- aislar la infraestructura;
+- facilitar las pruebas.
+
+---
+
+# 3. Filosofía
+
+La arquitectura representa las decisiones fundamentales del proyecto.
+
+Todo nuevo desarrollo deberá adaptarse a la arquitectura.
+
+La arquitectura nunca deberá adaptarse al código.
+
+---
+
+# 4. Principios Fundamentales
+
+Toda implementación respetará los siguientes principios.
+
+## 4.1 El dominio es el centro del sistema
+
+El dominio representa el conocimiento del proyecto.
+
+No conoce tecnologías.
+
+No conoce Linux.
+
+No conoce FastAPI.
+
+No conoce HTTP.
+
+---
+
+## 4.2 La infraestructura siempre queda aislada
+
+Toda interacción con:
+
+- Linux
+- MediaMTX
+- FFmpeg
+- Docker
+- systemd
+- SSH
+- Firewall
+
+deberá realizarse mediante Adaptadores.
+
+---
+
+## 4.3 Las dependencias apuntan hacia el dominio
+
+Nunca en sentido contrario.
+
+---
+
+## 4.4 Una responsabilidad por capa
+
+Cada capa resuelve un único tipo de problema.
+
+---
+
+# 5. Capas Oficiales
+
+La arquitectura oficial se divide en seis capas.
+
+```
+Cliente
+
+↓
+
+API
+
+↓
+
+Services
+
+↓
+
+Domain
+
+↓
+
+Adapters
+
+↓
+
+Infraestructura
+```
+
+---
+
+# 6. API
+
+Responsabilidades:
+
+- recibir solicitudes HTTP;
+- validar entradas;
+- devolver respuestas;
+- invocar Services.
+
+La API nunca implementa reglas de negocio.
+
+---
+
+# 7. Services
+
+Responsabilidades:
+
+- coordinar operaciones;
+- aplicar reglas de negocio;
+- utilizar el dominio;
+- utilizar adaptadores.
+
+Los Services no conocen HTTP.
+
+---
+
+# 8. Domain
+
+Responsabilidades:
+
+- representar entidades;
+- validar información;
+- preservar reglas del negocio.
+
+El Domain constituye el núcleo del proyecto.
+
+---
+
+# 9. Adapters
+
+Responsabilidades:
+
+- encapsular tecnologías externas;
+- ocultar detalles de implementación;
+- aislar Linux.
+
+Todo acceso a infraestructura pasa por un Adapter.
+
+---
+
+# 10. Infraestructura
+
+Incluye:
+
+- Linux
+- MediaMTX
+- FFmpeg
+- Docker
+- PostgreSQL
+- Redis
+- Archivos
+- Red
+
+La infraestructura nunca debe ser conocida por el dominio.
+
+---
+
+# 11. Flujo Oficial
+
+Toda solicitud sigue el siguiente recorrido.
+
+Cliente
+
+↓
+
+API
+
+↓
+
+Service
+
+↓
+
+Adapter
+
+↓
+
+Infraestructura
+
+↓
+
+Adapter
+
+↓
+
+Service
+
+↓
+
+API
+
+↓
+
+Cliente
+
+---
+
+# 12. Reglas de Dependencia
+
+Permitido
+
+API → Services
+
+Services → Domain
+
+Services → Adapters
+
+Adapters → Linux
+
+No permitido
+
+Domain → FastAPI
+
+Domain → Linux
+
+Domain → MediaMTX
+
+Services → platform
+
+Services → subprocess
+
+API → socket
+
+API → platform
+
+---
+
+# 13. Adaptadores
+
+Todo componente externo tendrá su Adapter.
+
+Ejemplos.
+
+LinuxSystemAdapter
+
+MediaMTXAdapter
+
+FFmpegAdapter
+
+DockerAdapter
+
+FirewallAdapter
+
+SSHAdapter
+
+---
+
+# 14. Escalabilidad
+
+Toda nueva capacidad deberá incorporarse reutilizando la arquitectura existente.
+
+Nunca se crearán estructuras paralelas.
+
+---
+
+# 15. Independencia Tecnológica
+
+La arquitectura deberá permitir reemplazar tecnologías sin modificar el dominio.
+
+Ejemplo.
+
+Hoy:
+
+LinuxSystemAdapter
+
+Mañana:
+
+WindowsSystemAdapter
+
+El Service permanece exactamente igual.
+
+---
+
+# 16. Pruebas Arquitectónicas
+
+Toda regla arquitectónica importante deberá protegerse mediante pruebas.
+
+Ejemplos.
+
+✓ Domain no importa FastAPI.
+
+✓ Services no utilizan Linux.
+
+✓ API no utiliza subprocess.
+
+✓ Sólo los Adapters conocen infraestructura.
+
+---
+
+# 17. Evolución
+
+La arquitectura crecerá mediante nuevas capacidades.
+
+Nunca mediante modificaciones desordenadas.
+
+Cada nueva misión deberá integrarse naturalmente a la arquitectura existente.
+
+---
+
+# 18. Relación con otros estándares
+
+EDS-001
+
+Documentación.
+
+EDS-002
+
+Ingeniería.
+
+EDS-003
+
+Código.
+
+EDS-004
+
+Git.
+
+EDS-005
+
+Pruebas.
+
+---
+
+# 19. Reglas de Oro
+
+1.
+
+La arquitectura gobierna al código.
+
+2.
+
+El dominio nunca conoce infraestructura.
+
+3.
+
+Toda tecnología entra mediante un Adapter.
+
+4.
+
+Los Services coordinan.
+
+No implementan infraestructura.
+
+5.
+
+La API expone capacidades.
+
+No reglas de negocio.
+
+6.
+
+Toda dependencia apunta al dominio.
+
+7.
+
+Cada capa posee una responsabilidad.
+
+8.
+
+Toda arquitectura debe poder probarse.
+
+9.
+
+Toda nueva capacidad reutiliza la arquitectura existente.
+
+10.
+
+Si una modificación rompe la arquitectura, la modificación está equivocada.
+
+---
+
+# 20. Conclusión
+
+La arquitectura constituye el contrato permanente del proyecto.
+
+Las tecnologías podrán cambiar.
+
+Los frameworks podrán evolucionar.
+
+El sistema operativo podrá reemplazarse.
+
+La arquitectura deberá permanecer estable.
+
+Construimos software que evoluciona.
+
+No software que se reinventa.
