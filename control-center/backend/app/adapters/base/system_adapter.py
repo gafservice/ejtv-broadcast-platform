@@ -1,10 +1,17 @@
-"""Contrato para consultar la identidad básica de un sistema."""
+"""Contrato para consultar información del sistema administrado."""
 
 from abc import ABC, abstractmethod
 
+from app.domain.system import (
+    CPUInfo,
+    DiskInfo,
+    MemoryInfo,
+    UptimeInfo,
+)
+
 
 class SystemAdapter(ABC):
-    """Contrato de acceso a información básica del sistema."""
+    """Contrato de acceso a información del sistema."""
 
     @abstractmethod
     def hostname(self) -> str:
@@ -17,3 +24,19 @@ class SystemAdapter(ABC):
     @abstractmethod
     def kernel(self) -> str:
         """Retorna la versión del kernel."""
+
+    @abstractmethod
+    def cpu_info(self) -> CPUInfo:
+        """Retorna el estado actual del procesador."""
+
+    @abstractmethod
+    def memory_info(self) -> MemoryInfo:
+        """Retorna el estado actual de la memoria principal."""
+
+    @abstractmethod
+    def disk_info(self) -> DiskInfo:
+        """Retorna el estado del almacenamiento principal."""
+
+    @abstractmethod
+    def uptime_info(self) -> UptimeInfo:
+        """Retorna el tiempo de funcionamiento del sistema."""

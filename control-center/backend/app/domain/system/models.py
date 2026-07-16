@@ -1,6 +1,63 @@
 """Objetos de dominio relacionados con el sistema administrado."""
 
 from dataclasses import dataclass
+from datetime import datetime
+
+
+def _validate_percentage(field_name: str, value: float) -> float:
+    """Valida y normaliza un porcentaje entre 0 y 100."""
+
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(
+            f"El campo '{field_name}' debe contener un valor numérico."
+        )
+
+    normalized_value = float(value)
+
+    if not 0.0 <= normalized_value <= 100.0:
+        raise ValueError(
+            f"El campo '{field_name}' debe estar entre 0 y 100."
+        )
+
+    return normalized_value
+
+
+def _validate_non_negative_integer(
+    field_name: str,
+    value: int,
+) -> int:
+    """Valida que un valor sea un entero mayor o igual que cero."""
+
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(
+            f"El campo '{field_name}' debe contener un número entero."
+        )
+
+    if value < 0:
+        raise ValueError(
+            f"El campo '{field_name}' no puede ser negativo."
+        )
+
+    return value
+
+
+def _validate_positive_integer(
+    field_name: str,
+    value: int,
+) -> int:
+    """Valida que un valor sea un entero mayor que cero."""
+
+    normalized_value = _validate_non_negative_integer(
+        field_name,
+        value,
+    )
+
+    if normalized_value == 0:
+        raise ValueError(
+            f"El campo '{field_name}' debe ser mayor que cero."
+        )
+
+    return normalized_value
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,3 +84,226 @@ class SystemInfo:
                 )
 
             object.__setattr__(self, field_name, value.strip())
+
+
+@dataclass(frozen=True, slots=True)
+class CPUInfo:
+    """Estado general del procesador del sistema."""
+
+    usage_percent: float
+    logical_cores: int
+    physical_cores: int | None
+    frequency_mhz: float | None
+
+    def __post_init__(self) -> None:
+        """Valida la información del procesador."""
+
+        object.__setattr__(
+            self,
+            "usage_percent",
+            _validate_percentage(
+                "usage_percent",
+                self.usage_percent,
+            ),
+        )
+
+        object.__setattr__(
+            self,
+            "logical_cores",
+            _validate_positive_integer(
+                "logical_cores",
+                self.logical_cores,
+            ),
+        )
+
+        if self.physical_cores is not None:
+            object.__setattr__(
+                self,
+                "physical_cores",
+                _validate_positive_integer(
+                    "physical_cores",
+                    self.physical_cores,
+                ),
+            )
+
+        if self.frequency_mhz is not None:
+            if (
+                isinstance(self.frequency_mhz, bool)
+                or not isinstance(self.frequency_mhz, (int, float))
+                or self.frequency_mhz < 0
+            ):
+                raise ValueError(
+                    "El campo 'frequency_mhz' debe contener un valor "
+                    "numérico mayor o igual que cero."
+                )
+
+            object.__setattr__(
+                self,
+                "frequency_mhz",
+                float(self.frequency_mhz),
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class MemoryInfo:
+    """Estado de utilización de la memoria principal."""
+
+    total_bytes: int
+    available_bytes: int
+    used_bytes: int
+    usage_percent: float
+
+    def __post_init__(self) -> None:
+        """Valida la información de memoria."""
+
+        for field_name in (
+            "total_bytes",
+            "available_bytes",
+            "used_bytes",
+        ):
+            value = getattr(self, field_name)
+
+            object.__setattr__(
+                self,
+                field_name,
+                _validate_non_negative_integer(
+                    field_name,
+                    value,
+                ),
+            )
+
+        if self.total_bytes == 0:
+            raise ValueError(
+                "El campo 'total_bytes' debe ser mayor que cero."
+            )
+
+        if self.available_bytes > self.total_bytes:
+            raise ValueError(
+                "'available_bytes' no puede superar 'total_bytes'."
+            )
+
+        if self.used_bytes > self.total_bytes:
+            raise ValueError(
+                "'used_bytes' no puede superar 'total_bytes'."
+            )
+
+        object.__setattr__(
+            self,
+            "usage_percent",
+            _validate_percentage(
+                "usage_percent",
+                self.usage_percent,
+            ),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class DiskInfo:
+    """Estado de utilización del almacenamiento principal."""
+
+    total_bytes: int
+    used_bytes: int
+    free_bytes: int
+    usage_percent: float
+
+    def __post_init__(self) -> None:
+        """Valida la información de almacenamiento."""
+
+        for field_name in (
+            "total_bytes",
+            "used_bytes",
+            "free_bytes",
+        ):
+            value = getattr(self, field_name)
+
+            object.__setattr__(
+                self,
+                field_name,
+                _validate_non_negative_integer(
+                    field_name,
+                    value,
+                ),
+            )
+
+        if self.total_bytes == 0:
+            raise ValueError(
+                "El campo 'total_bytes' debe ser mayor que cero."
+            )
+
+        if self.used_bytes > self.total_bytes:
+            raise ValueError(
+                "'used_bytes' no puede superar 'total_bytes'."
+            )
+
+        if self.free_bytes > self.total_bytes:
+            raise ValueError(
+                "'free_bytes' no puede superar 'total_bytes'."
+            )
+
+        object.__setattr__(
+            self,
+            "usage_percent",
+            _validate_percentage(
+                "usage_percent",
+                self.usage_percent,
+            ),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class UptimeInfo:
+    """Tiempo de funcionamiento continuo del sistema."""
+
+    uptime_seconds: int
+
+    def __post_init__(self) -> None:
+        """Valida el tiempo de funcionamiento."""
+
+        object.__setattr__(
+            self,
+            "uptime_seconds",
+            _validate_non_negative_integer(
+                "uptime_seconds",
+                self.uptime_seconds,
+            ),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class SystemResources:
+    """Medición consolidada de los recursos del servidor."""
+
+    cpu: CPUInfo
+    memory: MemoryInfo
+    disk: DiskInfo
+    uptime: UptimeInfo
+    captured_at: datetime
+
+    def __post_init__(self) -> None:
+        """Valida los componentes y el instante de medición."""
+
+        expected_types = {
+            "cpu": CPUInfo,
+            "memory": MemoryInfo,
+            "disk": DiskInfo,
+            "uptime": UptimeInfo,
+        }
+
+        for field_name, expected_type in expected_types.items():
+            value = getattr(self, field_name)
+
+            if not isinstance(value, expected_type):
+                raise ValueError(
+                    f"El campo '{field_name}' debe ser una instancia de "
+                    f"{expected_type.__name__}."
+                )
+
+        if not isinstance(self.captured_at, datetime):
+            raise ValueError(
+                "El campo 'captured_at' debe contener una fecha válida."
+            )
+
+        if self.captured_at.tzinfo is None:
+            raise ValueError(
+                "El campo 'captured_at' debe incluir zona horaria."
+            )

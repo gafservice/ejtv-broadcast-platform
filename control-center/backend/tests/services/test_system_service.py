@@ -1,9 +1,15 @@
 """Pruebas del servicio de información del sistema."""
 
 from app.adapters.base.system_adapter import SystemAdapter
-from app.domain.system import SystemInfo
+from app.domain.system import (
+    CPUInfo,
+    DiskInfo,
+    MemoryInfo,
+    SystemInfo,
+    SystemResources,
+    UptimeInfo,
+)
 from app.services.system_service import SystemService
-
 
 class FakeSystemAdapter(SystemAdapter):
     """Adaptador controlado utilizado exclusivamente en pruebas."""
@@ -17,6 +23,35 @@ class FakeSystemAdapter(SystemAdapter):
     def kernel(self) -> str:
         return "1.0.0-test"
 
+    def cpu_info(self) -> CPUInfo:
+        return CPUInfo(
+            usage_percent=25.0,
+            logical_cores=8,
+            physical_cores=4,
+            frequency_mhz=2800.0,
+        )
+
+    def memory_info(self) -> MemoryInfo:
+        return MemoryInfo(
+            total_bytes=8_000,
+            available_bytes=5_000,
+            used_bytes=3_000,
+            usage_percent=37.5,
+        )
+
+    def disk_info(self) -> DiskInfo:
+        return DiskInfo(
+            total_bytes=100_000,
+            used_bytes=40_000,
+            free_bytes=60_000,
+            usage_percent=40.0,
+        )
+
+    def uptime_info(self) -> UptimeInfo:
+        return UptimeInfo(
+            uptime_seconds=86_400,
+        )
+
 
 def test_system_service_returns_system_info() -> None:
     service = SystemService(FakeSystemAdapter())
@@ -29,6 +64,8 @@ def test_system_service_returns_system_info() -> None:
     assert result.kernel == "1.0.0-test"
 
 
+
+
 def test_system_service_uses_adapter_contract() -> None:
     adapter: SystemAdapter = FakeSystemAdapter()
     service = SystemService(adapter)
@@ -38,3 +75,16 @@ def test_system_service_uses_adapter_contract() -> None:
         operating_system="Test Linux 1.0",
         kernel="1.0.0-test",
     )
+
+def test_system_service_returns_system_resources() -> None:
+    service = SystemService(FakeSystemAdapter())
+
+    result = service.get_system_resources()
+
+    assert isinstance(result, SystemResources)
+    assert result.cpu.usage_percent == 25.0
+    assert result.cpu.logical_cores == 8
+    assert result.memory.used_bytes == 3_000
+    assert result.disk.free_bytes == 60_000
+    assert result.uptime.uptime_seconds == 86_400
+    assert result.captured_at.tzinfo is not None

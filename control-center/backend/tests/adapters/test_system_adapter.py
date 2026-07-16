@@ -69,3 +69,136 @@ def test_kernel() -> None:
         return_value="6.8.0-71-generic",
     ):
         assert adapter.kernel() == "6.8.0-71-generic"
+
+        
+def test_cpu_info() -> None:
+    adapter = LinuxSystemAdapter()
+
+    with (
+        patch(
+            "app.adapters.linux.linux_system_adapter."
+            "psutil.cpu_percent",
+            return_value=25.5,
+        ),
+        patch(
+            "app.adapters.linux.linux_system_adapter."
+            "psutil.cpu_count",
+            side_effect=[8, 4],
+        ),
+        patch(
+            "app.adapters.linux.linux_system_adapter."
+            "psutil.cpu_freq",
+            return_value=type(
+                "CPUFrequency",
+                (),
+                {"current": 2800.0},
+            )(),
+        ),
+    ):
+        result = adapter.cpu_info()
+
+    assert result.usage_percent == 25.5
+    assert result.logical_cores == 8
+    assert result.physical_cores == 4
+    assert result.frequency_mhz == 2800.0
+
+
+def test_cpu_info_accepts_missing_frequency() -> None:
+    adapter = LinuxSystemAdapter()
+
+    with (
+        patch(
+            "app.adapters.linux.linux_system_adapter."
+            "psutil.cpu_percent",
+            return_value=10.0,
+        ),
+        patch(
+            "app.adapters.linux.linux_system_adapter."
+            "psutil.cpu_count",
+            side_effect=[8, None],
+        ),
+        patch(
+            "app.adapters.linux.linux_system_adapter."
+            "psutil.cpu_freq",
+            return_value=None,
+        ),
+    ):
+        result = adapter.cpu_info()
+
+    assert result.logical_cores == 8
+    assert result.physical_cores is None
+    assert result.frequency_mhz is None
+
+
+def test_memory_info() -> None:
+    adapter = LinuxSystemAdapter()
+
+    memory = type(
+        "VirtualMemory",
+        (),
+        {
+            "total": 8_000,
+            "available": 5_000,
+            "used": 3_000,
+            "percent": 37.5,
+        },
+    )()
+
+    with patch(
+        "app.adapters.linux.linux_system_adapter."
+        "psutil.virtual_memory",
+        return_value=memory,
+    ):
+        result = adapter.memory_info()
+
+    assert result.total_bytes == 8_000
+    assert result.available_bytes == 5_000
+    assert result.used_bytes == 3_000
+    assert result.usage_percent == 37.5
+
+
+def test_disk_info() -> None:
+    adapter = LinuxSystemAdapter()
+
+    disk = type(
+        "DiskUsage",
+        (),
+        {
+            "total": 100_000,
+            "used": 40_000,
+            "free": 60_000,
+            "percent": 40.0,
+        },
+    )()
+
+    with patch(
+        "app.adapters.linux.linux_system_adapter."
+        "psutil.disk_usage",
+        return_value=disk,
+    ) as disk_usage:
+        result = adapter.disk_info()
+
+    disk_usage.assert_called_once_with("/")
+    assert result.total_bytes == 100_000
+    assert result.used_bytes == 40_000
+    assert result.free_bytes == 60_000
+    assert result.usage_percent == 40.0
+
+
+def test_uptime_info() -> None:
+    adapter = LinuxSystemAdapter()
+
+    with (
+        patch(
+            "app.adapters.linux.linux_system_adapter.time.time",
+            return_value=200_000.0,
+        ),
+        patch(
+            "app.adapters.linux.linux_system_adapter."
+            "psutil.boot_time",
+            return_value=113_600.0,
+        ),
+    ):
+        result = adapter.uptime_info()
+
+    assert result.uptime_seconds == 86_400

@@ -1,7 +1,9 @@
 """Servicios de aplicación relacionados con el sistema."""
 
+from datetime import UTC, datetime
+
 from app.adapters.base.system_adapter import SystemAdapter
-from app.domain.system import SystemInfo
+from app.domain.system import SystemInfo, SystemResources
 
 
 class SystemService:
@@ -20,3 +22,14 @@ class SystemService:
             operating_system=self._adapter.operating_system(),
             kernel=self._adapter.kernel(),
         )
+
+    def get_system_resources(self) -> SystemResources:
+        """Obtiene y consolida los recursos actuales del sistema."""
+
+        return SystemResources(
+            cpu=self._adapter.cpu_info(),
+            memory=self._adapter.memory_info(),
+            disk=self._adapter.disk_info(),
+            uptime=self._adapter.uptime_info(),
+            captured_at=datetime.now(UTC),
+        )   

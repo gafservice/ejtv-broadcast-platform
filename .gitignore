@@ -6,5 +6,5 @@ __pycache__/
 .venv/
 .env
 
-# Logs generados en ejecución
+logs/*.log
 control-center/logs/*.log
