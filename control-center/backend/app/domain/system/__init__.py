@@ -9,6 +9,13 @@ from app.domain.system.models import (
     UptimeInfo,
 )
 
+from app.domain.system.services import (
+    MonitoredService,
+    ServiceInstance,
+    ServiceMonitoringSnapshot,
+    ServiceStatus,
+)
+
 __all__ = [
     "CPUInfo",
     "DiskInfo",
@@ -16,4 +23,9 @@ __all__ = [
     "SystemInfo",
     "SystemResources",
     "UptimeInfo",
+    "MonitoredService",
+    "ServiceInstance",
+    "ServiceMonitoringSnapshot",
+    "ServiceStatus",
+
 ]

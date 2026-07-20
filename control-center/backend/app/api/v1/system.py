@@ -63,3 +63,18 @@ def get_system_resources(
         message="Recursos del sistema obtenidos correctamente.",
         request_id=request.state.request_id,
     )
+
+@router.get("/services")
+def get_service_monitoring(
+    request: Request,
+    service: SystemService = Depends(get_system_service),
+) -> dict[str, object]:
+    """Retorna el estado actual de los servicios monitoreados."""
+
+    monitoring = service.get_service_monitoring()
+
+    return success_response(
+        data=serialize_dataclass(monitoring),
+        message="Servicios monitoreados obtenidos correctamente.",
+        request_id=request.state.request_id,
+    )

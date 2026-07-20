@@ -1,5 +1,5 @@
 """Pruebas del servicio de información del sistema."""
-
+from datetime import UTC, datetime
 from app.adapters.base.system_adapter import SystemAdapter
 from app.domain.system import (
     CPUInfo,
@@ -8,6 +8,9 @@ from app.domain.system import (
     SystemInfo,
     SystemResources,
     UptimeInfo,
+    MonitoredService,
+    ServiceMonitoringSnapshot,
+    ServiceStatus,
 )
 from app.services.system_service import SystemService
 
@@ -52,6 +55,29 @@ class FakeSystemAdapter(SystemAdapter):
             uptime_seconds=86_400,
         )
 
+    def service_monitoring(
+        self,
+    ) -> ServiceMonitoringSnapshot:
+        return ServiceMonitoringSnapshot(
+            services=(
+                MonitoredService(
+                    name="MediaMTX",
+                    identifier="mediamtx.service",
+                    monitor_type="systemd",
+                    status=ServiceStatus.RUNNING,
+                    instances=(),
+                ),
+                MonitoredService(
+                    name="FFmpeg",
+                    identifier="ffmpeg",
+                    monitor_type="process",
+                    status=ServiceStatus.STOPPED,
+                    instances=(),
+                ),
+            ),
+            captured_at=datetime.now(UTC),
+        )
+
 
 def test_system_service_returns_system_info() -> None:
     service = SystemService(FakeSystemAdapter())
@@ -87,4 +113,17 @@ def test_system_service_returns_system_resources() -> None:
     assert result.memory.used_bytes == 3_000
     assert result.disk.free_bytes == 60_000
     assert result.uptime.uptime_seconds == 86_400
+    assert result.captured_at.tzinfo is not None
+
+def test_system_service_returns_service_monitoring() -> None:
+    service = SystemService(FakeSystemAdapter())
+
+    result = service.get_service_monitoring()
+
+    assert isinstance(result, ServiceMonitoringSnapshot)
+    assert len(result.services) == 2
+    assert result.services[0].name == "MediaMTX"
+    assert result.services[0].status is ServiceStatus.RUNNING
+    assert result.services[1].name == "FFmpeg"
+    assert result.services[1].status is ServiceStatus.STOPPED
     assert result.captured_at.tzinfo is not None

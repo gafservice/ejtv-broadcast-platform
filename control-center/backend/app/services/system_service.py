@@ -3,7 +3,11 @@
 from datetime import UTC, datetime
 
 from app.adapters.base.system_adapter import SystemAdapter
-from app.domain.system import SystemInfo, SystemResources
+from app.domain.system import (
+    ServiceMonitoringSnapshot,
+    SystemInfo,
+    SystemResources,
+)
 
 
 class SystemService:
@@ -33,3 +37,9 @@ class SystemService:
             uptime=self._adapter.uptime_info(),
             captured_at=datetime.now(UTC),
         )   
+    def get_service_monitoring(
+        self,
+        ) -> ServiceMonitoringSnapshot:
+        """Obtiene el estado actual de los servicios monitoreados."""
+
+        return self._adapter.service_monitoring()

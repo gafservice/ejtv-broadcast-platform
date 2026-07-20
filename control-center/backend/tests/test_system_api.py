@@ -1,7 +1,7 @@
 """Pruebas de la API de información del sistema."""
 
 from fastapi.testclient import TestClient
-
+from datetime import UTC, datetime
 from app.adapters.base.system_adapter import SystemAdapter
 from app.api.dependencies import get_system_service
 from app.main import app
@@ -11,6 +11,9 @@ from app.domain.system import (
     DiskInfo,
     MemoryInfo,
     UptimeInfo,
+    MonitoredService,
+    ServiceMonitoringSnapshot,
+    ServiceStatus,
 )
 
 class FakeSystemAdapter(SystemAdapter):
@@ -52,6 +55,29 @@ class FakeSystemAdapter(SystemAdapter):
     def uptime_info(self) -> UptimeInfo:
         return UptimeInfo(
             uptime_seconds=86_400,
+        )
+
+    def service_monitoring(
+        self,
+    ) -> ServiceMonitoringSnapshot:
+        return ServiceMonitoringSnapshot(
+            services=(
+                MonitoredService(
+                    name="MediaMTX",
+                    identifier="mediamtx.service",
+                    monitor_type="systemd",
+                    status=ServiceStatus.RUNNING,
+                    instances=(),
+                ),
+                MonitoredService(
+                    name="FFmpeg",
+                    identifier="ffmpeg",
+                    monitor_type="process",
+                    status=ServiceStatus.STOPPED,
+                    instances=(),
+                ),
+            ),
+            captured_at=datetime.now(UTC),
         )
 
 
@@ -129,3 +155,35 @@ def test_system_resources_endpoint() -> None:
         "Recursos del sistema obtenidos correctamente."
     )
     assert payload["request_id"]
+
+def test_system_services_endpoint() -> None:
+    response = client.get("/api/v1/system/services")
+
+    assert response.status_code == 200
+
+    payload = response.json()
+
+    assert payload["success"] is True
+    assert len(payload["data"]["services"]) == 2
+
+    assert payload["data"]["services"][0] == {
+        "name": "MediaMTX",
+        "identifier": "mediamtx.service",
+        "monitor_type": "systemd",
+        "status": "running",
+        "instances": [],
+    }
+
+    assert payload["data"]["services"][1] == {
+        "name": "FFmpeg",
+        "identifier": "ffmpeg",
+        "monitor_type": "process",
+        "status": "stopped",
+        "instances": [],
+    }
+
+    assert payload["data"]["captured_at"]
+    assert payload["message"] == (
+        "Servicios monitoreados obtenidos correctamente."
+    )
+    assert payload["request_id"]   

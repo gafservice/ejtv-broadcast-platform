@@ -5,6 +5,10 @@ from unittest.mock import patch
 
 from app.adapters.base.system_adapter import SystemAdapter
 from app.adapters.linux.linux_system_adapter import LinuxSystemAdapter
+from app.domain.system import (
+    ServiceInstance,
+    ServiceStatus,
+)
 
 
 def test_system_adapter_is_abstract() -> None:
@@ -161,7 +165,7 @@ def test_disk_info() -> None:
     adapter = LinuxSystemAdapter()
 
     disk = type(
-        "DiskUsage",
+        "DiskUsage",    
         (),
         {
             "total": 100_000,
@@ -202,3 +206,99 @@ def test_uptime_info() -> None:
         result = adapter.uptime_info()
 
     assert result.uptime_seconds == 86_400
+def test_map_systemd_running_status() -> None:
+    status = LinuxSystemAdapter._map_systemd_status(
+        active_state="active",
+        sub_state="running",
+    )
+
+    assert status is ServiceStatus.RUNNING
+
+
+def test_map_systemd_failed_status() -> None:
+    status = LinuxSystemAdapter._map_systemd_status(
+        active_state="failed",
+        sub_state="failed",
+    )
+
+    assert status is ServiceStatus.FAILED
+
+
+def test_map_systemd_stopped_status() -> None:
+    status = LinuxSystemAdapter._map_systemd_status(
+        active_state="inactive",
+        sub_state="dead",
+    )
+
+    assert status is ServiceStatus.STOPPED
+
+
+def test_map_systemd_unknown_status() -> None:
+    status = LinuxSystemAdapter._map_systemd_status(
+        active_state="activating",
+        sub_state="start",
+    )
+
+    assert status is ServiceStatus.UNKNOWN
+
+def test_process_service_stopped_when_no_process_matches() -> None:
+    adapter = LinuxSystemAdapter()
+
+    with patch(
+        "app.adapters.linux.linux_system_adapter."
+        "psutil.process_iter",
+        return_value=[],
+    ):
+        result = adapter._process_service(
+            name="FFmpeg",
+            process_name="ffmpeg",
+        )
+
+    assert result.name == "FFmpeg"
+    assert result.status is ServiceStatus.STOPPED
+    assert result.instances == ()
+
+
+def test_process_service_running_when_process_matches() -> None:
+    adapter = LinuxSystemAdapter()
+
+    process = type(
+        "FakeProcess",
+        (),
+        {
+            "info": {
+                "pid": 1234,
+                "name": "uvicorn",
+                "cmdline": [
+                    "uvicorn",
+                    "app.main:app",
+                ],
+            },
+        },
+    )()
+
+    with (
+        patch(
+            "app.adapters.linux.linux_system_adapter."
+            "psutil.process_iter",
+            return_value=[process],
+        ),
+        patch.object(
+            adapter,
+            "_process_instance",
+            return_value=ServiceInstance(
+                pid=1234,
+                cpu_percent=1.5,
+                memory_bytes=50_000_000,
+                uptime_seconds=120,
+            ),
+        ),
+    ):
+        result = adapter._process_service(
+            name="Control Center Backend",
+            process_name="uvicorn",
+        )
+
+    assert result.status is ServiceStatus.RUNNING
+    assert len(result.instances) == 1
+    assert result.instances[0].pid == 1234

@@ -1,4 +1,5 @@
 """Contrato para consultar información del sistema administrado."""
+from app.domain.system import ServiceMonitoringSnapshot
 
 from abc import ABC, abstractmethod
 
@@ -40,3 +41,7 @@ class SystemAdapter(ABC):
     @abstractmethod
     def uptime_info(self) -> UptimeInfo:
         """Retorna el tiempo de funcionamiento del sistema."""
+
+    @abstractmethod
+    def service_monitoring(self) -> ServiceMonitoringSnapshot:
+        """Retorna el estado de los servicios monitoreados."""
