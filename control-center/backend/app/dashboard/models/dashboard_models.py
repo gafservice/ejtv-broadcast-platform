@@ -1,0 +1,78 @@
+"""Modelos de presentación utilizados por el dashboard."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+
+
+@dataclass(frozen=True, slots=True)
+class ServerPanelData:
+    """Información mostrada en el panel SERVER."""
+
+    hostname: str
+    mediamtx_online: bool
+    api_online: bool
+    snapshot_at: datetime | None
+    quality: str
+
+
+@dataclass(frozen=True, slots=True)
+class StreamingPanelData:
+    """Resumen general mostrado en el panel STREAMING."""
+
+    active_paths: int
+    readers: int
+    inbound_bitrate_bps: float | None
+    outbound_bitrate_bps: float | None
+    quality: str
+
+    def __post_init__(self) -> None:
+        """Valida que el resumen contenga valores coherentes."""
+
+        if self.active_paths < 0:
+            raise ValueError(
+                "La cantidad de paths activos no puede ser negativa."
+            )
+
+        if self.readers < 0:
+            raise ValueError(
+                "La cantidad de lectores no puede ser negativa."
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class PathRowData:
+    """Información preparada para una fila de la tabla de paths."""
+
+    name: str
+    status: str
+    readers: int
+    inbound_bitrate_bps: float | None
+    outbound_bitrate_bps: float | None
+    quality: str
+    source: str
+
+    def __post_init__(self) -> None:
+        """Valida la información mínima requerida por una fila."""
+
+        if not isinstance(self.name, str) or not self.name.strip():
+            raise ValueError(
+                "El nombre del path debe contener texto válido."
+            )
+
+        if self.readers < 0:
+            raise ValueError(
+                "La cantidad de lectores no puede ser negativa."
+            )
+
+        object.__setattr__(self, "name", self.name.strip())
+
+
+@dataclass(frozen=True, slots=True)
+class DashboardData:
+    """Conjunto completo de información consumido por el dashboard."""
+
+    server: ServerPanelData
+    streaming: StreamingPanelData
+    paths: tuple[PathRowData, ...]

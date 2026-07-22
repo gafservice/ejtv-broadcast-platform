@@ -14,13 +14,13 @@ from app.domain.system import (
     CPUInfo,
     DiskInfo,
     MemoryInfo,
+    NetworkInfo,
     UptimeInfo,
     MonitoredService,
     ServiceInstance,
     ServiceMonitoringSnapshot,
     ServiceStatus,
 )
-
 
 class LinuxSystemAdapter(SystemAdapter):
     """Obtiene información y recursos del sistema operativo Linux."""
@@ -54,47 +54,125 @@ class LinuxSystemAdapter(SystemAdapter):
         return platform.release()
 
     def cpu_info(self) -> CPUInfo:
-        """Retorna el estado actual del procesador."""
+        """Obtiene la utilización y características del procesador."""
 
-        frequency = psutil.cpu_freq()
-
-        frequency_mhz = (
-            float(frequency.current)
-            if frequency is not None
-            else None
+        usage_percent = psutil.cpu_percent(
+            interval=0.1,
         )
 
+        per_core_usage_percent = psutil.cpu_percent(
+            interval=0.1,
+            percpu=True,
+        )
+
+        logical_cores = psutil.cpu_count(logical=True) or 1
+        physical_cores = psutil.cpu_count(logical=False)
+        frequency = psutil.cpu_freq()
+
         return CPUInfo(
-            usage_percent=psutil.cpu_percent(interval=0.1),
-            logical_cores=psutil.cpu_count(logical=True) or 1,
-            physical_cores=psutil.cpu_count(logical=False),
-            frequency_mhz=frequency_mhz,
+            usage_percent=usage_percent,
+            logical_cores=logical_cores,
+            physical_cores=physical_cores,
+            frequency_mhz=(
+                frequency.current
+                if frequency is not None
+                else None
+            ),
+            per_core_usage_percent=tuple(
+                per_core_usage_percent
+            ),
         )
 
     def memory_info(self) -> MemoryInfo:
-        """Retorna el estado actual de la memoria principal."""
-
+    
         memory = psutil.virtual_memory()
 
         return MemoryInfo(
-            total_bytes=int(memory.total),
-            available_bytes=int(memory.available),
-            used_bytes=int(memory.used),
-            usage_percent=float(memory.percent),
+            total_bytes=memory.total,
+            available_bytes=memory.available,
+            used_bytes=memory.used,
+            usage_percent=memory.percent,
+            free_bytes=memory.free,
+            cached_bytes=memory.cached,
+            buffers_bytes=memory.buffers,
         )
 
     def disk_info(self) -> DiskInfo:
-        """Retorna el estado de la partición raíz."""
+        mount_point = "/"
+        disk = psutil.disk_usage(mount_point)
+        partitions = psutil.disk_partitions(all=False)
 
-        disk = psutil.disk_usage("/")
+        root_partition = next(
+            (
+                partition
+                for partition in partitions
+                if partition.mountpoint == mount_point
+            ),
+            None,
+        )
+
+        device = (
+            root_partition.device
+            if root_partition is not None
+            else "unknown"
+        )
+
+        filesystem_type = (
+            root_partition.fstype
+            if root_partition is not None
+            else "unknown"
+        )
 
         return DiskInfo(
             total_bytes=int(disk.total),
             used_bytes=int(disk.used),
             free_bytes=int(disk.free),
             usage_percent=float(disk.percent),
+            device=device,
+            mount_point=mount_point,
+            filesystem_type=filesystem_type,
         )
 
+        
+    def network_info(self, interface: str) -> NetworkInfo:
+        """Retorna los contadores acumulados de una interfaz de red."""
+
+        if not isinstance(interface, str):
+            raise TypeError(
+                "El nombre de la interfaz debe ser una cadena."
+            )
+
+        normalized_interface = interface.strip()
+
+        if not normalized_interface:
+            raise ValueError(
+                "El nombre de la interfaz no puede estar vacío."
+            )
+
+        counters_by_interface = psutil.net_io_counters(
+            pernic=True,
+        )
+
+        counters = counters_by_interface.get(
+            normalized_interface,
+        )
+
+        if counters is None:
+            raise ValueError(
+                f"La interfaz '{normalized_interface}' no existe."
+            )
+
+        return NetworkInfo(
+            interface=normalized_interface,
+            bytes_sent=int(counters.bytes_sent),
+            bytes_received=int(counters.bytes_recv),
+            packets_sent=int(counters.packets_sent),
+            packets_received=int(counters.packets_recv),
+            errors_in=int(counters.errin),
+            errors_out=int(counters.errout),
+            dropped_in=int(counters.dropin),
+            dropped_out=int(counters.dropout),
+        )
     def uptime_info(self) -> UptimeInfo:
         """Retorna el tiempo de funcionamiento del sistema."""
 

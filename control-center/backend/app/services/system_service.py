@@ -34,9 +34,10 @@ class SystemService:
             cpu=self._adapter.cpu_info(),
             memory=self._adapter.memory_info(),
             disk=self._adapter.disk_info(),
+            network=self._adapter.network_info("ens2f0"),
             uptime=self._adapter.uptime_info(),
             captured_at=datetime.now(UTC),
-        )   
+        )  
     def get_service_monitoring(
         self,
         ) -> ServiceMonitoringSnapshot:

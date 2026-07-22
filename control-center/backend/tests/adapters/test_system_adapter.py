@@ -1,6 +1,7 @@
 """Pruebas del contrato y del adaptador Linux."""
 
 import inspect
+import pytest
 from unittest.mock import patch
 
 from app.adapters.base.system_adapter import SystemAdapter
@@ -82,7 +83,19 @@ def test_cpu_info() -> None:
         patch(
             "app.adapters.linux.linux_system_adapter."
             "psutil.cpu_percent",
-            return_value=25.5,
+            side_effect=[
+                25.5,
+                [
+                    10.0,
+                    20.0,
+                    30.0,
+                    40.0,
+                    15.0,
+                    25.0,
+                    35.0,
+                    45.0,
+                ],
+            ],
         ),
         patch(
             "app.adapters.linux.linux_system_adapter."
@@ -105,7 +118,18 @@ def test_cpu_info() -> None:
     assert result.logical_cores == 8
     assert result.physical_cores == 4
     assert result.frequency_mhz == 2800.0
-
+    assert result.per_core_usage_percent == (
+        10.0,
+        20.0,
+        30.0,
+        40.0,
+        15.0,
+        25.0,
+        35.0,
+        45.0,
+    )
+    assert result.minimum_core_usage_percent == 10.0
+    assert result.maximum_core_usage_percent == 45.0
 
 def test_cpu_info_accepts_missing_frequency() -> None:
     adapter = LinuxSystemAdapter()
@@ -114,7 +138,19 @@ def test_cpu_info_accepts_missing_frequency() -> None:
         patch(
             "app.adapters.linux.linux_system_adapter."
             "psutil.cpu_percent",
-            return_value=10.0,
+            side_effect=[
+                10.0,
+                [
+                    5.0,
+                    10.0,
+                    15.0,
+                    20.0,
+                    25.0,
+                    30.0,
+                    35.0,
+                    40.0,
+                ],
+            ],
         ),
         patch(
             "app.adapters.linux.linux_system_adapter."
@@ -132,6 +168,16 @@ def test_cpu_info_accepts_missing_frequency() -> None:
     assert result.logical_cores == 8
     assert result.physical_cores is None
     assert result.frequency_mhz is None
+    assert result.per_core_usage_percent == (
+        5.0,
+        10.0,
+        15.0,
+        20.0,
+        25.0,
+        30.0,
+        35.0,
+        40.0,
+    )
 
 
 def test_memory_info() -> None:
@@ -145,6 +191,9 @@ def test_memory_info() -> None:
             "available": 5_000,
             "used": 3_000,
             "percent": 37.5,
+            "free": 2_000,
+            "cached": 800,
+            "buffers": 200,
         },
     )()
 
@@ -159,13 +208,15 @@ def test_memory_info() -> None:
     assert result.available_bytes == 5_000
     assert result.used_bytes == 3_000
     assert result.usage_percent == 37.5
-
+    assert result.free_bytes == 2_000
+    assert result.cached_bytes == 800
+    assert result.buffers_bytes == 200
 
 def test_disk_info() -> None:
     adapter = LinuxSystemAdapter()
 
     disk = type(
-        "DiskUsage",    
+        "DiskUsage",
         (),
         {
             "total": 100_000,
@@ -175,18 +226,41 @@ def test_disk_info() -> None:
         },
     )()
 
-    with patch(
-        "app.adapters.linux.linux_system_adapter."
-        "psutil.disk_usage",
-        return_value=disk,
-    ) as disk_usage:
+    partition = type(
+        "Partition",
+        (),
+        {
+            "device": "/dev/sda2",
+            "mountpoint": "/",
+            "fstype": "ext4",
+        },
+    )()
+
+    with (
+        patch(
+            "app.adapters.linux.linux_system_adapter."
+            "psutil.disk_usage",
+            return_value=disk,
+        ) as disk_usage,
+        patch(
+            "app.adapters.linux.linux_system_adapter."
+            "psutil.disk_partitions",
+            return_value=[partition],
+        ) as disk_partitions,
+    ):
         result = adapter.disk_info()
 
     disk_usage.assert_called_once_with("/")
+    disk_partitions.assert_called_once_with(all=False)
+
     assert result.total_bytes == 100_000
     assert result.used_bytes == 40_000
     assert result.free_bytes == 60_000
     assert result.usage_percent == 40.0
+    assert result.device == "/dev/sda2"
+    assert result.mount_point == "/"
+    assert result.filesystem_type == "ext4"
+
 
 
 def test_uptime_info() -> None:
@@ -302,3 +376,51 @@ def test_process_service_running_when_process_matches() -> None:
     assert result.status is ServiceStatus.RUNNING
     assert len(result.instances) == 1
     assert result.instances[0].pid == 1234
+
+def test_network_info() -> None:
+    adapter = LinuxSystemAdapter()
+
+    counters = type(
+        "NetworkCounters",
+        (),
+        {
+            "bytes_sent": 1_000_000,
+            "bytes_recv": 2_000_000,
+            "packets_sent": 10_000,
+            "packets_recv": 20_000,
+            "errin": 2,
+            "errout": 1,
+            "dropin": 4,
+            "dropout": 3,
+        },
+    )()
+
+    with patch(
+        "app.adapters.linux.linux_system_adapter."
+        "psutil.net_io_counters",
+        return_value={"ens2f0": counters},
+    ) as net_io_counters:
+        result = adapter.network_info("ens2f0")
+
+    net_io_counters.assert_called_once_with(pernic=True)
+
+    assert result.interface == "ens2f0"
+    assert result.bytes_sent == 1_000_000
+    assert result.bytes_received == 2_000_000
+    assert result.packets_sent == 10_000
+    assert result.packets_received == 20_000
+    assert result.errors_in == 2
+    assert result.errors_out == 1
+    assert result.dropped_in == 4
+    assert result.dropped_out == 3
+
+def test_network_info_rejects_unknown_interface() -> None:
+    adapter = LinuxSystemAdapter()
+
+    with patch(
+        "app.adapters.linux.linux_system_adapter."
+        "psutil.net_io_counters",
+        return_value={},
+    ):
+        with pytest.raises(ValueError):
+            adapter.network_info("ens2f0")

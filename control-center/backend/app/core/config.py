@@ -15,9 +15,9 @@ from app.core.constants import (
 
 
 class Settings(BaseSettings):
-    """Parámetros configurables del EJTV Control Center."""
+    """Parámetros configurables del Control Center."""
 
-    app_name: str = "EJTV Control Center"
+    app_name: str = "Control Center"
 
     environment: Literal[
         "development",
@@ -32,6 +32,13 @@ class Settings(BaseSettings):
 
     log_level: str = DEFAULT_LOG_LEVEL
     log_directory: str = "../logs"
+
+    mediamtx_api_url: str = "http://127.0.0.1:9997"
+
+    mediamtx_api_timeout_seconds: float = Field(
+        default=5.0,
+        gt=0,
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",

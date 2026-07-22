@@ -4,6 +4,7 @@ from app.domain.system.models import (
     CPUInfo,
     DiskInfo,
     MemoryInfo,
+    NetworkInfo,
     SystemInfo,
     SystemResources,
     UptimeInfo,

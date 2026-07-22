@@ -10,6 +10,7 @@ from app.domain.system import (
     CPUInfo,
     DiskInfo,
     MemoryInfo,
+    NetworkInfo,
     UptimeInfo,
     MonitoredService,
     ServiceMonitoringSnapshot,
@@ -51,6 +52,20 @@ class FakeSystemAdapter(SystemAdapter):
             free_bytes=60_000,
             usage_percent=40.0,
         )
+
+    def network_info(self, interface: str) -> NetworkInfo:
+        return NetworkInfo(
+            interface=interface,
+            bytes_sent=1_000_000,
+            bytes_received=2_000_000,
+            packets_sent=10_000,
+            packets_received=20_000,
+            errors_in=0,
+            errors_out=0,
+            dropped_in=0,
+            dropped_out=0,
+        )
+
 
     def uptime_info(self) -> UptimeInfo:
         return UptimeInfo(
@@ -129,33 +144,45 @@ def test_system_resources_endpoint() -> None:
     payload = response.json()
 
     assert payload["success"] is True
+
     assert payload["data"]["cpu"] == {
         "usage_percent": 25.0,
         "logical_cores": 8,
         "physical_cores": 4,
         "frequency_mhz": 2800.0,
+        "per_core_usage_percent": [],
     }
+
     assert payload["data"]["memory"] == {
         "total_bytes": 8_000,
         "available_bytes": 5_000,
         "used_bytes": 3_000,
         "usage_percent": 37.5,
+        "free_bytes": 0,
+        "cached_bytes": 0,
+        "buffers_bytes": 0,
     }
+
     assert payload["data"]["disk"] == {
-        "total_bytes": 100_000,
-        "used_bytes": 40_000,
-        "free_bytes": 60_000,
-        "usage_percent": 40.0,
+    "total_bytes": 100_000,
+    "used_bytes": 40_000,
+    "free_bytes": 60_000,
+    "usage_percent": 40.0,
+    "device": "unknown",
+    "mount_point": "/",
+    "filesystem_type": "unknown",
     }
+
     assert payload["data"]["uptime"] == {
         "uptime_seconds": 86_400,
     }
+
     assert payload["data"]["captured_at"]
     assert payload["message"] == (
         "Recursos del sistema obtenidos correctamente."
     )
     assert payload["request_id"]
-
+    
 def test_system_services_endpoint() -> None:
     response = client.get("/api/v1/system/services")
 

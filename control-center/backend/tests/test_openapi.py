@@ -14,7 +14,7 @@ def test_openapi_document_is_available() -> None:
 
     document = response.json()
 
-    assert document["info"]["title"] == "EJTV Control Center"
+    assert document["info"]["title"] == "Control Center"
     assert document["info"]["version"] == "0.2.0"
 
 

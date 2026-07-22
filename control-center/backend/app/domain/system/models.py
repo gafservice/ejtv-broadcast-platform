@@ -94,6 +94,7 @@ class CPUInfo:
     logical_cores: int
     physical_cores: int | None
     frequency_mhz: float | None
+    per_core_usage_percent: tuple[float, ...] = ()
 
     def __post_init__(self) -> None:
         """Valida la información del procesador."""
@@ -143,6 +144,52 @@ class CPUInfo:
                 float(self.frequency_mhz),
             )
 
+        if not isinstance(self.per_core_usage_percent, tuple):
+            raise ValueError(
+                "El campo 'per_core_usage_percent' debe ser una tupla."
+            )
+
+        normalized_core_usage = tuple(
+            _validate_percentage(
+                "per_core_usage_percent",
+                value,
+            )
+            for value in self.per_core_usage_percent
+        )
+
+        if (
+            normalized_core_usage
+            and len(normalized_core_usage) != self.logical_cores
+        ):
+            raise ValueError(
+                "La cantidad de mediciones por CPU lógica debe coincidir "
+                "con 'logical_cores'."
+            )
+
+        object.__setattr__(
+            self,
+            "per_core_usage_percent",
+            normalized_core_usage,
+        )
+
+    @property
+    def minimum_core_usage_percent(self) -> float | None:
+        """Retorna la menor utilización entre las CPU lógicas."""
+
+        if not self.per_core_usage_percent:
+            return None
+
+        return min(self.per_core_usage_percent)
+
+    @property
+    def maximum_core_usage_percent(self) -> float | None:
+        """Retorna la mayor utilización entre las CPU lógicas."""
+
+        if not self.per_core_usage_percent:
+            return None
+
+        return max(self.per_core_usage_percent)
+
 
 @dataclass(frozen=True, slots=True)
 class MemoryInfo:
@@ -153,6 +200,10 @@ class MemoryInfo:
     used_bytes: int
     usage_percent: float
 
+    free_bytes: int = 0
+    cached_bytes: int = 0 
+    buffers_bytes: int = 0
+
     def __post_init__(self) -> None:
         """Valida la información de memoria."""
 
@@ -160,6 +211,9 @@ class MemoryInfo:
             "total_bytes",
             "available_bytes",
             "used_bytes",
+            "free_bytes",
+            "cached_bytes",
+            "buffers_bytes",
         ):
             value = getattr(self, field_name)
 
@@ -205,6 +259,9 @@ class DiskInfo:
     used_bytes: int
     free_bytes: int
     usage_percent: float
+    device: str = "unknown"
+    mount_point: str = "/"
+    filesystem_type: str = "unknown"
 
     def __post_init__(self) -> None:
         """Valida la información de almacenamiento."""
@@ -249,6 +306,30 @@ class DiskInfo:
             ),
         )
 
+        for field_name in (
+            "device",
+            "mount_point",
+            "filesystem_type",
+        ):
+            value = getattr(self, field_name)
+
+            if not isinstance(value, str):
+                raise TypeError(
+                    f"El campo '{field_name}' debe ser una cadena."
+                )
+
+            normalized_value = value.strip()
+
+            if not normalized_value:
+                raise ValueError(
+                    f"El campo '{field_name}' no puede estar vacío."
+                )
+
+            object.__setattr__(
+                self,
+                field_name,
+                normalized_value,
+            )
 
 @dataclass(frozen=True, slots=True)
 class UptimeInfo:
@@ -270,12 +351,68 @@ class UptimeInfo:
 
 
 @dataclass(frozen=True, slots=True)
+class NetworkInfo:
+    """Contadores acumulados de una interfaz de red."""
+
+    interface: str
+    bytes_sent: int
+    bytes_received: int
+    packets_sent: int
+    packets_received: int
+    errors_in: int
+    errors_out: int
+    dropped_in: int
+    dropped_out: int
+
+    def __post_init__(self) -> None:
+        """Valida la identidad y los contadores de red."""
+
+        if not isinstance(self.interface, str):
+            raise TypeError(
+                "El campo 'interface' debe ser una cadena."
+            )
+
+        normalized_interface = self.interface.strip()
+
+        if not normalized_interface:
+            raise ValueError(
+                "El campo 'interface' no puede estar vacío."
+            )
+
+        object.__setattr__(
+            self,
+            "interface",
+            normalized_interface,
+        )
+
+        for field_name in (
+            "bytes_sent",
+            "bytes_received",
+            "packets_sent",
+            "packets_received",
+            "errors_in",
+            "errors_out",
+            "dropped_in",
+            "dropped_out",
+        ):
+            value = getattr(self, field_name)
+
+            object.__setattr__(
+                self,
+                field_name,
+                _validate_non_negative_integer(
+                    field_name,
+                    value,
+                ),
+            )
+@dataclass(frozen=True, slots=True)
 class SystemResources:
     """Medición consolidada de los recursos del servidor."""
 
     cpu: CPUInfo
     memory: MemoryInfo
     disk: DiskInfo
+    network: NetworkInfo
     uptime: UptimeInfo
     captured_at: datetime
 
@@ -286,6 +423,7 @@ class SystemResources:
             "cpu": CPUInfo,
             "memory": MemoryInfo,
             "disk": DiskInfo,
+            "network": NetworkInfo,
             "uptime": UptimeInfo,
         }
 

@@ -7,6 +7,7 @@ from app.domain.system import (
     CPUInfo,
     DiskInfo,
     MemoryInfo,
+    NetworkInfo,
     UptimeInfo,
 )
 
@@ -37,7 +38,11 @@ class SystemAdapter(ABC):
     @abstractmethod
     def disk_info(self) -> DiskInfo:
         """Retorna el estado del almacenamiento principal."""
-
+    
+    @abstractmethod
+    def network_info(self, interface: str) -> NetworkInfo:
+        """Retorna los contadores de una interfaz de red."""
+    
     @abstractmethod
     def uptime_info(self) -> UptimeInfo:
         """Retorna el tiempo de funcionamiento del sistema."""

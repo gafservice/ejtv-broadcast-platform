@@ -15,7 +15,7 @@ def test_root_endpoint() -> None:
     payload = response.json()
 
     assert payload["success"] is True
-    assert payload["data"]["application"] == "EJTV Control Center"
+    assert payload["data"]["application"] == "Control Center"
     assert payload["data"]["status"] == "running"
     assert payload["request_id"]
 

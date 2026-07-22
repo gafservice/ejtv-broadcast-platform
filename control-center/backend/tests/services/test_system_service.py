@@ -7,7 +7,9 @@ from app.domain.system import (
     MemoryInfo,
     SystemInfo,
     SystemResources,
+    MemoryInfo,
     UptimeInfo,
+    NetworkInfo,
     MonitoredService,
     ServiceMonitoringSnapshot,
     ServiceStatus,
@@ -55,6 +57,20 @@ class FakeSystemAdapter(SystemAdapter):
             uptime_seconds=86_400,
         )
 
+    def network_info(self, interface: str) -> NetworkInfo:
+        return NetworkInfo(
+            interface=interface,
+            bytes_sent=1_000_000,
+            bytes_received=2_000_000,
+            packets_sent=10_000,
+            packets_received=20_000,
+            errors_in=0,
+            errors_out=0,
+            dropped_in=0,
+            dropped_out=0,
+        )
+
+
     def service_monitoring(
         self,
     ) -> ServiceMonitoringSnapshot:
@@ -92,6 +108,7 @@ def test_system_service_returns_system_info() -> None:
 
 
 
+
 def test_system_service_uses_adapter_contract() -> None:
     adapter: SystemAdapter = FakeSystemAdapter()
     service = SystemService(adapter)
@@ -114,6 +131,9 @@ def test_system_service_returns_system_resources() -> None:
     assert result.disk.free_bytes == 60_000
     assert result.uptime.uptime_seconds == 86_400
     assert result.captured_at.tzinfo is not None
+    assert result.network.interface == "ens2f0"
+    assert result.network.bytes_sent == 1_000_000
+    assert result.network.bytes_received == 2_000_000
 
 def test_system_service_returns_service_monitoring() -> None:
     service = SystemService(FakeSystemAdapter())

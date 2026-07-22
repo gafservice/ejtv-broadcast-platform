@@ -1,0 +1,58 @@
+"""Punto de entrada del monitor NOC."""
+
+from __future__ import annotations
+
+from app.adapters.linux.linux_system_adapter import LinuxSystemAdapter
+from app.adapters.mediamtx.adapter import MediaMTXAdapter
+from app.adapters.mediamtx.client import MediaMTXClient
+from app.core.config import get_settings
+from app.core.http import HttpClient
+from app.dashboard.application import DashboardApplication
+from app.dashboard.renderers.dashboard_renderer import DashboardRenderer
+from app.dashboard.services.dashboard_service import DashboardService
+from app.services.streaming_service import StreamingService
+from app.services.system_service import SystemService
+
+
+def build_dashboard_application() -> DashboardApplication:
+    """Construye el runtime completo del monitor NOC."""
+
+    settings = get_settings()
+
+    http_client = HttpClient(
+        base_url=settings.mediamtx_api_url,
+        timeout=settings.mediamtx_api_timeout_seconds,
+    )
+
+    mediamtx_client = MediaMTXClient(http_client)
+    mediamtx_adapter = MediaMTXAdapter(mediamtx_client)
+
+    system_adapter = LinuxSystemAdapter()
+    system_service = SystemService(system_adapter)
+
+    streaming_service = StreamingService()
+    dashboard_service = DashboardService()
+    dashboard_renderer = DashboardRenderer()
+
+    return DashboardApplication(
+        mediamtx_adapter=mediamtx_adapter,
+        streaming_service=streaming_service,
+        dashboard_service=dashboard_service,
+        dashboard_renderer=dashboard_renderer,
+        system_service=system_service,
+    )
+
+
+def main() -> None:
+    """Inicia el monitor NOC conectado a MediaMTX."""
+
+    application = build_dashboard_application()
+
+    try:
+        application.run()
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == "__main__":
+    main()
