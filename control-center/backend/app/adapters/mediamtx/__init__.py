@@ -9,10 +9,20 @@ from .exceptions import (
     MediaMTXInvalidResponseError,
     MediaMTXTimeoutError,
 )
+from .metrics_client import MediaMTXMetricsClient
+from .metrics_parser import (
+    MediaMTXMetricsParser,
+    MediaMTXMetricsSnapshot,
+    PrometheusSample,
+)
 
 __all__ = [
     "MediaMTXAdapter",
     "MediaMTXClient",
+    "MediaMTXMetricsClient",
+    "MediaMTXMetricsParser",
+    "MediaMTXMetricsSnapshot",
+    "PrometheusSample",
     "MediaMTXError",
     "MediaMTXConnectionError",
     "MediaMTXTimeoutError",

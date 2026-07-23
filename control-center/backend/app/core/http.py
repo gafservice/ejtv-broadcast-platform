@@ -51,6 +51,15 @@ class HttpResponse:
                 "La respuesta no contiene JSON válido."
             ) from exc
 
+    def text(self, encoding: str = "utf-8") -> str:
+        """Decodifica el cuerpo HTTP como texto."""
+        try:
+            return self.body.decode(encoding)
+        except UnicodeDecodeError as exc:
+            raise HttpInvalidResponseError(
+                "La respuesta HTTP no contiene texto válido."
+            ) from exc
+
 
 class HttpClient:
     """Cliente HTTP básico basado únicamente en la biblioteca estándar."""
