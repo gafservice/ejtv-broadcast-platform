@@ -2,9 +2,21 @@
 
 from datetime import datetime, timezone
 
+from datetime import timedelta
+
+from app.domain.system import (
+    CPUInfo,
+    DiskInfo,
+    MemoryInfo,
+    NetworkInfo,
+    SystemResources,
+    UptimeInfo,
+)
+
 import pytest
 
 from app.dashboard.services.dashboard_service import DashboardService
+
 from app.domain.streaming import (
     MeasurementQuality,
     MediaMTXSnapshot,
@@ -15,6 +27,91 @@ from app.domain.streaming import (
     StreamingPathMeasurement,
 )
 
+def test_build_system_panel_calculates_network_rates() -> None:
+    """Debe calcular RX/TX usando dos capturas consecutivas."""
+
+    service = DashboardService()
+
+    captured_at = datetime(
+        2026,
+        7,
+        20,
+        12,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    previous = SystemResources(
+        cpu=CPUInfo(
+            usage_percent=10,
+            per_core_usage_percent=(10,),
+            logical_cores=1,
+            physical_cores=1,
+            frequency_mhz=3000,
+        ),
+        memory=MemoryInfo(
+            total_bytes=100,
+            available_bytes=40,
+            used_bytes=60,
+            usage_percent=60,
+        ),
+        disk=DiskInfo(
+            total_bytes=100,
+            used_bytes=50,
+            free_bytes=50,
+            usage_percent=50,
+        ),
+        network=NetworkInfo(
+            interface="ens2f0",
+            bytes_sent=500_000,
+            bytes_received=1_000_000,
+            packets_sent=0,
+            packets_received=0,
+            errors_in=1,
+            errors_out=2,
+            dropped_in=3,
+            dropped_out=4,
+        ),
+        uptime=UptimeInfo(
+            uptime_seconds=100,
+        ),
+        captured_at=captured_at,
+    )
+
+    current = SystemResources(
+        cpu=previous.cpu,
+        memory=previous.memory,
+        disk=previous.disk,
+        network=NetworkInfo(
+            interface="ens2f0",
+            bytes_sent=1_000_000,
+            bytes_received=2_000_000,
+            packets_sent=0,
+            packets_received=0,
+            errors_in=5,
+            errors_out=6,
+            dropped_in=7,
+            dropped_out=8,
+        ),
+        uptime=UptimeInfo(
+            uptime_seconds=101,
+        ),
+        captured_at=captured_at + timedelta(seconds=1),
+    )
+
+    panel = service.build_system_panel(
+        resources=current,
+        previous_resources=previous,
+    )
+
+    assert panel.network.rx_bps == 8_000_000
+    assert panel.network.tx_bps == 4_000_000
+
+    assert panel.network.errors_in == 5
+    assert panel.network.errors_out == 6
+
+    assert panel.network.dropped_in == 7
+    assert panel.network.dropped_out == 8
 
 def test_dashboard_service_can_be_created() -> None:
     service = DashboardService()

@@ -1,11 +1,16 @@
 """Servicio de aplicación para construir datos del dashboard."""
 
 from app.dashboard.models import (
+    CpuPanelData,
     DashboardData,
+    DiskPanelData,
+    MemoryPanelData,
+    NetworkPanelData,
     PathRowData,
     ServerPanelData,
     StreamingPanelData,
     SystemPanelData,
+    UptimePanelData,
 )
 from app.domain.streaming import (
     MeasurementQuality,
@@ -13,7 +18,10 @@ from app.domain.streaming import (
     StreamingHealth,
     StreamingMeasurement,
 )
-from app.domain.system import SystemResources
+from app.domain.system import (
+    NetworkRateCalculator,
+    SystemResources,
+)
 
 
 _SOURCE_LABELS = {
@@ -29,6 +37,17 @@ _SOURCE_LABELS = {
 
 class DashboardService:
     """Coordina la construcción de la información del dashboard."""
+
+    def __init__(
+        self,
+        network_rate_calculator: NetworkRateCalculator | None = None,
+    ) -> None:
+        """Configura los calculadores usados por el servicio."""
+
+        self._network_rate_calculator = (
+            network_rate_calculator
+            or NetworkRateCalculator()
+        )
 
     def build_server_panel(
         self,
@@ -72,34 +91,49 @@ class DashboardService:
         self,
         *,
         resources: SystemResources,
+        previous_resources: SystemResources | None = None,
     ) -> SystemPanelData:
         """Construye los datos del panel SYSTEM."""
 
-        return SystemPanelData(
-            cpu_usage_percent=resources.cpu.usage_percent,
-            per_core_usage_percent=(
-                resources.cpu.per_core_usage_percent
-            ),
-            logical_cores=resources.cpu.logical_cores,
-            physical_cores=resources.cpu.physical_cores,
-            frequency_mhz=resources.cpu.frequency_mhz,
-            memory_usage_percent=resources.memory.usage_percent,
-            memory_used_bytes=resources.memory.used_bytes,
-            memory_total_bytes=resources.memory.total_bytes,
-            disk_usage_percent=resources.disk.usage_percent,
-            disk_used_bytes=resources.disk.used_bytes,
-            disk_total_bytes=resources.disk.total_bytes,
-            uptime_seconds=resources.uptime.uptime_seconds,
-            network_interface=resources.network.interface,
-            network_bytes_sent=resources.network.bytes_sent,
-            network_bytes_received=resources.network.bytes_received,
-            network_errors_in=resources.network.errors_in,
-            network_errors_out=resources.network.errors_out,
-            network_dropped_in=resources.network.dropped_in,
-            network_dropped_out=resources.network.dropped_out,
-            captured_at=resources.captured_at,
+        network_rate = self._network_rate_calculator.compare(
+            previous_resources,
+            resources,
         )
 
+        return SystemPanelData(
+            cpu=CpuPanelData(
+                usage_percent=resources.cpu.usage_percent,
+                per_core_usage_percent=(
+                    resources.cpu.per_core_usage_percent
+                ),
+                logical_cores=resources.cpu.logical_cores,
+                physical_cores=resources.cpu.physical_cores,
+                frequency_mhz=resources.cpu.frequency_mhz,
+            ),
+            memory=MemoryPanelData(
+                usage_percent=resources.memory.usage_percent,
+                used_bytes=resources.memory.used_bytes,
+                total_bytes=resources.memory.total_bytes,
+            ),
+            disk=DiskPanelData(
+                usage_percent=resources.disk.usage_percent,
+                used_bytes=resources.disk.used_bytes,
+                total_bytes=resources.disk.total_bytes,
+            ),
+            network=NetworkPanelData(
+                interface=network_rate.interface,
+                rx_bps=network_rate.rx_bps,
+                tx_bps=network_rate.tx_bps,
+                errors_in=network_rate.errors_in,
+                errors_out=network_rate.errors_out,
+                dropped_in=network_rate.dropped_in,
+                dropped_out=network_rate.dropped_out,
+            ),
+            uptime=UptimePanelData(
+                seconds=resources.uptime.uptime_seconds,
+            ),
+            captured_at=resources.captured_at,
+        )
 
     def build_path_row(
         self,
@@ -152,6 +186,7 @@ class DashboardService:
         snapshot: MediaMTXSnapshot,
         measurement: StreamingMeasurement,
         system_resources: SystemResources | None = None,
+        previous_system_resources: SystemResources | None = None,
         health: StreamingHealth | None = None,
     ) -> DashboardData:
         """Construye el dashboard completo desde snapshot y medición."""
@@ -197,7 +232,10 @@ class DashboardService:
         )
 
         system = (
-            self.build_system_panel(resources=system_resources)
+            self.build_system_panel(
+                resources=system_resources,
+                previous_resources=previous_system_resources,
+            )
             if system_resources is not None
             else None
         )

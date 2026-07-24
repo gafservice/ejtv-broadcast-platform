@@ -100,6 +100,7 @@ def test_run_once_builds_and_renders_dashboard() -> None:
         snapshot=snapshot,
         measurement=measurement,
         system_resources=system_resources,
+        previous_system_resources=None,
     )
 
     dashboard_renderer.render.assert_called_once_with(dashboard_data)
@@ -383,6 +384,7 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         snapshot=snapshot,
         measurement=measurement,
         system_resources=system_resources,
+        previous_system_resources=None,
         health=streaming_health,
     )
 

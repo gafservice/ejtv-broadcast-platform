@@ -14,6 +14,7 @@ from app.adapters.mediamtx.metrics_parser import MediaMTXMetricsParser
 from app.dashboard.renderers.dashboard_renderer import DashboardRenderer
 from app.dashboard.services.dashboard_service import DashboardService
 from app.domain.streaming import MediaMTXSnapshot, StreamingHealth
+from app.domain.system import SystemResources
 from app.services.streaming_health_service import StreamingHealthService
 from app.services.streaming_service import StreamingService
 from app.services.system_service import SystemService
@@ -45,6 +46,7 @@ class DashboardApplication:
         self._streaming_health_service = streaming_health_service
 
         self._previous_snapshot: MediaMTXSnapshot | None = None
+        self._previous_system_resources: SystemResources | None = None
         self._latest_health: StreamingHealth | None = None
 
         self._validate_health_dependencies()
@@ -81,6 +83,9 @@ class DashboardApplication:
             "snapshot": snapshot,
             "measurement": measurement,
             "system_resources": system_resources,
+            "previous_system_resources": (
+                self._previous_system_resources
+            ),
         }
 
         if streaming_health is not None:
@@ -97,6 +102,7 @@ class DashboardApplication:
         )
 
         self._previous_snapshot = snapshot
+        self._previous_system_resources = system_resources
         self._latest_health = streaming_health
 
         return rendered_dashboard
