@@ -1,0 +1,3 @@
+# Diseño
+
+Pendiente de refinamiento.

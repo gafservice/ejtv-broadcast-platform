@@ -1,0 +1,3 @@
+# Problema
+
+Pendiente de refinamiento.
