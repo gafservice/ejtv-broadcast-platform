@@ -89,3 +89,26 @@ def test_render_accepts_missing_health() -> None:
     assert "UNKNOWN" in output
     assert "No health data available." in output
     assert "Summary: No health data available." in output
+
+def test_render_shortens_long_message() -> None:
+    renderer = StreamingHealthRenderer()
+
+    health = StreamingHealth(
+        captured_at=CAPTURED_AT,
+        paths=(),
+        status=HealthStatus.DEGRADED,
+        message=(
+            "El subsistema SRT presenta una condición "
+            "degradada que requiere observación."
+        ),
+    )
+
+    panel = renderer.render(health)
+    output = render_to_text(panel)
+
+    assert "Summary" in output
+    assert "…" in output
+    assert (
+        "El subsistema SRT presenta una condición "
+        "degradada que requiere observación."
+    ) not in output
