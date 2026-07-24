@@ -297,7 +297,7 @@ def test_build_dashboard_from_measurement() -> None:
     assert path.inbound_bitrate_bps == 4_000_000
     assert path.outbound_bitrate_bps == 8_000_000
     assert path.quality == "AVAILABLE"
-    assert path.source == "udpSource"
+    assert path.source == "UDP"
 
 
 def test_build_dashboard_uses_none_source_when_path_is_missing() -> None:
@@ -575,3 +575,101 @@ def test_build_dashboard_rejects_duplicate_measurement_paths() -> None:
             snapshot=snapshot,
             measurement=measurement,
         )
+
+
+def test_build_dashboard_rejects_mismatched_health_capture_time() -> None:
+    """Health debe corresponder al mismo instante que el snapshot."""
+
+    from datetime import timedelta
+
+    from app.domain.streaming import HealthStatus, StreamingHealth
+
+    service = DashboardService()
+
+    captured_at = datetime(
+        2026,
+        7,
+        22,
+        12,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=0,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=None,
+        interval_seconds=None,
+        paths=(),
+        total_inbound_bitrate_bps=None,
+        total_outbound_bitrate_bps=None,
+        quality=MeasurementQuality.NOT_AVAILABLE,
+    )
+
+    health = StreamingHealth(
+        captured_at=captured_at + timedelta(seconds=1),
+        paths=(),
+        status=HealthStatus.UNKNOWN,
+        message="Sin métricas.",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="deben pertenecer al mismo instante",
+    ):
+        service.build_dashboard_from_measurement(
+            hostname="server-01",
+            mediamtx_online=True,
+            api_online=True,
+            snapshot=snapshot,
+            measurement=measurement,
+            health=health,
+        )
+
+def test_resolve_source_formats_mpegts_source() -> None:
+    service = DashboardService()
+
+    captured_at = datetime(
+        2026,
+        7,
+        20,
+        20,
+        30,
+        tzinfo=timezone.utc,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(
+            MediaPath(
+                name="canal-mpegts",
+                configuration_name="canal-mpegts",
+                status=MediaPathStatus.ACTIVE,
+                ready=True,
+                available=True,
+                online=True,
+                source=MediaSource(
+                    source_type="mpegtsSource",
+                    source_id="source-mpegts-001",
+                ),
+                readers=(),
+                inbound_bytes=0,
+                outbound_bytes=0,
+            ),
+        ),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    source = service._resolve_source(
+        snapshot=snapshot,
+        path_name="canal-mpegts",
+    )
+
+    assert source == "MPEG-TS"

@@ -9,8 +9,19 @@ from app.dashboard.models import (
 from app.domain.streaming import (
     MeasurementQuality,
     MediaMTXSnapshot,
+    StreamingHealth,
     StreamingMeasurement,
 )
+
+_SOURCE_LABELS = {
+    "mpegtsSource": "MPEG-TS",
+    "udpSource": "UDP",
+    "rtmpSource": "RTMP",
+    "rtspSource": "RTSP",
+    "srtSource": "SRT",
+    "hlsSource": "HLS",
+    "webRTCSource": "WebRTC",
+}
 
 
 class DashboardService:
@@ -83,6 +94,7 @@ class DashboardService:
         server: ServerPanelData,
         streaming: StreamingPanelData,
         paths: tuple[PathRowData, ...],
+        health: StreamingHealth | None = None,
     ) -> DashboardData:
         """Agrupa todas las secciones del dashboard."""
 
@@ -90,6 +102,7 @@ class DashboardService:
             server=server,
             streaming=streaming,
             paths=paths,
+            health=health,
         )
 
     def build_dashboard_from_measurement(
@@ -100,12 +113,22 @@ class DashboardService:
         api_online: bool,
         snapshot: MediaMTXSnapshot,
         measurement: StreamingMeasurement,
-        ) -> DashboardData:
+        health: StreamingHealth | None = None,
+    ) -> DashboardData:
         """Construye el dashboard completo desde snapshot y medición."""
 
         if snapshot.captured_at != measurement.captured_at:
             raise ValueError(
                 "snapshot y measurement deben pertenecer al mismo instante"
+            )
+
+        if (
+            health is not None
+            and health.captured_at != snapshot.captured_at
+        ):
+            raise ValueError(
+                "snapshot, measurement y health deben pertenecer "
+                "al mismo instante"
             )
 
         path_names = [
@@ -158,6 +181,7 @@ class DashboardService:
             server=server,
             streaming=streaming,
             paths=paths,
+            health=health,
         )
 
     @staticmethod
@@ -166,11 +190,13 @@ class DashboardService:
         snapshot: MediaMTXSnapshot,
         path_name: str,
     ) -> str:
-        """Obtiene el tipo de fuente de un path o retorna NONE."""
+        """Obtiene la etiqueta legible de la fuente o retorna NONE."""
 
         snapshot_path = snapshot.get_path(path_name)
 
         if snapshot_path is None or snapshot_path.source is None:
             return "NONE"
 
-        return snapshot_path.source.source_type
+        source_type = snapshot_path.source.source_type
+
+        return _SOURCE_LABELS.get(source_type, source_type)
