@@ -7,6 +7,9 @@ from app.dashboard.renderers.path_table_renderer import PathTableRenderer
 from app.dashboard.renderers.server_panel_renderer import (
     ServerPanelRenderer,
 )
+from app.dashboard.renderers.streaming_health_renderer import (
+    StreamingHealthRenderer,
+)
 from app.dashboard.renderers.streaming_panel_renderer import (
     StreamingPanelRenderer,
 )
@@ -18,6 +21,7 @@ class DashboardRenderer:
     def __init__(self) -> None:
         self._server_renderer = ServerPanelRenderer()
         self._streaming_renderer = StreamingPanelRenderer()
+        self._health_renderer = StreamingHealthRenderer()
         self._path_table_renderer = PathTableRenderer()
 
     def render(self, data: DashboardData) -> Layout:
@@ -33,6 +37,7 @@ class DashboardRenderer:
         layout["summary"].split_row(
             Layout(name="server"),
             Layout(name="streaming"),
+            Layout(name="health"),
         )
 
         layout["server"].update(
@@ -41,6 +46,10 @@ class DashboardRenderer:
 
         layout["streaming"].update(
             self._streaming_renderer.render(data.streaming)
+        )
+
+        layout["health"].update(
+            self._health_renderer.render(data.health)
         )
 
         layout["paths"].update(

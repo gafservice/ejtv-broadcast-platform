@@ -5,11 +5,14 @@ from __future__ import annotations
 from app.adapters.linux.linux_system_adapter import LinuxSystemAdapter
 from app.adapters.mediamtx.adapter import MediaMTXAdapter
 from app.adapters.mediamtx.client import MediaMTXClient
+from app.adapters.mediamtx.metrics_client import MediaMTXMetricsClient
+from app.adapters.mediamtx.metrics_parser import MediaMTXMetricsParser
 from app.core.config import get_settings
 from app.core.http import HttpClient
 from app.dashboard.application import DashboardApplication
 from app.dashboard.renderers.dashboard_renderer import DashboardRenderer
 from app.dashboard.services.dashboard_service import DashboardService
+from app.services.streaming_health_service import StreamingHealthService
 from app.services.streaming_service import StreamingService
 from app.services.system_service import SystemService
 
@@ -19,13 +22,28 @@ def build_dashboard_application() -> DashboardApplication:
 
     settings = get_settings()
 
-    http_client = HttpClient(
+    api_http_client = HttpClient(
         base_url=settings.mediamtx_api_url,
         timeout=settings.mediamtx_api_timeout_seconds,
     )
 
-    mediamtx_client = MediaMTXClient(http_client)
+    mediamtx_client = MediaMTXClient(api_http_client)
     mediamtx_adapter = MediaMTXAdapter(mediamtx_client)
+
+    metrics_http_client = HttpClient(
+        base_url=settings.mediamtx_metrics_url,
+        timeout=settings.mediamtx_metrics_timeout_seconds,
+        default_headers={
+            "Accept": "text/plain",
+        },
+    )
+
+    metrics_client = MediaMTXMetricsClient(
+        metrics_http_client
+    )
+
+    metrics_parser = MediaMTXMetricsParser()
+    streaming_health_service = StreamingHealthService()
 
     system_adapter = LinuxSystemAdapter()
     system_service = SystemService(system_adapter)
@@ -40,6 +58,9 @@ def build_dashboard_application() -> DashboardApplication:
         dashboard_service=dashboard_service,
         dashboard_renderer=dashboard_renderer,
         system_service=system_service,
+        metrics_client=metrics_client,
+        metrics_parser=metrics_parser,
+        streaming_health_service=streaming_health_service,
     )
 
 

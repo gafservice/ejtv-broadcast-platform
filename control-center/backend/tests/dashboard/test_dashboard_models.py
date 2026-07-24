@@ -1,7 +1,7 @@
 """Pruebas de los modelos de presentación del dashboard."""
 
 from datetime import datetime, timezone
-
+from app.domain.streaming import HealthStatus, StreamingHealth
 import pytest
 
 from app.dashboard.models.dashboard_models import (
@@ -81,14 +81,16 @@ def test_dashboard_data_groups_all_sections() -> None:
     )
 
     dashboard = DashboardData(
-        server=server,
-        streaming=streaming,
-        paths=(),
+    server=server,
+    streaming=streaming,
+    paths=(),
+    health=None,
     )
 
     assert dashboard.server is server
     assert dashboard.streaming is streaming
     assert dashboard.paths == ()
+    assert dashboard.health is None
 
 
 def test_streaming_panel_rejects_negative_active_paths() -> None:
@@ -137,3 +139,39 @@ def test_path_row_rejects_empty_name() -> None:
             quality="NOT_AVAILABLE",
             source="N/D",
         )
+            
+def test_dashboard_data_accepts_streaming_health() -> None:
+    """DashboardData debe transportar la salud del streaming."""
+
+    health = StreamingHealth(
+        captured_at=datetime(
+            2026,
+            7,
+            22,
+            tzinfo=timezone.utc,
+        ),
+        paths=(),
+        status=HealthStatus.UNKNOWN,
+        message="Sin conexiones.",
+    )
+
+    dashboard = DashboardData(
+        server=ServerPanelData(
+            hostname="server-01",
+            mediamtx_online=True,
+            api_online=True,
+            snapshot_at=health.captured_at,
+            quality="AVAILABLE",
+        ),
+        streaming=StreamingPanelData(
+            active_paths=0,
+            readers=0,
+            inbound_bitrate_bps=None,
+            outbound_bitrate_bps=None,
+            quality="AVAILABLE",
+        ),
+        paths=(),
+        health=health,
+    )
+
+    assert dashboard.health is health

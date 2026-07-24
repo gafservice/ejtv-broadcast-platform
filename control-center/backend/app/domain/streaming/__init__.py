@@ -1,5 +1,11 @@
 """Dominio de monitoreo multimedia."""
 
+from .health import (
+    HealthStatus,
+    SRTConnectionHealth,
+    SRTPathHealth,
+    StreamingHealth,
+)
 from .metrics import (
     MeasurementQuality,
     StreamingMeasurement,
@@ -15,6 +21,10 @@ from .models import (
 )
 
 __all__ = [
+    "HealthStatus",
+    "SRTConnectionHealth",
+    "SRTPathHealth",
+    "StreamingHealth",
     "MeasurementQuality",
     "StreamingMeasurement",
     "StreamingPathMeasurement",

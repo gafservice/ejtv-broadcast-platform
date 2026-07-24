@@ -255,3 +255,135 @@ def test_run_updates_live_dashboard_repeatedly() -> None:
     ]
 
     sleep_mock.assert_called_once_with(1.0)
+
+
+def test_run_once_builds_streaming_health_when_configured() -> None:
+    """La aplicación debe ejecutar el flujo completo de salud."""
+
+    from app.adapters.mediamtx.metrics_parser import (
+        MediaMTXMetricsSnapshot,
+    )
+    from app.domain.streaming import HealthStatus, StreamingHealth
+
+    captured_at = datetime(
+        2026,
+        7,
+        22,
+        12,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=0,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=None,
+        interval_seconds=None,
+        paths=(),
+        total_inbound_bitrate_bps=None,
+        total_outbound_bitrate_bps=None,
+        quality=MeasurementQuality.NOT_AVAILABLE,
+    )
+
+    metrics_text = 'srt_conns_ms_rtt{id="1",path="enlace"} 10\n'
+
+    metrics_snapshot = MediaMTXMetricsSnapshot(
+        samples=(),
+    )
+
+    streaming_health = StreamingHealth(
+        captured_at=captured_at,
+        paths=(),
+        status=HealthStatus.UNKNOWN,
+        message="No existen métricas SRT disponibles.",
+    )
+
+    dashboard_data = Mock(spec=DashboardData)
+    rendered_dashboard = Mock(spec=Layout)
+
+    mediamtx_adapter = Mock()
+    mediamtx_adapter.health.return_value = True
+    mediamtx_adapter.get_snapshot.return_value = snapshot
+
+    streaming_service = Mock()
+    streaming_service.compare.return_value = measurement
+
+    metrics_client = Mock()
+    metrics_client.get_metrics_text.return_value = metrics_text
+
+    metrics_parser = Mock()
+    metrics_parser.parse.return_value = metrics_snapshot
+
+    streaming_health_service = Mock()
+    streaming_health_service.build.return_value = streaming_health
+
+    dashboard_service = Mock()
+    dashboard_service.build_dashboard_from_measurement.return_value = (
+        dashboard_data
+    )
+
+    dashboard_renderer = Mock()
+    dashboard_renderer.render.return_value = rendered_dashboard
+
+    system_service = Mock()
+    system_info = Mock()
+    system_info.hostname = "server-01"
+    system_service.get_system_info.return_value = system_info
+
+    application = DashboardApplication(
+        mediamtx_adapter=mediamtx_adapter,
+        streaming_service=streaming_service,
+        dashboard_service=dashboard_service,
+        dashboard_renderer=dashboard_renderer,
+        system_service=system_service,
+        metrics_client=metrics_client,
+        metrics_parser=metrics_parser,
+        streaming_health_service=streaming_health_service,
+    )
+
+    result = application.run_once()
+
+    assert result is rendered_dashboard
+    assert application.latest_health is streaming_health
+
+    metrics_client.get_metrics_text.assert_called_once_with()
+    metrics_parser.parse.assert_called_once_with(metrics_text)
+
+    streaming_health_service.build.assert_called_once_with(
+        snapshot=metrics_snapshot,
+        captured_at=captured_at,
+    )
+
+    dashboard_service.build_dashboard_from_measurement.assert_called_once_with(
+        hostname="server-01",
+        mediamtx_online=True,
+        api_online=True,
+        snapshot=snapshot,
+        measurement=measurement,
+        health=streaming_health,
+    )
+
+
+def test_application_rejects_partial_health_configuration() -> None:
+    """Las dependencias del motor de salud deben configurarse juntas."""
+
+    import pytest
+
+    with pytest.raises(
+        ValueError,
+        match="deben configurarse juntos",
+    ):
+        DashboardApplication(
+            mediamtx_adapter=Mock(),
+            streaming_service=Mock(),
+            dashboard_service=Mock(),
+            dashboard_renderer=Mock(),
+            system_service=Mock(),
+            metrics_client=Mock(),
+        )

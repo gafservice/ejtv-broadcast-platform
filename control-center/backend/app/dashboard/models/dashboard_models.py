@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
+from app.domain.streaming import StreamingHealth
 
 @dataclass(frozen=True, slots=True)
 class ServerPanelData:
@@ -76,3 +77,5 @@ class DashboardData:
     server: ServerPanelData
     streaming: StreamingPanelData
     paths: tuple[PathRowData, ...]
+
+    health: StreamingHealth | None = None

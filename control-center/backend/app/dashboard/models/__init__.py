@@ -1,5 +1,7 @@
 """Modelos de presentación del dashboard."""
 
+from app.domain.streaming import StreamingHealth
+
 from .dashboard_models import (
     DashboardData,
     PathRowData,
@@ -12,4 +14,5 @@ __all__ = [
     "PathRowData",
     "ServerPanelData",
     "StreamingPanelData",
+    "StreamingHealth",
 ]

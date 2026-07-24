@@ -1,6 +1,6 @@
 """Pruebas del punto de entrada del monitor NOC."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 from app.dashboard.live_monitor import build_dashboard_application
 
@@ -11,10 +11,18 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
     settings = Mock()
     settings.mediamtx_api_url = "http://127.0.0.1:9997"
     settings.mediamtx_api_timeout_seconds = 3.0
+    settings.mediamtx_metrics_url = "http://127.0.0.1:9998"
+    settings.mediamtx_metrics_timeout_seconds = 4.0
 
-    http_client = Mock()
+    api_http_client = Mock()
+    metrics_http_client = Mock()
+
     mediamtx_client = Mock()
     mediamtx_adapter = Mock()
+    metrics_client = Mock()
+    metrics_parser = Mock()
+    streaming_health_service = Mock()
+
     system_adapter = Mock()
     system_service = Mock()
     streaming_service = Mock()
@@ -29,7 +37,10 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
         ),
         patch(
             "app.dashboard.live_monitor.HttpClient",
-            return_value=http_client,
+            side_effect=(
+                api_http_client,
+                metrics_http_client,
+            ),
         ) as http_client_class,
         patch(
             "app.dashboard.live_monitor.MediaMTXClient",
@@ -39,6 +50,18 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
             "app.dashboard.live_monitor.MediaMTXAdapter",
             return_value=mediamtx_adapter,
         ) as mediamtx_adapter_class,
+        patch(
+            "app.dashboard.live_monitor.MediaMTXMetricsClient",
+            return_value=metrics_client,
+        ) as metrics_client_class,
+        patch(
+            "app.dashboard.live_monitor.MediaMTXMetricsParser",
+            return_value=metrics_parser,
+        ) as metrics_parser_class,
+        patch(
+            "app.dashboard.live_monitor.StreamingHealthService",
+            return_value=streaming_health_service,
+        ) as health_service_class,
         patch(
             "app.dashboard.live_monitor.LinuxSystemAdapter",
             return_value=system_adapter,
@@ -68,16 +91,37 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
 
     assert result is dashboard_application
 
-    http_client_class.assert_called_once_with(
-        base_url="http://127.0.0.1:9997",
-        timeout=3.0,
+    assert http_client_class.call_args_list == [
+        call(
+            base_url="http://127.0.0.1:9997",
+            timeout=3.0,
+        ),
+        call(
+            base_url="http://127.0.0.1:9998",
+            timeout=4.0,
+            default_headers={
+                "Accept": "text/plain",
+            },
+        ),
+    ]
+
+    mediamtx_client_class.assert_called_once_with(
+        api_http_client
+    )
+    mediamtx_adapter_class.assert_called_once_with(
+        mediamtx_client
     )
 
-    mediamtx_client_class.assert_called_once_with(http_client)
-    mediamtx_adapter_class.assert_called_once_with(mediamtx_client)
+    metrics_client_class.assert_called_once_with(
+        metrics_http_client
+    )
+    metrics_parser_class.assert_called_once_with()
+    health_service_class.assert_called_once_with()
 
     system_adapter_class.assert_called_once_with()
-    system_service_class.assert_called_once_with(system_adapter)
+    system_service_class.assert_called_once_with(
+        system_adapter
+    )
 
     streaming_service_class.assert_called_once_with()
     dashboard_service_class.assert_called_once_with()
@@ -89,5 +133,7 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
         dashboard_service=dashboard_service,
         dashboard_renderer=dashboard_renderer,
         system_service=system_service,
+        metrics_client=metrics_client,
+        metrics_parser=metrics_parser,
+        streaming_health_service=streaming_health_service,
     )
-
