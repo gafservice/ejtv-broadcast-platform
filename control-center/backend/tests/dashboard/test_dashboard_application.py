@@ -65,6 +65,11 @@ def test_run_once_builds_and_renders_dashboard() -> None:
     system_info.hostname = "server-01"
     system_service.get_system_info.return_value = system_info
 
+    system_resources = Mock()
+    system_service.get_system_resources.return_value = (
+        system_resources
+    )
+
     application = DashboardApplication(
         mediamtx_adapter=mediamtx_adapter,
         streaming_service=streaming_service,
@@ -86,6 +91,7 @@ def test_run_once_builds_and_renders_dashboard() -> None:
     )
 
     system_service.get_system_info.assert_called_once_with()
+    system_service.get_system_resources.assert_called_once_with()
 
     dashboard_service.build_dashboard_from_measurement.assert_called_once_with(
         hostname="server-01",
@@ -93,6 +99,7 @@ def test_run_once_builds_and_renders_dashboard() -> None:
         api_online=True,
         snapshot=snapshot,
         measurement=measurement,
+        system_resources=system_resources,
     )
 
     dashboard_renderer.render.assert_called_once_with(dashboard_data)
@@ -187,6 +194,10 @@ def test_run_once_uses_previous_snapshot_on_second_execution() -> None:
     system_info = Mock()
     system_info.hostname = "server-01"
     system_service.get_system_info.return_value = system_info
+    system_resources = Mock()
+    system_service.get_system_resources.return_value = (
+        system_resources
+    )
 
     application = DashboardApplication(
         mediamtx_adapter=mediamtx_adapter,
@@ -336,6 +347,11 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
     system_info.hostname = "server-01"
     system_service.get_system_info.return_value = system_info
 
+    system_resources = Mock()
+    system_service.get_system_resources.return_value = (
+        system_resources
+    )
+
     application = DashboardApplication(
         mediamtx_adapter=mediamtx_adapter,
         streaming_service=streaming_service,
@@ -366,6 +382,7 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         api_online=True,
         snapshot=snapshot,
         measurement=measurement,
+        system_resources=system_resources,
         health=streaming_health,
     )
 

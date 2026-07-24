@@ -7,6 +7,7 @@ from .dashboard_models import (
     PathRowData,
     ServerPanelData,
     StreamingPanelData,
+    SystemPanelData,
 )
 
 __all__ = [
@@ -14,5 +15,6 @@ __all__ = [
     "PathRowData",
     "ServerPanelData",
     "StreamingPanelData",
+    "SystemPanelData",
     "StreamingHealth",
 ]

@@ -72,6 +72,7 @@ class DashboardApplication:
         )
 
         system_info = self._system_service.get_system_info()
+        system_resources = self._system_service.get_system_resources()
 
         dashboard_arguments: dict[str, Any] = {
             "hostname": system_info.hostname,
@@ -79,6 +80,7 @@ class DashboardApplication:
             "api_online": api_online,
             "snapshot": snapshot,
             "measurement": measurement,
+            "system_resources": system_resources,
         }
 
         if streaming_health is not None:
