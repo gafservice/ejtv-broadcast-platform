@@ -7,6 +7,7 @@ from datetime import datetime
 
 from app.domain.streaming import StreamingHealth
 from app.dashboard.models.system_panel import SystemPanelData
+from app.dashboard.models.session_panel import SessionPanelData
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,9 +77,14 @@ class PathRowData:
 class DashboardData:
     """Conjunto completo de información consumido por el dashboard."""
 
+@dataclass(frozen=True, slots=True)
+class DashboardData:
+    """Datos completos requeridos para renderizar el dashboard."""
+
     server: ServerPanelData
     streaming: StreamingPanelData
     paths: tuple[PathRowData, ...]
 
+    sessions: SessionPanelData | None = None
     system: SystemPanelData | None = None
     health: StreamingHealth | None = None

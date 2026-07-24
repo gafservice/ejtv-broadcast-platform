@@ -16,6 +16,8 @@ from app.domain.system import (
 import pytest
 
 from app.dashboard.services.dashboard_service import DashboardService
+from app.domain.sessions.measurement import SessionMeasurement
+from app.domain.sessions.quality import SessionQuality
 
 from app.domain.streaming import (
     MeasurementQuality,
@@ -770,3 +772,46 @@ def test_resolve_source_formats_mpegts_source() -> None:
     )
 
     assert source == "MPEG-TS"
+
+def test_build_session_panel_data() -> None:
+    """Debe convertir SessionMeasurement en SessionPanelData."""
+
+    captured_at = datetime(
+        2026,
+        7,
+        24,
+        14,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    quality = tuple(SessionQuality)[0]
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(),
+        paths=(),
+        total_sessions=0,
+        reader_count=0,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=8.5,
+        total_outbound_bitrate_mbps=42.25,
+        worst_quality=quality,
+        protocols=(),
+    )
+
+    panel = DashboardService().build_session_panel(
+        measurement=measurement,
+    )
+
+    assert panel.total_sessions == 0
+    assert panel.readers == 0
+    assert panel.publishers == 0
+    assert panel.degraded_sessions == 0
+    assert panel.critical_sessions == 0
+    assert panel.inbound_bitrate_bps == 8_500_000
+    assert panel.outbound_bitrate_bps == 42_250_000
+    assert panel.quality == quality.value

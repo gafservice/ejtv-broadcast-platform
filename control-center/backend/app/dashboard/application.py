@@ -11,10 +11,13 @@ from rich.live import Live
 from app.adapters.mediamtx.adapter import MediaMTXAdapter
 from app.adapters.mediamtx.metrics_client import MediaMTXMetricsClient
 from app.adapters.mediamtx.metrics_parser import MediaMTXMetricsParser
+from app.adapters.mediamtx.session_adapter import MediaMTXSessionAdapter
 from app.dashboard.renderers.dashboard_renderer import DashboardRenderer
 from app.dashboard.services.dashboard_service import DashboardService
+from app.domain.sessions import SessionSnapshot
 from app.domain.streaming import MediaMTXSnapshot, StreamingHealth
 from app.domain.system import SystemResources
+from app.services.session_service import SessionService
 from app.services.streaming_health_service import StreamingHealthService
 from app.services.streaming_service import StreamingService
 from app.services.system_service import SystemService
@@ -27,7 +30,9 @@ class DashboardApplication:
         self,
         *,
         mediamtx_adapter: MediaMTXAdapter,
+        session_adapter: MediaMTXSessionAdapter,
         streaming_service: StreamingService,
+        session_service: SessionService,
         dashboard_service: DashboardService,
         dashboard_renderer: DashboardRenderer,
         system_service: SystemService,
@@ -36,7 +41,11 @@ class DashboardApplication:
         streaming_health_service: StreamingHealthService | None = None,
     ) -> None:
         self._mediamtx_adapter = mediamtx_adapter
+        self._session_adapter = session_adapter
+
         self._streaming_service = streaming_service
+        self._session_service = session_service
+
         self._dashboard_service = dashboard_service
         self._dashboard_renderer = dashboard_renderer
         self._system_service = system_service
@@ -46,6 +55,7 @@ class DashboardApplication:
         self._streaming_health_service = streaming_health_service
 
         self._previous_snapshot: MediaMTXSnapshot | None = None
+        self._previous_session_snapshot: SessionSnapshot | None = None
         self._previous_system_resources: SystemResources | None = None
         self._latest_health: StreamingHealth | None = None
 
@@ -64,9 +74,15 @@ class DashboardApplication:
 
         snapshot = self._mediamtx_adapter.get_snapshot()
 
+        session_snapshot = self._session_adapter.get_snapshot()
+
         measurement = self._streaming_service.compare(
             self._previous_snapshot,
             snapshot,
+        )
+
+        session_measurement = self._session_service.measure(
+            session_snapshot,
         )
 
         streaming_health = self._build_streaming_health(
@@ -82,6 +98,7 @@ class DashboardApplication:
             "api_online": api_online,
             "snapshot": snapshot,
             "measurement": measurement,
+            "session_measurement": session_measurement,
             "system_resources": system_resources,
             "previous_system_resources": (
                 self._previous_system_resources
@@ -102,6 +119,7 @@ class DashboardApplication:
         )
 
         self._previous_snapshot = snapshot
+        self._previous_session_snapshot = session_snapshot
         self._previous_system_resources = system_resources
         self._latest_health = streaming_health
 

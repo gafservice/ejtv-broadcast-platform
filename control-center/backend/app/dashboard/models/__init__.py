@@ -12,6 +12,7 @@ from app.dashboard.models.dashboard_models import (
 from app.dashboard.models.disk_panel import DiskPanelData
 from app.dashboard.models.memory_panel import MemoryPanelData
 from app.dashboard.models.network_panel import NetworkPanelData
+from app.dashboard.models.session_panel import SessionPanelData
 from app.dashboard.models.system_panel import SystemPanelData
 from app.dashboard.models.uptime_panel import UptimePanelData
 
@@ -23,6 +24,7 @@ __all__ = [
     "NetworkPanelData",
     "PathRowData",
     "ServerPanelData",
+    "SessionPanelData",
     "StreamingHealth",
     "StreamingPanelData",
     "SystemPanelData",

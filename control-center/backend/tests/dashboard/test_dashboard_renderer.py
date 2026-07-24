@@ -11,6 +11,7 @@ from app.dashboard.models import (
     DashboardData,
     PathRowData,
     ServerPanelData,
+    SessionPanelData,
     StreamingPanelData,
 )
 from app.dashboard.renderers.dashboard_renderer import DashboardRenderer
@@ -123,3 +124,46 @@ def test_render_contains_streaming_health_data() -> None:
     assert "Summary" in output
     assert "El subsistema SRT funciona" in output
     assert "…" in output
+
+
+def test_render_contains_active_clients_panel() -> None:
+    """Debe renderizar ACTIVE CLIENTS cuando hay datos de sesiones."""
+
+    renderer = DashboardRenderer()
+    base_data = build_dashboard_data()
+
+    data = DashboardData(
+        server=base_data.server,
+        streaming=base_data.streaming,
+        paths=base_data.paths,
+        sessions=SessionPanelData(
+            total_sessions=6,
+            readers=5,
+            publishers=1,
+            degraded_sessions=1,
+            critical_sessions=0,
+            inbound_bitrate_bps=8_000_000,
+            outbound_bitrate_bps=40_000_000,
+            quality="GOOD",
+        ),
+        health=base_data.health,
+    )
+
+    layout = renderer.render(data)
+
+    console = Console(
+        record=True,
+        width=160,
+        color_system=None,
+    )
+    console.print(layout)
+
+    output = console.export_text()
+
+    assert "ACTIVE CLIENTS" in output
+    assert "Sessions" in output
+    assert "Readers" in output
+    assert "Publishers" in output
+    assert "6" in output
+    assert "5" in output
+    assert "GOOD" in output

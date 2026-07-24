@@ -8,10 +8,12 @@ from app.dashboard.models import (
     NetworkPanelData,
     PathRowData,
     ServerPanelData,
+    SessionPanelData,
     StreamingPanelData,
     SystemPanelData,
     UptimePanelData,
 )
+from app.domain.sessions.measurement import SessionMeasurement
 from app.domain.streaming import (
     MeasurementQuality,
     MediaMTXSnapshot,
@@ -85,6 +87,30 @@ class DashboardService:
             inbound_bitrate_bps=inbound_bitrate_bps,
             outbound_bitrate_bps=outbound_bitrate_bps,
             quality=quality.value,
+        )
+
+    def build_session_panel(
+        self,
+        *,
+        measurement: SessionMeasurement,
+    ) -> SessionPanelData:
+        """Construye los datos del panel ACTIVE CLIENTS."""
+
+        return SessionPanelData(
+            total_sessions=measurement.total_sessions,
+            readers=measurement.reader_count,
+            publishers=measurement.publisher_count,
+            degraded_sessions=measurement.degraded_session_count,
+            critical_sessions=measurement.critical_session_count,
+            inbound_bitrate_bps=(
+                measurement.total_inbound_bitrate_mbps
+                * 1_000_000
+            ),
+            outbound_bitrate_bps=(
+                measurement.total_outbound_bitrate_mbps
+                * 1_000_000
+            ),
+            quality=measurement.worst_quality.value,
         )
 
     def build_system_panel(
@@ -163,6 +189,7 @@ class DashboardService:
         *,
         server: ServerPanelData,
         streaming: StreamingPanelData,
+        sessions: SessionPanelData | None = None,
         paths: tuple[PathRowData, ...],
         system: SystemPanelData | None = None,
         health: StreamingHealth | None = None,
@@ -172,6 +199,7 @@ class DashboardService:
         return DashboardData(
             server=server,
             streaming=streaming,
+            sessions=sessions,
             system=system,
             paths=paths,
             health=health,
@@ -185,6 +213,7 @@ class DashboardService:
         api_online: bool,
         snapshot: MediaMTXSnapshot,
         measurement: StreamingMeasurement,
+        session_measurement: SessionMeasurement | None = None,
         system_resources: SystemResources | None = None,
         previous_system_resources: SystemResources | None = None,
         health: StreamingHealth | None = None,
@@ -231,6 +260,14 @@ class DashboardService:
             quality=measurement.quality,
         )
 
+        sessions = (
+            self.build_session_panel(
+                measurement=session_measurement,
+            )
+            if session_measurement is not None
+            else None
+        )
+
         system = (
             self.build_system_panel(
                 resources=system_resources,
@@ -263,6 +300,7 @@ class DashboardService:
         return self.build_dashboard(
             server=server,
             streaming=streaming,
+            sessions=sessions,
             system=system,
             paths=paths,
             health=health,

@@ -19,12 +19,18 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
 
     mediamtx_client = Mock()
     mediamtx_adapter = Mock()
+
+    session_client = Mock()
+    session_adapter = Mock()
+    session_service = Mock()
+
     metrics_client = Mock()
     metrics_parser = Mock()
     streaming_health_service = Mock()
 
     system_adapter = Mock()
     system_service = Mock()
+
     streaming_service = Mock()
     dashboard_service = Mock()
     dashboard_renderer = Mock()
@@ -50,6 +56,18 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
             "app.dashboard.live_monitor.MediaMTXAdapter",
             return_value=mediamtx_adapter,
         ) as mediamtx_adapter_class,
+        patch(
+            "app.dashboard.live_monitor.MediaMTXSessionClient",
+            return_value=session_client,
+        ) as session_client_class,
+        patch(
+            "app.dashboard.live_monitor.MediaMTXSessionAdapter",
+            return_value=session_adapter,
+        ) as session_adapter_class,
+        patch(
+            "app.dashboard.live_monitor.SessionService",
+            return_value=session_service,
+        ) as session_service_class,
         patch(
             "app.dashboard.live_monitor.MediaMTXMetricsClient",
             return_value=metrics_client,
@@ -108,17 +126,30 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
     mediamtx_client_class.assert_called_once_with(
         api_http_client
     )
+
     mediamtx_adapter_class.assert_called_once_with(
         mediamtx_client
     )
 
+    session_client_class.assert_called_once_with(
+        api_http_client
+    )
+
+    session_adapter_class.assert_called_once_with(
+        session_client
+    )
+
+    session_service_class.assert_called_once_with()
+
     metrics_client_class.assert_called_once_with(
         metrics_http_client
     )
+
     metrics_parser_class.assert_called_once_with()
     health_service_class.assert_called_once_with()
 
     system_adapter_class.assert_called_once_with()
+
     system_service_class.assert_called_once_with(
         system_adapter
     )
@@ -129,7 +160,9 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
 
     dashboard_application_class.assert_called_once_with(
         mediamtx_adapter=mediamtx_adapter,
+        session_adapter=session_adapter,
         streaming_service=streaming_service,
+        session_service=session_service,
         dashboard_service=dashboard_service,
         dashboard_renderer=dashboard_renderer,
         system_service=system_service,
