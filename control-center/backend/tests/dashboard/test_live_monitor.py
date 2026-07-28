@@ -13,6 +13,9 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
     settings.mediamtx_api_timeout_seconds = 3.0
     settings.mediamtx_metrics_url = "http://127.0.0.1:9998"
     settings.mediamtx_metrics_timeout_seconds = 4.0
+    settings.geoip_database_path = (
+        "data/geoip/GeoLite2-Country.mmdb"
+    )
 
     api_http_client = Mock()
     metrics_http_client = Mock()
@@ -20,6 +23,7 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
     mediamtx_client = Mock()
     mediamtx_adapter = Mock()
 
+    geoip_service = Mock()
     session_client = Mock()
     session_adapter = Mock()
     session_service = Mock()
@@ -56,6 +60,10 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
             "app.dashboard.live_monitor.MediaMTXAdapter",
             return_value=mediamtx_adapter,
         ) as mediamtx_adapter_class,
+        patch(
+            "app.dashboard.live_monitor.GeoIPService",
+            return_value=geoip_service,
+        ) as geoip_service_class,
         patch(
             "app.dashboard.live_monitor.MediaMTXSessionClient",
             return_value=session_client,
@@ -131,12 +139,17 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
         mediamtx_client
     )
 
+    geoip_service_class.assert_called_once_with(
+        "data/geoip/GeoLite2-Country.mmdb"
+    )
+
     session_client_class.assert_called_once_with(
         api_http_client
     )
 
     session_adapter_class.assert_called_once_with(
-        session_client
+        session_client,
+        geoip_service,
     )
 
     session_service_class.assert_called_once_with()

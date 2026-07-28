@@ -2,6 +2,15 @@
 
 from datetime import datetime, timezone
 
+from app.domain.sessions import (
+    ActiveSession,
+    SessionMeasurement,
+    SessionProtocol,
+    SessionQuality,
+    SessionRole,
+)
+
+
 from datetime import timedelta
 
 from app.domain.system import (
@@ -815,3 +824,123 @@ def test_build_session_panel_data() -> None:
     assert panel.inbound_bitrate_bps == 8_500_000
     assert panel.outbound_bitrate_bps == 42_250_000
     assert panel.quality == quality.value
+
+def test_build_active_connections_panel_data() -> None:
+    """Debe convertir las sesiones activas en filas del panel."""
+
+    captured_at = datetime(
+        2026,
+        7,
+        26,
+        18,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    session = ActiveSession(
+        session_id="session-001",
+        protocol=SessionProtocol.SRT,
+        role=SessionRole.READER,
+        state="active",
+        remote_ip="201.192.154.130",
+        remote_port=26676,
+        path="canal-principal",
+        connected_since=datetime(
+            2026,
+            7,
+            26,
+            17,
+            0,
+            tzinfo=timezone.utc,
+        ),
+        country_name="Costa Rica",
+        bitrate_send_mbps=4.31,
+        username="cliente-norte",
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=1,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=4.31,
+        worst_quality=SessionQuality.GOOD,
+        protocols=(SessionProtocol.SRT,),
+    )
+
+    panel = DashboardService().build_active_connections_panel(
+        measurement=measurement,
+    )
+
+    assert panel.captured_at == captured_at
+    assert panel.connection_count == 1
+
+    connection = panel.connections[0]
+
+    assert connection.remote_address == "201.192.154.130:26676"
+    assert connection.country == "Costa Rica"
+    assert connection.protocol == "SRT"
+    assert connection.path == "canal-principal"
+    assert connection.role == "READER"
+    assert connection.bitrate_bps == pytest.approx(4_310_000)
+    assert connection.uptime_seconds == 3_600
+    assert connection.username == "cliente-norte"
+
+
+def test_build_active_connections_panel_handles_missing_values() -> None:
+    """Debe presentar valores seguros cuando faltan datos opcionales."""
+
+    captured_at = datetime(
+        2026,
+        7,
+        26,
+        18,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    session = ActiveSession(
+        session_id="session-002",
+        protocol=SessionProtocol.UNKNOWN,
+        role=SessionRole.UNKNOWN,
+        state="active",
+        remote_ip="10.20.30.15",
+        remote_port=None,
+        path=None,
+        connected_since=captured_at,
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=0,
+        publisher_count=0,
+        unknown_role_count=1,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=0.0,
+        worst_quality=SessionQuality.UNKNOWN,
+        protocols=(SessionProtocol.UNKNOWN,),
+    )
+
+    panel = DashboardService().build_active_connections_panel(
+        measurement=measurement,
+    )
+
+    connection = panel.connections[0]
+
+    assert connection.remote_address == "10.20.30.15"
+    assert connection.country == "Red local"
+    assert connection.path == "(sin path)"
+    assert connection.bitrate_bps is None
+    assert connection.uptime_seconds == 0
+    assert connection.username is None

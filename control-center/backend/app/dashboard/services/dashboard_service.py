@@ -1,6 +1,8 @@
 """Servicio de aplicación para construir datos del dashboard."""
 
 from app.dashboard.models import (
+    ActiveConnectionRow,
+    ActiveConnectionsPanelData,
     CpuPanelData,
     DashboardData,
     DiskPanelData,
@@ -111,6 +113,48 @@ class DashboardService:
                 * 1_000_000
             ),
             quality=measurement.worst_quality.value,
+            protocol_counts=tuple(
+                (
+                    protocol.value,
+                    count,
+                )
+                for protocol, count in measurement.protocol_counts
+            ),
+        )
+
+    def build_active_connections_panel(
+        self,
+        *,
+        measurement: SessionMeasurement,
+    ) -> ActiveConnectionsPanelData:
+        """Construye los datos del panel CONNECTED CLIENTS."""
+
+        connections = tuple(
+            ActiveConnectionRow(
+                remote_address=session.remote_address,
+                country=session.location_label,
+                country_code=session.country_code,
+                asn=session.asn,
+                provider=session.provider or "Unknown",
+                protocol=session.protocol.value,
+                path=session.path or "(sin path)",
+                role=session.role.value,
+                bitrate_bps=(
+                    session.effective_bitrate_mbps * 1_000_000
+                    if session.effective_bitrate_mbps is not None
+                    else None
+                ),
+                uptime_seconds=session.duration_seconds(
+                    now=measurement.captured_at,
+                ),
+                username=session.username,
+            )
+            for session in measurement.sessions
+        )
+
+        return ActiveConnectionsPanelData(
+            captured_at=measurement.captured_at,
+            connections=connections,
         )
 
     def build_system_panel(
@@ -190,6 +234,7 @@ class DashboardService:
         server: ServerPanelData,
         streaming: StreamingPanelData,
         sessions: SessionPanelData | None = None,
+        active_connections: ActiveConnectionsPanelData | None = None,
         paths: tuple[PathRowData, ...],
         system: SystemPanelData | None = None,
         health: StreamingHealth | None = None,
@@ -200,6 +245,7 @@ class DashboardService:
             server=server,
             streaming=streaming,
             sessions=sessions,
+            active_connections=active_connections,
             system=system,
             paths=paths,
             health=health,
@@ -267,6 +313,13 @@ class DashboardService:
             if session_measurement is not None
             else None
         )
+        active_connections = (
+            self.build_active_connections_panel(
+                measurement=session_measurement,
+            )
+            if session_measurement is not None
+            else None
+        )
 
         system = (
             self.build_system_panel(
@@ -301,6 +354,7 @@ class DashboardService:
             server=server,
             streaming=streaming,
             sessions=sessions,
+            active_connections=active_connections,
             system=system,
             paths=paths,
             health=health,
@@ -320,5 +374,3 @@ class DashboardService:
             return "NONE"
 
         source_type = snapshot_path.source.source_type
-
-        return _SOURCE_LABELS.get(source_type, source_type)

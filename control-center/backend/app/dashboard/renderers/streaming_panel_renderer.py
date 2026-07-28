@@ -30,7 +30,7 @@ class StreamingPanelRenderer:
             f"{self._format_bitrate(data.outbound_bitrate_bps)}\n"
         )
 
-        content.append("Quality: ")
+        content.append("Status: ")
         content.append(data.quality)
 
         return Panel(

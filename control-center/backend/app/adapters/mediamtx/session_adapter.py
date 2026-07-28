@@ -15,13 +15,19 @@ from app.domain.sessions import (
 
 from .exceptions import MediaMTXInvalidResponseError
 from .session_client import MediaMTXSessionClient
+from app.services.geoip_service import GeoIPService
 
 
 class MediaMTXSessionAdapter:
     """Transforma sesiones de MediaMTX en objetos del dominio."""
 
-    def __init__(self, client: MediaMTXSessionClient) -> None:
+    def __init__(
+        self,
+        client: MediaMTXSessionClient,
+        geoip_service: GeoIPService | None = None,
+    ) -> None:
         self._client = client
+        self._geoip = geoip_service
 
     def get_snapshot(self) -> SessionSnapshot:
         """Obtiene el snapshot agregado de sesiones activas.
@@ -88,6 +94,12 @@ class MediaMTXSessionAdapter:
         session_id = self._required_string(item, "id")
         remote_ip, remote_port = self._parse_remote_address(
             self._required_string(item, "remoteAddr")
+        )
+
+        geoip = (
+            self._geoip.resolve(remote_ip)
+            if self._geoip is not None
+            else None
         )
 
         state = self._optional_string(item.get("state")) or "unknown"
@@ -224,6 +236,27 @@ class MediaMTXSessionAdapter:
             packets_sent=packets_sent,
             packets_lost=packets_lost,
             packets_retransmitted=packets_retransmitted,
+            
+           country_code=(
+                geoip.country_code
+                if geoip is not None
+                else None
+            ),
+            country_name=(
+                geoip.country_name
+                if geoip is not None
+                else None
+            ),
+            asn=(
+                geoip.asn
+                if geoip is not None
+                else None
+            ),
+            provider=(
+                geoip.asn_organization
+                if geoip is not None
+                else None
+            ),
             quality=quality,
         )
 

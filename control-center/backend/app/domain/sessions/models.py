@@ -31,6 +31,9 @@ class ActiveSession:
     country_code: str | None = None
     country_name: str | None = None
 
+    asn: int | None = None
+    provider: str | None = None
+
     bytes_received: int = 0
     bytes_sent: int = 0
 

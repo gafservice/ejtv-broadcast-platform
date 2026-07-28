@@ -7,6 +7,16 @@ import pytest
 from app.dashboard.models import SessionPanelData
 
 
+PROTOCOL_COUNTS = (
+    ("SRT", 7),
+    ("RTMP", 2),
+    ("RTSP", 1),
+    ("HLS", 1),
+    ("WebRTC", 1),
+    ("UNKNOWN", 0),
+)
+
+
 def build_panel_data() -> SessionPanelData:
     """Construye datos válidos para el panel ACTIVE CLIENTS."""
 
@@ -19,6 +29,7 @@ def build_panel_data() -> SessionPanelData:
         inbound_bitrate_bps=8_500_000.0,
         outbound_bitrate_bps=42_000_000.0,
         quality="POOR",
+        protocol_counts=PROTOCOL_COUNTS,
     )
 
 
@@ -33,6 +44,7 @@ def test_session_panel_data_can_be_created() -> None:
     assert data.inbound_bitrate_bps == 8_500_000.0
     assert data.outbound_bitrate_bps == 42_000_000.0
     assert data.quality == "POOR"
+    assert data.protocol_counts == PROTOCOL_COUNTS
 
 
 def test_session_panel_data_accepts_unavailable_bitrates() -> None:
@@ -45,11 +57,27 @@ def test_session_panel_data_accepts_unavailable_bitrates() -> None:
         inbound_bitrate_bps=None,
         outbound_bitrate_bps=None,
         quality="UNKNOWN",
+        protocol_counts=(
+            ("SRT", 0),
+            ("RTMP", 0),
+            ("RTSP", 0),
+            ("HLS", 0),
+            ("WebRTC", 0),
+            ("UNKNOWN", 0),
+        ),
     )
 
     assert data.inbound_bitrate_bps is None
     assert data.outbound_bitrate_bps is None
     assert data.quality == "UNKNOWN"
+    assert data.protocol_counts == (
+        ("SRT", 0),
+        ("RTMP", 0),
+        ("RTSP", 0),
+        ("HLS", 0),
+        ("WebRTC", 0),
+        ("UNKNOWN", 0),
+    )
 
 
 def test_session_panel_data_instances_with_same_values_are_equal() -> None:

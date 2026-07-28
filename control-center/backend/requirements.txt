@@ -6,3 +6,4 @@ pytest
 httpx
 psutil
 rich
+geoip2

@@ -47,6 +47,10 @@ class Settings(BaseSettings):
         gt=0,
     )
 
+    geoip_database_path: str = (
+        "data/geoip/GeoLite2-Country.mmdb"
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

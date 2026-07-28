@@ -1,0 +1,754 @@
+"""Pruebas del modelo de presentación SessionPanelData."""
+
+from dataclasses import FrozenInstanceError
+
+import pytest
+
+from app.dashboard.models import SessionPanelData
+
+
+def build_panel_data() -> SessionPanelData:
+    """Construye datos válidos para el panel ACTIVE CLIENTS."""
+
+    return SessionPanelData(
+        total_sessions=12,
+        readers=10,
+        publishers=2,
+        degraded_sessions=3,
+        critical_sessions=1,
+        inbound_bitrate_bps=8_500_000.0,
+        outbound_bitrate_bps=42_000_000.0,
+        quality="POOR",
+    )
+
+
+def test_session_panel_data_can_be_created() -> None:
+    data = build_panel_data()
+
+    assert data.total_sessions == 12
+    assert data.readers == 10
+    assert data.publishers == 2
+    assert data.degraded_sessions == 3
+    assert data.critical_sessions == 1
+    assert data.inbound_bitrate_bps == 8_500_000.0
+    assert data.outbound_bitrate_bps == 42_000_000.0
+    assert data.quality == "POOR"
+
+
+def test_session_panel_data_accepts_unavailable_bitrates() -> None:
+    data = SessionPanelData(
+        total_sessions=0,
+        readers=0,
+        publishers=0,
+        degraded_sessions=0,
+        critical_sessions=0,
+        inbound_bitrate_bps=None,
+        outbound_bitrate_bps=None,
+        quality="UNKNOWN",
+    )
+
+    assert data.inbound_bitrate_bps is None
+    assert data.outbound_bitrate_bps is None
+    assert data.quality == "UNKNOWN"
+
+
+def test_session_panel_data_instances_with_same_values_are_equal() -> None:
+    first = build_panel_data()
+    second = build_panel_data()
+
+    assert first == second
+
+
+def test_session_panel_data_is_immutable() -> None:
+    data = build_panel_data()
+
+    with pytest.raises(FrozenInstanceError):
+        data.total_sessions = 99
+        20,
+        20,
+        30,
+        tzinfo=timezone.utc,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(
+            MediaPath(
+                name="canal-mpegts",
+                configuration_name="canal-mpegts",
+                status=MediaPathStatus.ACTIVE,
+                ready=True,
+                available=True,
+                online=True,
+                source=MediaSource(
+                    source_type="mpegtsSource",
+                    source_id="source-mpegts-001",
+                ),
+                readers=(),
+                inbound_bytes=0,
+                outbound_bytes=0,
+            ),
+        ),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    source = service._resolve_source(
+        snapshot=snapshot,
+        path_name="canal-mpegts",
+    )
+
+    assert source == "MPEG-TS"
+
+def test_build_session_panel_data() -> None:
+    """Debe convertir SessionMeasurement en SessionPanelData."""
+
+    captured_at = datetime(
+        2026,
+        7,
+        24,
+        14,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    quality = tuple(SessionQuality)[0]
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(),
+        paths=(),
+        total_sessions=0,
+        reader_count=0,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=8.5,
+        total_outbound_bitrate_mbps=42.25,
+        worst_quality=quality,
+        protocols=(),
+    )
+
+    panel = DashboardService().build_session_panel(
+        measurement=measurement,
+    )
+
+    assert panel.total_sessions == 0
+    assert panel.readers == 0
+    assert panel.publishers == 0
+    assert panel.degraded_sessions == 0
+    assert panel.critical_sessions == 0
+    assert panel.inbound_bitrate_bps == 8_500_000
+    assert panel.outbound_bitrate_bps == 42_250_000
+    assert panel.quality == quality.value
+"""Pruebas del renderizador ACTIVE CLIENTS."""
+
+from rich.panel import Panel
+
+from app.dashboard.models import SessionPanelData
+from app.dashboard.renderers.session_panel_renderer import (
+    SessionPanelRenderer,
+)
+
+
+def build_panel() -> SessionPanelData:
+    return SessionPanelData(
+        total_sessions=12,
+        readers=10,
+        publishers=2,
+        degraded_sessions=3,
+        critical_sessions=1,
+        inbound_bitrate_bps=8_000_000,
+        outbound_bitrate_bps=42_000_000,
+        quality="GOOD",
+    )
+
+
+def test_render_returns_panel():
+    panel = SessionPanelRenderer().render(
+        build_panel()
+    )
+
+    assert isinstance(panel, Panel)
+    assert panel.title == "ACTIVE CLIENTS"
+
+
+def test_render_contains_values():
+    panel = SessionPanelRenderer().render(
+        build_panel()
+    )
+
+    text = str(panel.renderable)
+
+    assert "12" in text
+    assert "10" in text
+    assert "2" in text
+    assert "GOOD" in text
+    assert "8.00 Mbps" in text
+    assert "42.00 Mbps" in text
+
+
+def test_format_none_bitrate():
+    assert (
+        SessionPanelRenderer._format_bitrate(None)
+        == "N/A"
+    )
+
+
+def test_format_valid_bitrate():
+    assert (
+        SessionPanelRenderer._format_bitrate(
+            12_500_000
+        )
+        == "12.50 Mbps"
+    )
+
+Pasted text(389).txt
+Documento
+
+Pasted text(390).txt
+Documento
+
+porque la calidad es poor 
+
+Pasted text(391).txt
+Documento
+
+Pasted text(392).txt
+Documento
+
+Pasted text(393).txt
+Documento
+
+Pasted text(394).txt
+Documento
+tu propuesta me parece bien
+
+Pasted text(395).txt
+Documento
+
+Pasted text(396).txt
+Documento
+me parece muy bien panel separado:   
+
+Pasted text(397).txt
+Documento
+
+Sí, pero prefiero no inventarle un archivo completo.
+
+En este momento no conozco el contenido actual de su dashboard_service.py. Ese archivo ha evolucionado durante varios sprints y ya contiene muchos métodos. Si yo le genero un archivo completo, corro el riesgo de sobrescribir trabajo que ya existe o eliminar métodos agregados en Sprint-005.
+
+Lo correcto es trabajar sobre su versión actual.
+
+Por favor pegue el contenido de:
+
+sed -n '1,260p' app/dashboard/services/dashboard_service.py
+
+Si el archivo es más largo, continúe con:
+
+sed -n '261,520p' app/dashboard/services/dashboard_service.py
+
+Con ese contenido le devolveré el archivo 100 % corregido, incluyendo:
+
+    ✅ imports correctos
+
+    ✅ ActiveConnectionRow
+
+    ✅ ActiveConnectionsPanelData
+
+    ✅ build_active_connections_panel()
+
+    ✅ sin romper ninguno de los 368 tests existentes
+
+    ✅ respetando exactamente la arquitectura actual de su proyecto
+
+Prefiero hacerlo sobre su versión real para no introducir regresiones.
+
+Pasted text(398).txt
+Documento
+
+Perfecto. Ya encontré el problema.
+
+Su archivo tiene un pequeño error aquí:
+
+        return SessionPanelData(
+            ...
+        )
+
+        self,
+
+Ese self, quedó suelto (líneas alrededor de 124–128) y es exactamente el lugar donde debemos insertar el nuevo método.
+Haga este cambio
+
+Elimine la línea:
+
+        self,
+
+y justo después del return SessionPanelData(...) pegue el siguiente método completo:
+
+    def build_active_connections_panel(
+        self,
+        *,
+        measurement: SessionMeasurement,
+    ) -> ActiveConnectionsPanelData:
+        """Construye los datos del panel CONNECTED CLIENTS."""
+
+        connections = tuple(
+            ActiveConnectionRow(
+                remote_address=session.remote_address,
+                country=session.location_label,
+                protocol=session.protocol.value,
+                path=session.path or "(sin path)",
+                role=session.role.value,
+                bitrate_bps=(
+                    session.effective_bitrate_mbps * 1_000_000
+                    if session.effective_bitrate_mbps is not None
+                    else None
+                ),
+                uptime_seconds=session.duration_seconds(
+                    now=measurement.captured_at,
+                ),
+                username=session.username,
+            )
+            for session in measurement.sessions
+        )
+
+        return ActiveConnectionsPanelData(
+            captured_at=measurement.captured_at,
+            connections=connections,
+        )
+
+Al terminar, el archivo debe verse aproximadamente así:
+
+    def build_session_panel(...):
+        ...
+        return SessionPanelData(...)
+
+    def build_active_connections_panel(
+        self,
+        *,
+        measurement: SessionMeasurement,
+    ) -> ActiveConnectionsPanelData:
+        ...
+
+    def build_system_panel(
+        self,
+        *,
+        resources: SystemResources,
+
+Es decir:
+
+build_session_panel()
+↓
+build_active_connections_panel()
+↓
+build_system_panel()
+
+No debe quedar ninguna línea con solo:
+
+self,
+
+porque eso fue un resto de la edición anterior.
+
+Después ejecute:
+
+pytest -q tests/dashboard/test_dashboard_service.py
+
+Si aún aparece algún error, envíeme únicamente la nueva salida del pytest. Ya estamos muy cerca de dejar esta parte terminada.
+
+deme el archivo corregido
+
+Aquí tiene el archivo completo corregido. Conserva el contenido actual e incorpora correctamente build_active_connections_panel() dentro de DashboardService; además elimina la línea suelta self, que había quedado en el archivo original. Los imports requeridos ya estaban presentes en su versión.
+
+Para reemplazarlo en el proyecto:
+
+cp /mnt/data/dashboard_service.py \
+  app/dashboard/services/dashboard_service.py
+
+Como el archivo descargado estará en su computadora y no necesariamente en /mnt/data del servidor, también puede copiar directamente su contenido al archivo correspondiente. Luego ejecute:
+
+python -m py_compile app/dashboard/services/dashboard_service.py
+pytest -q tests/dashboard/test_dashboard_service.py
+
+El resultado esperado es:
+
+17 passed
+
+Después:
+
+pytest -q
+
+El total debería quedar aproximadamente en:
+
+370 passed
+
+
+Biblioteca
+/dashboard_service.py
+
+"""Servicio de aplicación para construir datos del dashboard."""
+
+from app.dashboard.models import (
+    ActiveConnectionRow,
+    ActiveConnectionsPanelData,
+    CpuPanelData,
+    DashboardData,
+    DiskPanelData,
+    MemoryPanelData,
+    NetworkPanelData,
+    PathRowData,
+    ServerPanelData,
+    SessionPanelData,
+    StreamingPanelData,
+    SystemPanelData,
+    UptimePanelData,
+)
+from app.domain.sessions.measurement import SessionMeasurement
+from app.domain.streaming import (
+    MeasurementQuality,
+    MediaMTXSnapshot,
+    StreamingHealth,
+    StreamingMeasurement,
+)
+from app.domain.system import (
+    NetworkRateCalculator,
+    SystemResources,
+)
+
+
+_SOURCE_LABELS = {
+    "mpegtsSource": "MPEG-TS",
+    "udpSource": "UDP",
+    "rtmpSource": "RTMP",
+    "rtspSource": "RTSP",
+    "srtSource": "SRT",
+    "hlsSource": "HLS",
+    "webRTCSource": "WebRTC",
+}
+
+
+class DashboardService:
+    """Coordina la construcción de la información del dashboard."""
+
+    def __init__(
+        self,
+        network_rate_calculator: NetworkRateCalculator | None = None,
+    ) -> None:
+        """Configura los calculadores usados por el servicio."""
+
+        self._network_rate_calculator = (
+            network_rate_calculator
+            or NetworkRateCalculator()
+        )
+
+    def build_server_panel(
+        self,
+        *,
+        hostname: str,
+        mediamtx_online: bool,
+        api_online: bool,
+        snapshot: MediaMTXSnapshot,
+        quality: MeasurementQuality,
+    ) -> ServerPanelData:
+        """Construye los datos del panel SERVER."""
+
+        return ServerPanelData(
+            hostname=hostname,
+            mediamtx_online=mediamtx_online,
+            api_online=api_online,
+            snapshot_at=snapshot.captured_at,
+            quality=quality.value,
+        )
+
+    def build_streaming_panel(
+        self,
+        *,
+        active_paths: int,
+        readers: int,
+        inbound_bitrate_bps: float | None,
+        outbound_bitrate_bps: float | None,
+        quality: MeasurementQuality,
+    ) -> StreamingPanelData:
+        """Construye los datos del panel STREAMING."""
+
+        return StreamingPanelData(
+            active_paths=active_paths,
+            readers=readers,
+            inbound_bitrate_bps=inbound_bitrate_bps,
+            outbound_bitrate_bps=outbound_bitrate_bps,
+            quality=quality.value,
+        )
+
+    def build_session_panel(
+        self,
+        *,
+        measurement: SessionMeasurement,
+    ) -> SessionPanelData:
+        """Construye los datos del panel ACTIVE CLIENTS."""
+
+        return SessionPanelData(
+            total_sessions=measurement.total_sessions,
+            readers=measurement.reader_count,
+            publishers=measurement.publisher_count,
+            degraded_sessions=measurement.degraded_session_count,
+            critical_sessions=measurement.critical_session_count,
+            inbound_bitrate_bps=(
+                measurement.total_inbound_bitrate_mbps
+                * 1_000_000
+            ),
+            outbound_bitrate_bps=(
+                measurement.total_outbound_bitrate_mbps
+                * 1_000_000
+            ),
+            quality=measurement.worst_quality.value,
+            protocol_counts=tuple(
+                (
+                    protocol.value,
+                    count,
+                )
+                for protocol, count in measurement.protocol_counts
+            ),
+        )
+
+    def build_active_connections_panel(
+        self,
+        *,
+        measurement: SessionMeasurement,
+    ) -> ActiveConnectionsPanelData:
+        """Construye los datos del panel CONNECTED CLIENTS."""
+
+        connections = tuple(
+            ActiveConnectionRow(
+                remote_address=session.remote_address,
+                country=session.location_label,
+                protocol=session.protocol.value,
+                path=session.path or "(sin path)",
+                role=session.role.value,
+                bitrate_bps=(
+                    session.effective_bitrate_mbps * 1_000_000
+                    if session.effective_bitrate_mbps is not None
+                    else None
+                ),
+                uptime_seconds=session.duration_seconds(
+                    now=measurement.captured_at,
+                ),
+                username=session.username,
+            )
+            for session in measurement.sessions
+        )
+
+        return ActiveConnectionsPanelData(
+            captured_at=measurement.captured_at,
+            connections=connections,
+        )
+
+    def build_system_panel(
+        self,
+        *,
+        resources: SystemResources,
+        previous_resources: SystemResources | None = None,
+    ) -> SystemPanelData:
+        """Construye los datos del panel SYSTEM."""
+
+        network_rate = self._network_rate_calculator.compare(
+            previous_resources,
+            resources,
+        )
+
+        return SystemPanelData(
+            cpu=CpuPanelData(
+                usage_percent=resources.cpu.usage_percent,
+                per_core_usage_percent=(
+                    resources.cpu.per_core_usage_percent
+                ),
+                logical_cores=resources.cpu.logical_cores,
+                physical_cores=resources.cpu.physical_cores,
+                frequency_mhz=resources.cpu.frequency_mhz,
+            ),
+            memory=MemoryPanelData(
+                usage_percent=resources.memory.usage_percent,
+                used_bytes=resources.memory.used_bytes,
+                total_bytes=resources.memory.total_bytes,
+            ),
+            disk=DiskPanelData(
+                usage_percent=resources.disk.usage_percent,
+                used_bytes=resources.disk.used_bytes,
+                total_bytes=resources.disk.total_bytes,
+            ),
+            network=NetworkPanelData(
+                interface=network_rate.interface,
+                rx_bps=network_rate.rx_bps,
+                tx_bps=network_rate.tx_bps,
+                errors_in=network_rate.errors_in,
+                errors_out=network_rate.errors_out,
+                dropped_in=network_rate.dropped_in,
+                dropped_out=network_rate.dropped_out,
+            ),
+            uptime=UptimePanelData(
+                seconds=resources.uptime.uptime_seconds,
+            ),
+            captured_at=resources.captured_at,
+        )
+
+    def build_path_row(
+        self,
+        *,
+        name: str,
+        status: str,
+        readers: int,
+        inbound_bitrate_bps: float | None,
+        outbound_bitrate_bps: float | None,
+        quality: MeasurementQuality,
+        source: str,
+    ) -> PathRowData:
+        """Construye una fila para la tabla de paths."""
+
+        return PathRowData(
+            name=name,
+            status=status,
+            readers=readers,
+            inbound_bitrate_bps=inbound_bitrate_bps,
+            outbound_bitrate_bps=outbound_bitrate_bps,
+            quality=quality.value,
+            source=source,
+        )
+
+    def build_dashboard(
+        self,
+        *,
+        server: ServerPanelData,
+        streaming: StreamingPanelData,
+        sessions: SessionPanelData | None = None,
+        paths: tuple[PathRowData, ...],
+        system: SystemPanelData | None = None,
+        health: StreamingHealth | None = None,
+    ) -> DashboardData:
+        """Agrupa todas las secciones del dashboard."""
+
+        return DashboardData(
+            server=server,
+            streaming=streaming,
+            sessions=sessions,
+            system=system,
+            paths=paths,
+            health=health,
+        )
+
+    def build_dashboard_from_measurement(
+        self,
+        *,
+        hostname: str,
+        mediamtx_online: bool,
+        api_online: bool,
+        snapshot: MediaMTXSnapshot,
+        measurement: StreamingMeasurement,
+        session_measurement: SessionMeasurement | None = None,
+        system_resources: SystemResources | None = None,
+        previous_system_resources: SystemResources | None = None,
+        health: StreamingHealth | None = None,
+    ) -> DashboardData:
+        """Construye el dashboard completo desde snapshot y medición."""
+
+        if snapshot.captured_at != measurement.captured_at:
+            raise ValueError(
+                "snapshot y measurement deben pertenecer al mismo instante"
+            )
+
+        if (
+            health is not None
+            and health.captured_at != snapshot.captured_at
+        ):
+            raise ValueError(
+                "snapshot, measurement y health deben pertenecer "
+                "al mismo instante"
+            )
+
+        path_names = [
+            path_measurement.name
+            for path_measurement in measurement.paths
+        ]
+
+        if len(path_names) != len(set(path_names)):
+            raise ValueError(
+                "measurement contiene nombres de paths duplicados"
+            )
+
+        server = self.build_server_panel(
+            hostname=hostname,
+            mediamtx_online=mediamtx_online,
+            api_online=api_online,
+            snapshot=snapshot,
+            quality=measurement.quality,
+        )
+
+        streaming = self.build_streaming_panel(
+            active_paths=snapshot.active_path_count,
+            readers=measurement.total_reader_count,
+            inbound_bitrate_bps=measurement.total_inbound_bitrate_bps,
+            outbound_bitrate_bps=measurement.total_outbound_bitrate_bps,
+            quality=measurement.quality,
+        )
+
+        sessions = (
+            self.build_session_panel(
+                measurement=session_measurement,
+            )
+            if session_measurement is not None
+            else None
+        )
+
+        system = (
+            self.build_system_panel(
+                resources=system_resources,
+                previous_resources=previous_system_resources,
+            )
+            if system_resources is not None
+            else None
+        )
+
+        paths = tuple(
+            self.build_path_row(
+                name=path_measurement.name,
+                status=path_measurement.status.value,
+                readers=path_measurement.reader_count,
+                inbound_bitrate_bps=(
+                    path_measurement.inbound_bitrate_bps
+                ),
+                outbound_bitrate_bps=(
+                    path_measurement.outbound_bitrate_bps
+                ),
+                quality=path_measurement.quality,
+                source=self._resolve_source(
+                    snapshot=snapshot,
+                    path_name=path_measurement.name,
+                ),
+            )
+            for path_measurement in measurement.paths
+        )
+
+        return self.build_dashboard(
+            server=server,
+            streaming=streaming,
+            sessions=sessions,
+            system=system,
+            paths=paths,
+            health=health,
+        )
+
+    @staticmethod
+    def _resolve_source(
+        *,
+        snapshot: MediaMTXSnapshot,
+        path_name: str,
+    ) -> str:
+        """Obtiene la etiqueta legible de la fuente o retorna NONE."""
+
+        snapshot_path = snapshot.get_path(path_name)
+
+        if snapshot_path is None or snapshot_path.source is None:
+            return "NONE"
+
+        source_type = snapshot_path.source.source_type
+
+        return _SOURCE_LABELS.get(source_type, source_type)

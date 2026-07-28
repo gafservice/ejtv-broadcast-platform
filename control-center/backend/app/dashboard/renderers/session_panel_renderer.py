@@ -17,33 +17,36 @@ class SessionPanelRenderer:
 
         content = Text()
 
-        content.append("Sessions: ")
+        for protocol, count in data.protocol_counts:
+            if protocol == "UNKNOWN":
+                continue
+
+            content.append(f"{protocol}: ")
+            content.append(f"{count}\n")
+
+        content.append("TOTAL: ")
         content.append(f"{data.total_sessions}\n")
 
-        content.append("Readers: ")
-        content.append(f"{data.readers}\n")
+        average_bitrate_bps: float | None = None
 
-        content.append("Publishers: ")
-        content.append(f"{data.publishers}\n")
+        if (
+            data.total_sessions > 0
+            and data.outbound_bitrate_bps is not None
+        ):
+            average_bitrate_bps = (
+                data.outbound_bitrate_bps
+                / data.total_sessions
+            )
 
-        content.append("Inbound: ")
-        content.append(
-            f"{self._format_bitrate(data.inbound_bitrate_bps)}\n"
-        )
-
-        content.append("Outbound: ")
+        content.append("Total traffic: ")
         content.append(
             f"{self._format_bitrate(data.outbound_bitrate_bps)}\n"
         )
 
-        content.append("Degraded: ")
-        content.append(f"{data.degraded_sessions}\n")
-
-        content.append("Critical: ")
-        content.append(f"{data.critical_sessions}\n")
-
-        content.append("Quality: ")
-        content.append(data.quality)
+        content.append("Avg/client: ")
+        content.append(
+            f"{self._format_bitrate(average_bitrate_bps)}\n"
+        )
 
         return Panel(
             content,

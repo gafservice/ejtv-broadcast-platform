@@ -18,6 +18,7 @@ from app.services.session_service import SessionService
 from app.services.streaming_health_service import StreamingHealthService
 from app.services.streaming_service import StreamingService
 from app.services.system_service import SystemService
+from app.services.geoip_service import GeoIPService
 
 
 def build_dashboard_application() -> DashboardApplication:
@@ -39,8 +40,15 @@ def build_dashboard_application() -> DashboardApplication:
     #
     # Active Sessions
     #
+    geoip_service = GeoIPService(
+        settings.geoip_database_path
+    )
+
     session_client = MediaMTXSessionClient(api_http_client)
-    session_adapter = MediaMTXSessionAdapter(session_client)
+    session_adapter = MediaMTXSessionAdapter(
+        session_client,
+        geoip_service,
+    )
     session_service = SessionService()
 
     #

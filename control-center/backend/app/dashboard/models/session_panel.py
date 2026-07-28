@@ -15,3 +15,4 @@ class SessionPanelData:
     inbound_bitrate_bps: float | None
     outbound_bitrate_bps: float | None
     quality: str
+    protocol_counts: tuple[tuple[str, int], ...]

@@ -145,6 +145,14 @@ def test_render_contains_active_clients_panel() -> None:
             inbound_bitrate_bps=8_000_000,
             outbound_bitrate_bps=40_000_000,
             quality="GOOD",
+            protocol_counts=(
+                ("SRT", 3),
+                ("RTMP", 1),
+                ("RTSP", 1),
+                ("HLS", 1),
+                ("WebRTC", 0),
+                ("UNKNOWN", 0),
+            ),
         ),
         health=base_data.health,
     )
@@ -161,9 +169,20 @@ def test_render_contains_active_clients_panel() -> None:
     output = console.export_text()
 
     assert "ACTIVE CLIENTS" in output
-    assert "Sessions" in output
-    assert "Readers" in output
-    assert "Publishers" in output
-    assert "6" in output
-    assert "5" in output
-    assert "GOOD" in output
+
+    assert "SRT" in output
+    assert "RTMP" in output
+    assert "RTSP" in output
+    assert "HLS" in output
+    assert "WebRTC" in output
+
+    assert "TOTAL" in output
+
+    assert "Inbound" in output
+    assert "Outbound" in output
+    assert "GOOD" not in output
+
+    assert "Sessions" not in output
+    assert "Publishers" not in output
+    assert "Degraded" not in output
+    assert "Critical" not in output

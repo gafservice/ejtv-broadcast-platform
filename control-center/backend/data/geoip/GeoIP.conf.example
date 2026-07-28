@@ -1,0 +1,7 @@
+# GeoIP configuration template.
+# Copy this file to GeoIP.conf and insert local credentials.
+# Never commit GeoIP.conf.
+
+AccountID YOUR_ACCOUNT_ID
+LicenseKey YOUR_LICENSE_KEY
+EditionIDs GeoLite2-ASN GeoLite2-City GeoLite2-Country

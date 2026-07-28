@@ -8,3 +8,6 @@ __pycache__/
 
 logs/*.log
 control-center/logs/*.log
+
+# Local MaxMind credentials
+control-center/backend/data/geoip/GeoIP.conf

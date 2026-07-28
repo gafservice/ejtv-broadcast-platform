@@ -127,7 +127,7 @@ def test_render_contains_server_labels() -> None:
     assert "MediaMTX" in output
     assert "API" in output
     assert "Snapshot" in output
-    assert "Quality" in output
+    assert "Quality" not in output
 
 def test_render_formats_service_statuses() -> None:
     renderer = ServerPanelRenderer()

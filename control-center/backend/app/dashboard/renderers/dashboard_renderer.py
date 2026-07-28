@@ -3,6 +3,9 @@
 from rich.layout import Layout
 
 from app.dashboard.models import DashboardData
+from app.dashboard.renderers.active_connections_panel_renderer import (
+    ActiveConnectionsPanelRenderer,
+)
 from app.dashboard.renderers.path_table_renderer import PathTableRenderer
 from app.dashboard.renderers.server_panel_renderer import (
     ServerPanelRenderer,
@@ -28,6 +31,9 @@ class DashboardRenderer:
         self._server_renderer = ServerPanelRenderer()
         self._streaming_renderer = StreamingPanelRenderer()
         self._session_renderer = SessionPanelRenderer()
+        self._active_connections_renderer = (
+            ActiveConnectionsPanelRenderer()
+        )
         self._health_renderer = StreamingHealthRenderer()
         self._system_renderer = SystemPanelRenderer()
         self._path_table_renderer = PathTableRenderer()
@@ -37,10 +43,17 @@ class DashboardRenderer:
 
         layout = Layout(name="dashboard")
 
-        layout.split_column(
-            Layout(name="summary", size=18),
-            Layout(name="paths"),
-        )
+        if data.active_connections is not None:
+            layout.split_column(
+                Layout(name="summary", size=18),
+                Layout(name="active_connections", size=12),
+                Layout(name="paths"),
+            )
+        else:
+            layout.split_column(
+                Layout(name="summary", size=18),
+                Layout(name="paths"),
+            )
 
         layout["summary"].split_column(
             Layout(name="summary_top", size=8),
@@ -83,6 +96,13 @@ class DashboardRenderer:
         if data.sessions is not None:
             layout["sessions"].update(
                 self._session_renderer.render(data.sessions)
+            )
+
+        if data.active_connections is not None:
+            layout["active_connections"].update(
+                self._active_connections_renderer.render(
+                    data.active_connections
+                )
             )
 
         layout["paths"].update(

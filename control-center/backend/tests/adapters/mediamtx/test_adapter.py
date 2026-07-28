@@ -186,7 +186,9 @@ def test_adapter_rejects_invalid_reader() -> None:
 
 def test_adapter_preserves_mediamtx_timezone() -> None:
     adapter = MediaMTXAdapter(
-        FakeMediaMTXClient(build_active_payload())  # type: ignore[arg-type]
+        FakeMediaMTXClient(
+            build_active_payload()
+        )  # type: ignore[arg-type]
     )
 
     path = adapter.get_snapshot().paths[0]

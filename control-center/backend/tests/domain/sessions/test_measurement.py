@@ -160,6 +160,87 @@ def test_measurement_accepts_valid_values() -> None:
     assert measurement.publisher_count == 0
     assert measurement.protocols == (SessionProtocol.SRT,)
 
+def test_measurement_counts_sessions_by_protocol() -> None:
+    sessions = (
+        build_session(
+            session_id="srt-1",
+        ),
+        ActiveSession(
+            session_id="srt-2",
+            protocol=SessionProtocol.SRT,
+            role=SessionRole.READER,
+            state="read",
+            remote_ip="203.0.113.11",
+            remote_port=9001,
+            path="channel-1",
+            connected_since=CONNECTED_AT,
+            quality=SessionQuality.EXCELLENT,
+        ),
+        ActiveSession(
+            session_id="hls-1",
+            protocol=SessionProtocol.HLS,
+            role=SessionRole.READER,
+            state="read",
+            remote_ip="203.0.113.12",
+            remote_port=9002,
+            path="channel-1",
+            connected_since=CONNECTED_AT,
+            quality=SessionQuality.GOOD,
+        ),
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=CAPTURED_AT,
+        sessions=sessions,
+        paths=(),
+        total_sessions=3,
+        reader_count=3,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=0.0,
+        worst_quality=SessionQuality.GOOD,
+        protocols=(
+            SessionProtocol.HLS,
+            SessionProtocol.SRT,
+        ),
+    )
+
+    assert measurement.protocol_counts == (
+        (SessionProtocol.SRT, 2),
+        (SessionProtocol.RTMP, 0),
+        (SessionProtocol.RTSP, 0),
+        (SessionProtocol.HLS, 1),
+        (SessionProtocol.WEBRTC, 0),
+        (SessionProtocol.UNKNOWN, 0),
+    )
+
+
+def test_empty_measurement_reports_zero_for_every_protocol() -> None:
+    measurement = SessionMeasurement(
+        captured_at=CAPTURED_AT,
+        sessions=(),
+        paths=(),
+        total_sessions=0,
+        reader_count=0,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=0.0,
+        worst_quality=SessionQuality.UNKNOWN,
+        protocols=(),
+    )
+
+    assert measurement.protocol_counts == tuple(
+        (protocol, 0)
+        for protocol in SessionProtocol
+    )
+
+
 
 def test_measurement_reports_degraded_sessions() -> None:
     degraded = build_session(

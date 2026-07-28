@@ -175,3 +175,20 @@ class SessionMeasurement:
         """Indica si existen sesiones críticas."""
 
         return self.critical_session_count > 0
+
+    @property
+    def protocol_counts(
+        self,
+    ) -> tuple[tuple[SessionProtocol, int], ...]:
+        """Cantidad de sesiones activas agrupadas por protocolo."""
+
+        return tuple(
+            (
+                protocol,
+                sum(
+                    session.protocol is protocol
+                    for session in self.sessions
+                ),
+            )
+            for protocol in SessionProtocol
+        )
