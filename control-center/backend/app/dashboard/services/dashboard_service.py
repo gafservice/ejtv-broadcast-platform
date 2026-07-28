@@ -374,3 +374,15 @@ class DashboardService:
             return "NONE"
 
         source_type = snapshot_path.source.source_type
+
+        source_labels = {
+            "udpSource": "UDP",
+            "mpegtsSource": "MPEG-TS",
+            "srtSource": "SRT",
+            "rtspSource": "RTSP",
+            "rtmpSource": "RTMP",
+            "hlsSource": "HLS",
+            "webRTCSource": "WebRTC",
+        }
+
+        return source_labels.get(source_type, source_type)
