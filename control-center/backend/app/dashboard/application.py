@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from time import sleep
-from typing import Any
+
 
 from rich.layout import Layout
 from rich.live import Live
@@ -14,6 +15,10 @@ from app.adapters.mediamtx.metrics_parser import MediaMTXMetricsParser
 from app.adapters.mediamtx.session_adapter import MediaMTXSessionAdapter
 from app.dashboard.renderers.dashboard_renderer import DashboardRenderer
 from app.dashboard.services.dashboard_service import DashboardService
+from app.dashboard.services.dashboard_snapshot_service import (
+    DashboardSnapshotInput,
+    DashboardSnapshotService,
+)
 from app.domain.sessions import SessionSnapshot
 from app.domain.streaming import MediaMTXSnapshot, StreamingHealth
 from app.domain.system import SystemResources
@@ -39,6 +44,7 @@ class DashboardApplication:
         metrics_client: MediaMTXMetricsClient | None = None,
         metrics_parser: MediaMTXMetricsParser | None = None,
         streaming_health_service: StreamingHealthService | None = None,
+        dashboard_snapshot_service: DashboardSnapshotService | None = None,
     ) -> None:
         self._mediamtx_adapter = mediamtx_adapter
         self._session_adapter = session_adapter
@@ -47,6 +53,11 @@ class DashboardApplication:
         self._session_service = session_service
 
         self._dashboard_service = dashboard_service
+        self._dashboard_snapshot_service = (
+            dashboard_snapshot_service
+            if dashboard_snapshot_service is not None
+            else DashboardSnapshotService(dashboard_service)
+        )
         self._dashboard_renderer = dashboard_renderer
         self._system_service = system_service
 
@@ -92,7 +103,7 @@ class DashboardApplication:
         system_info = self._system_service.get_system_info()
         system_resources = self._system_service.get_system_resources()
 
-        dashboard_arguments: dict[str, Any] = {
+        snapshot_kwargs = {
             "hostname": system_info.hostname,
             "mediamtx_online": api_online,
             "api_online": api_online,
@@ -100,18 +111,16 @@ class DashboardApplication:
             "measurement": measurement,
             "session_measurement": session_measurement,
             "system_resources": system_resources,
-            "previous_system_resources": (
-                self._previous_system_resources
-            ),
+            "previous_system_resources": self._previous_system_resources,
         }
 
         if streaming_health is not None:
-            dashboard_arguments["health"] = streaming_health
+            snapshot_kwargs["health"] = streaming_health
 
-        dashboard_data = (
-            self._dashboard_service.build_dashboard_from_measurement(
-                **dashboard_arguments
-            )
+        snapshot_input = DashboardSnapshotInput(**snapshot_kwargs)
+
+        dashboard_data = self._dashboard_snapshot_service.build_snapshot(
+            snapshot_input
         )
 
         rendered_dashboard = self._dashboard_renderer.render(
@@ -162,9 +171,9 @@ class DashboardApplication:
                 sleep(refresh_interval_seconds)
 
     def _build_streaming_health(
-        self,
-        *,
-        captured_at: Any,
+    self,
+    *,
+    captured_at: datetime,
     ) -> StreamingHealth | None:
         """Obtiene y transforma las métricas Prometheus disponibles."""
 

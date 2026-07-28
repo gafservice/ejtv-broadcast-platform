@@ -1,6 +1,6 @@
 """Pruebas del punto de entrada del monitor NOC."""
 
-from unittest.mock import Mock, call, patch
+from unittest.mock import ANY, Mock, call, patch
 
 from app.dashboard.live_monitor import build_dashboard_application
 
@@ -182,4 +182,5 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
         metrics_client=metrics_client,
         metrics_parser=metrics_parser,
         streaming_health_service=streaming_health_service,
+        dashboard_snapshot_service=ANY,
     )

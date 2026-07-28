@@ -122,6 +122,7 @@ def test_run_once_builds_and_renders_dashboard() -> None:
         session_measurement=session_measurement,
         system_resources=system_resources,
         previous_system_resources=None,
+        health=None,
     )
 
     dashboard_renderer.render.assert_called_once_with(

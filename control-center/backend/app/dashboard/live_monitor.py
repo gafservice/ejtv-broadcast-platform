@@ -14,6 +14,9 @@ from app.core.http import HttpClient
 from app.dashboard.application import DashboardApplication
 from app.dashboard.renderers.dashboard_renderer import DashboardRenderer
 from app.dashboard.services.dashboard_service import DashboardService
+from app.dashboard.services.dashboard_snapshot_service import (
+    DashboardSnapshotService,
+)
 from app.services.session_service import SessionService
 from app.services.streaming_health_service import StreamingHealthService
 from app.services.streaming_service import StreamingService
@@ -80,6 +83,9 @@ def build_dashboard_application() -> DashboardApplication:
     #
     streaming_service = StreamingService()
     dashboard_service = DashboardService()
+    dashboard_snapshot_service = DashboardSnapshotService(
+        dashboard_service
+    )
     dashboard_renderer = DashboardRenderer()
 
     return DashboardApplication(
@@ -93,6 +99,7 @@ def build_dashboard_application() -> DashboardApplication:
         metrics_client=metrics_client,
         metrics_parser=metrics_parser,
         streaming_health_service=streaming_health_service,
+        dashboard_snapshot_service=dashboard_snapshot_service,
     )
 
 
