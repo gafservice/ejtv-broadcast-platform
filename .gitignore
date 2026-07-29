@@ -8,3 +8,15 @@ __pycache__/
 
 logs/*.log
 control-center/logs/*.log
+
+# Local MaxMind credentials
+control-center/backend/data/geoip/GeoIP.conf
+
+# Local backups and damaged files
+.backup/
+*.bak
+*.damaged
+engineering-noc-project.tar.gz
+
+# Runtime and diagnostic logs
+*.log

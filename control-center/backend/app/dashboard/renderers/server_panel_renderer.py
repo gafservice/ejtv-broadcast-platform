@@ -31,9 +31,6 @@ class ServerPanelRenderer:
         )
         content.append("\n")
 
-        content.append("Quality: ")
-        content.append(data.quality)
-
         return Panel(
             content,
             title="SERVER",

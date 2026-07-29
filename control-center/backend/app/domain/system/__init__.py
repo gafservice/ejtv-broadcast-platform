@@ -10,6 +10,11 @@ from app.domain.system.models import (
     UptimeInfo,
 )
 
+from app.domain.system.network_rates import (
+    NetworkRate,
+    NetworkRateCalculator,
+)
+
 from app.domain.system.services import (
     MonitoredService,
     ServiceInstance,
@@ -21,6 +26,9 @@ __all__ = [
     "CPUInfo",
     "DiskInfo",
     "MemoryInfo",
+    "NetworkInfo",
+    "NetworkRate",
+    "NetworkRateCalculator",
     "SystemInfo",
     "SystemResources",
     "UptimeInfo",
@@ -28,5 +36,4 @@ __all__ = [
     "ServiceInstance",
     "ServiceMonitoringSnapshot",
     "ServiceStatus",
-
 ]

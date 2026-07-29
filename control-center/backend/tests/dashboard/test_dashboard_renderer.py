@@ -1,4 +1,7 @@
 """Pruebas para DashboardRenderer."""
+from rich.console import Console
+
+from app.domain.streaming import HealthStatus, StreamingHealth
 
 from datetime import datetime, timezone
 
@@ -8,6 +11,7 @@ from app.dashboard.models import (
     DashboardData,
     PathRowData,
     ServerPanelData,
+    SessionPanelData,
     StreamingPanelData,
 )
 from app.dashboard.renderers.dashboard_renderer import DashboardRenderer
@@ -49,6 +53,7 @@ def build_dashboard_data() -> DashboardData:
                 quality="AVAILABLE",
             ),
         ),
+        health=None,
     )
 
 
@@ -65,3 +70,119 @@ def test_render_returns_rich_layout() -> None:
     layout = renderer.render(data)
 
     assert isinstance(layout, Layout)
+def test_render_contains_health_panel() -> None:
+    renderer = DashboardRenderer()
+    data = build_dashboard_data()
+
+    layout = renderer.render(data)
+
+    console = Console(
+        record=True,
+        width=160,
+        color_system=None,
+    )
+    console.print(layout)
+
+    output = console.export_text()
+
+    assert "STREAM HEALTH" in output
+    assert "UNKNOWN" in output
+    assert "No health data available." in output
+
+
+def test_render_contains_streaming_health_data() -> None:
+    renderer = DashboardRenderer()
+    data = build_dashboard_data()
+
+    health = StreamingHealth(
+        captured_at=data.server.snapshot_at,
+        paths=(),
+        status=HealthStatus.HEALTHY,
+        message="El subsistema SRT funciona correctamente.",
+    )
+
+    data = DashboardData(
+        server=data.server,
+        streaming=data.streaming,
+        paths=data.paths,
+        health=health,
+    )
+
+    layout = renderer.render(data)
+
+    console = Console(
+        record=True,
+        width=160,
+        color_system=None,
+    )
+    console.print(layout)
+
+    output = console.export_text()
+
+    assert "STREAM HEALTH" in output
+    assert "HEALTHY" in output
+    assert "Summary" in output
+    assert "El subsistema SRT funciona" in output
+    assert "…" in output
+
+
+def test_render_contains_active_clients_panel() -> None:
+    """Debe renderizar ACTIVE CLIENTS cuando hay datos de sesiones."""
+
+    renderer = DashboardRenderer()
+    base_data = build_dashboard_data()
+
+    data = DashboardData(
+        server=base_data.server,
+        streaming=base_data.streaming,
+        paths=base_data.paths,
+        sessions=SessionPanelData(
+            total_sessions=6,
+            readers=5,
+            publishers=1,
+            degraded_sessions=1,
+            critical_sessions=0,
+            inbound_bitrate_bps=8_000_000,
+            outbound_bitrate_bps=40_000_000,
+            quality="GOOD",
+            protocol_counts=(
+                ("SRT", 3),
+                ("RTMP", 1),
+                ("RTSP", 1),
+                ("HLS", 1),
+                ("WebRTC", 0),
+                ("UNKNOWN", 0),
+            ),
+        ),
+        health=base_data.health,
+    )
+
+    layout = renderer.render(data)
+
+    console = Console(
+        record=True,
+        width=160,
+        color_system=None,
+    )
+    console.print(layout)
+
+    output = console.export_text()
+
+    assert "ACTIVE CLIENTS" in output
+
+    assert "SRT" in output
+    assert "RTMP" in output
+    assert "RTSP" in output
+    assert "HLS" in output
+    assert "WebRTC" in output
+
+    assert "TOTAL" in output
+
+    assert "Inbound" in output
+    assert "Outbound" in output
+    assert "GOOD" not in output
+
+    assert "Sessions" not in output
+    assert "Publishers" not in output
+    assert "Degraded" not in output
+    assert "Critical" not in output

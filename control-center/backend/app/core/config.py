@@ -40,6 +40,17 @@ class Settings(BaseSettings):
         gt=0,
     )
 
+    mediamtx_metrics_url: str = "http://127.0.0.1:9998"
+
+    mediamtx_metrics_timeout_seconds: float = Field(
+        default=5.0,
+        gt=0,
+    )
+
+    geoip_database_path: str = (
+        "data/geoip/GeoLite2-Country.mmdb"
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

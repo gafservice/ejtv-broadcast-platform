@@ -60,5 +60,6 @@ def test_render_contains_streaming_values() -> None:
     assert "8.00 Mbps" in output
     assert "Outbound" in output
     assert "24.00 Mbps" in output
-    assert "Quality" in output
+    assert "Status" in output
+    assert "Quality" not in output
     assert "AVAILABLE" in output

@@ -1,176 +1,266 @@
-# EJTV Broadcast Platform
+# Broadcast Platform
 
-> *"Toda plataforma nace para resolver un problema."*
+> *"Toda plataforma nace para resolver un problema.
+> Las plataformas que perduran son aquellas capaces de evolucionar sin perder
+> sus principios."*
 
 ---
 
 # Bienvenido
 
-Durante muchos años la distribución de contenido televisivo dependió casi exclusivamente de enlaces satelitales.
+Toda plataforma tiene una historia.
 
-Este modelo permitió construir redes de gran cobertura y ofrecer servicios confiables durante décadas. Sin embargo, también introdujo una serie de limitaciones relacionadas con los costos de operación, la dependencia de infraestructura especializada y la dificultad para evolucionar hacia nuevas tecnologías basadas en redes IP.
+Algunas nacen para responder a una necesidad inmediata. Otras aparecen como
+resultado de años de experiencia acumulada y del deseo de construir una
+solución diferente.
 
-Al mismo tiempo, comenzaron a aparecer protocolos abiertos capaces de transportar contenido audiovisual con altos niveles de confiabilidad sobre Internet y redes privadas.
+Broadcast Platform pertenece a este segundo grupo.
 
-Entre ellos destaca **SRT (Secure Reliable Transport)**, un protocolo diseñado para transportar audio y video con baja latencia, corrección de errores y mecanismos de recuperación ante pérdidas de paquetes.
+Durante muchos años la distribución profesional de contenido audiovisual estuvo
+ligada principalmente a enlaces satelitales y a soluciones propietarias de alto
+costo. Este modelo permitió construir redes confiables y de gran cobertura,
+pero también generó una fuerte dependencia de infraestructura especializada,
+licenciamientos y plataformas cerradas.
 
-En EJTV surgió entonces una pregunta muy sencilla:
+Paralelamente, las redes IP comenzaron a demostrar que podían transportar
+contenido audiovisual con niveles de estabilidad cada vez mayores. La evolución
+de Internet, el incremento del ancho de banda y la aparición de nuevos
+protocolos hicieron posible imaginar una alternativa diferente para la
+distribución profesional de televisión.
 
-> **¿Es posible construir una plataforma profesional para distribuir televisión utilizando herramientas abiertas, completamente documentadas y sin depender de soluciones propietarias?**
+Entre estos protocolos surgió **SRT (Secure Reliable Transport)**, diseñado para
+transportar audio y video con baja latencia, recuperación ante pérdida de
+paquetes y mecanismos de seguridad integrados.
 
-Esta pregunta dio origen a **EJTV Broadcast Platform**.
+Su aparición abrió una nueva posibilidad.
 
-Este proyecto no nace con el objetivo de instalar un servidor Linux.
+¿Era realmente necesario depender de soluciones propietarias para construir una
+infraestructura profesional de distribución de contenido?
 
-Tampoco pretende ser únicamente una guía para configurar diferentes programas.
+Esa pregunta marcó el inicio de este proyecto.
 
-Nuestro propósito es mucho más ambicioso.
+Broadcast Platform nació con un objetivo muy claro:
 
-Queremos construir una plataforma de ingeniería cuya evolución quede completamente documentada, permitiendo comprender no solamente cómo funciona cada componente, sino también por qué fue seleccionado y cuál es su papel dentro del sistema.
+> **Demostrar que es posible construir una plataforma profesional de recepción,
+> administración y distribución de contenido audiovisual utilizando tecnologías
+> abiertas, completamente documentadas y sustentadas sobre principios sólidos de
+> ingeniería.**
 
-Este repositorio documenta ese recorrido.
+Desde el primer día quedó claro que el propósito del proyecto iba mucho más
+allá de instalar un servidor Linux o aprender a utilizar determinadas
+herramientas.
 
-Desde la primera decisión de arquitectura hasta la puesta en producción del servidor.
+Nuestro objetivo consiste en comprender cada componente, justificar cada
+decisión y documentar todo el proceso de construcción de la plataforma.
+
+Queremos que cualquier persona pueda recorrer esta documentación y entender no
+solamente cómo funciona el sistema, sino también por qué fue diseñado de esta
+manera, cuáles alternativas fueron consideradas y qué principios guiaron cada
+decisión de arquitectura.
+
+Por esa razón este repositorio no documenta únicamente una instalación.
+
+Documenta la evolución completa de una plataforma de ingeniería.
+
+Desde las primeras ideas hasta su crecimiento hacia un sistema profesional de
+operación, monitoreo y administración de infraestructuras Broadcast IP.
 
 ---
 
-# ¿Qué es EJTV Broadcast Platform?
+# ¿Qué es Broadcast Platform?
 
-EJTV Broadcast Platform es una plataforma abierta para la recepción, administración y distribución de contenido audiovisual sobre redes IP.
+Broadcast Platform es una plataforma abierta para la recepción, administración,
+monitoreo y distribución de contenido audiovisual sobre redes IP.
 
-Su objetivo principal consiste en recibir señales previamente codificadas por equipos profesionales y redistribuirlas de forma confiable hacia operadores de televisión por cable utilizando protocolos modernos de transporte.
+Su responsabilidad principal consiste en recibir señales previamente
+codificadas por equipos especializados y redistribuirlas de forma confiable
+hacia diferentes destinos utilizando protocolos modernos de transporte.
 
-Durante la primera etapa del proyecto la plataforma estará orientada exclusivamente al protocolo **SRT**.
+Durante las primeras etapas del proyecto la plataforma se concentró en la
+recepción y distribución de flujos Broadcast IP utilizando tecnologías abiertas
+como **FFmpeg** y **MediaMTX**, construyendo una arquitectura modular, estable y
+completamente documentada.
 
-Esta decisión permite concentrar los esfuerzos en construir una infraestructura estable y altamente confiable antes de incorporar otros protocolos o nuevas funcionalidades.
-
-Desde el inicio se tomó otra decisión importante.
+Desde el inicio se tomó una decisión de ingeniería que continúa vigente.
 
 La plataforma **no realizará procesos de transcodificación de video**.
 
-La codificación y compresión del contenido serán realizadas por equipos especializados, como codificadores profesionales y dispositivos Magewell.
+La codificación y compresión del contenido permanecerán bajo la responsabilidad
+de equipos especializados, como codificadores profesionales, dispositivos
+Magewell u otras soluciones dedicadas.
 
-Nuestro servidor tendrá una única responsabilidad:
+Esta decisión reduce considerablemente la complejidad del servidor, disminuye
+el consumo de recursos y permite concentrar todos los esfuerzos en garantizar
+la estabilidad, la administración y la distribución eficiente del contenido.
 
-- recibir;
-- administrar;
-- distribuir.
+En otras palabras, la plataforma asume únicamente tres responsabilidades
+fundamentales:
 
-Nada más.
+- Recibir.
+- Administrar.
+- Distribuir.
 
-Reducir las responsabilidades del servidor simplifica la arquitectura, disminuye el consumo de recursos y mejora considerablemente la estabilidad del sistema.
+Todo aquello que no pertenezca a estas responsabilidades deberá implementarse
+como servicios independientes, preservando la modularidad y facilitando la
+evolución futura del sistema.
+
+Esta filosofía ha acompañado al proyecto desde sus primeras versiones y
+continúa siendo uno de los pilares sobre los que se construye toda la
+arquitectura.
 
 ---
 
 # Nuestra filosofía
 
-Existe una diferencia importante entre instalar un servidor y construir una plataforma.
+Existe una diferencia importante entre instalar un servidor y construir una
+plataforma.
 
-Instalar un servidor consiste en ejecutar una serie de comandos hasta obtener un sistema funcionando.
+Instalar un servidor consiste en ejecutar una secuencia de comandos hasta
+obtener un sistema funcionando. Aunque este proceso puede resolver una
+necesidad inmediata, rara vez permite comprender las razones que existen detrás
+de cada decisión técnica.
 
-Construir una plataforma significa comprender cada componente, justificar cada decisión y pensar en el mantenimiento del sistema durante los próximos años.
+Construir una plataforma exige un enfoque diferente.
 
-Nosotros elegimos el segundo camino.
+Significa comprender cada componente, justificar cada decisión de arquitectura,
+evaluar distintas alternativas y pensar en el mantenimiento del sistema durante
+los próximos años.
 
-Por esa razón este proyecto está organizado alrededor de principios de ingeniería y no alrededor de programas específicos.
+Nosotros elegimos este segundo camino.
 
-Creemos que una plataforma estable depende tanto de la calidad de sus decisiones técnicas como de la claridad con que estas decisiones quedan documentadas.
+Desde el inicio decidimos que cada componente incorporado debía tener un motivo
+claramente justificado. Ninguna herramienta forma parte del proyecto por ser
+popular o por encontrarse de moda.
 
-Todo componente podrá evolucionar.
+Cada tecnología utilizada debe responder a una necesidad concreta dentro de la
+arquitectura.
 
-Todo componente podrá sustituirse.
+Del mismo modo, asumimos que ningún componente es permanente.
 
-Pero los principios de ingeniería permanecerán.
+Los protocolos evolucionan.
+
+Las aplicaciones cambian.
+
+Los sistemas operativos se actualizan.
+
+Incluso el hardware sobre el que hoy se ejecuta la plataforma será sustituido
+algún día.
+
+Sin embargo, los principios de ingeniería permanecerán.
+
+Por esa razón este proyecto no está construido alrededor de programas
+específicos.
+
+Está construido alrededor de decisiones de arquitectura.
+
+Si en el futuro FFmpeg, MediaMTX o cualquier otra herramienta son reemplazados
+por alternativas superiores, la plataforma deberá ser capaz de evolucionar sin
+perder su identidad.
+
+Creemos que una plataforma madura no depende de un producto determinado.
+
+Depende de la calidad de sus principios.
+
+Y esos principios deben quedar tan bien documentados como el propio código.
 
 ---
 
 # Principios de ingeniería
 
-Toda decisión tomada durante el desarrollo de esta plataforma deberá respetar los siguientes principios.
+Toda decisión tomada durante el desarrollo de esta plataforma deberá respetar
+los siguientes principios.
+
+Estos principios constituyen la base sobre la que evolucionará el proyecto y
+servirán como referencia para evaluar cualquier cambio futuro.
 
 ## Estabilidad
 
-La estabilidad prevalece sobre la incorporación de nuevas funcionalidades.
+La estabilidad siempre tendrá prioridad sobre la incorporación de nuevas
+funcionalidades.
 
-Antes de instalar un nuevo componente, incorporar un protocolo adicional o actualizar una versión del software, deberá demostrarse que dicho cambio no compromete la confiabilidad de la plataforma.
+Antes de añadir un nuevo servicio, incorporar un protocolo adicional o
+actualizar una versión de software, deberá demostrarse que dicho cambio no
+compromete la confiabilidad del sistema.
 
----
+Una plataforma profesional debe comportarse de forma predecible incluso bajo
+condiciones adversas.
 
 ## Seguridad
 
-La seguridad forma parte del diseño del sistema.
+La seguridad forma parte del diseño de la plataforma.
 
-No será considerada como un elemento adicional incorporado al finalizar el proyecto.
+No será considerada como un elemento adicional incorporado al finalizar el
+desarrollo.
 
-Cada servicio deberá ejecutarse con los privilegios mínimos necesarios y todo acceso deberá encontrarse controlado y documentado.
-
----
+Cada servicio deberá ejecutarse con los privilegios mínimos necesarios, cada
+acceso deberá encontrarse controlado y toda modificación importante deberá
+quedar registrada y documentada.
 
 ## Modularidad
 
 Cada servicio tendrá una única responsabilidad.
 
-Esta filosofía facilita el mantenimiento, simplifica el diagnóstico de problemas y permite comprender rápidamente la función de cada componente.
+La separación clara de responsabilidades facilita el mantenimiento, simplifica
+el diagnóstico de problemas y permite sustituir componentes individuales sin
+afectar el resto del sistema.
 
----
+Una arquitectura modular también favorece el crecimiento progresivo de la
+plataforma.
+
+Cada nuevo módulo deberá integrarse sin alterar el funcionamiento de los
+componentes existentes.
 
 ## Independencia
 
-Todos los componentes deberán poder evolucionar de manera independiente.
+Todos los componentes deberán poder evolucionar de forma independiente.
 
-Si en el futuro resulta necesario sustituir un servidor multimedia, un sistema operativo o una herramienta de monitoreo, el resto de la plataforma deberá continuar funcionando con los menores cambios posibles.
+La sustitución de un servidor multimedia, un sistema operativo, una base de
+datos o una herramienta de monitoreo no deberá obligar a rediseñar toda la
+arquitectura.
 
----
+La plataforma debe adaptarse a la evolución tecnológica sin perder estabilidad.
+
+## Observabilidad
+
+No es posible administrar aquello que no puede observarse.
+
+Desde sus primeras versiones la plataforma registrará información suficiente
+para comprender el comportamiento de cada uno de sus componentes.
+
+La observabilidad permitirá identificar problemas antes de que afecten la
+operación y proporcionará la base para el desarrollo del Engineering NOC.
 
 ## Documentación
 
 La documentación forma parte integral del proyecto.
 
-Toda decisión importante será explicada, justificada y registrada dentro de este repositorio.
+Cada decisión importante deberá quedar registrada, explicada y justificada
+dentro de este repositorio.
 
 Nuestro objetivo no consiste únicamente en construir una plataforma funcional.
 
 Queremos construir una plataforma comprensible.
 
+Una plataforma cuya evolución pueda entenderse incluso muchos años después de
+haber sido diseñada.
+
 ---
 
 # Nuestra metodología
 
-La documentación de EJTV Broadcast Platform ha sido escrita con un enfoque completamente didáctico.
+Toda la documentación de Broadcast Platform ha sido escrita con un enfoque
+didáctico y progresivo.
 
-Cada documento responderá siempre las siguientes preguntas:
+No asumimos que el lector conoce previamente todos los conceptos utilizados
+durante el desarrollo del proyecto.
 
-1. ¿Qué es?
-2. ¿Por qué existe?
-3. ¿Cómo funciona?
-4. ¿Cómo se implementa?
-5. ¿Cómo verificamos que funciona correctamente?
+Cada nuevo término será presentado antes de ser utilizado y cada decisión será
+explicada antes de ser implementada.
 
-De esta forma el lector no solamente podrá reproducir una configuración, sino comprender completamente la lógica detrás de cada decisión.
+Nuestro propósito no consiste únicamente en mostrar una configuración que
+funciona.
 
-No asumiremos que el lector conoce previamente todos los conceptos utilizados durante el proyecto.
-
-Cada término nuevo será introducido y explicado antes de ser utilizado.
-
-Creemos que enseñar forma parte del proceso de construir una buena plataforma.
-
----
-
-# Estado actual del proyecto
-
-Actualmente la plataforma se encuentra en su etapa inicial de diseño.
-
-Durante esta fase se definirán:
-
-- la arquitectura general;
-- los principios de ingeniería;
-- la organización documental;
-- la estrategia de seguridad;
-- la estructura de red;
-- los procedimientos de instalación;
-- los mecanismos de administración y monitoreo.
-
-Posteriormente comenzará la implementación progresiva de cada componente.
+Queremos explicar por qué funciona.
 
 ---
 
@@ -178,11 +268,101 @@ Posteriormente comenzará la implementación progresiva de cada componente.
 
 Este repositorio constituye la fuente oficial de documentación del proyecto.
 
-Toda la información relacionada con la plataforma se encontrará organizada y versionada mediante Git.
+Todo el conocimiento generado durante el desarrollo de la plataforma deberá
+quedar organizado, versionado y disponible para futuras etapas de evolución.
 
-Cada documento tendrá un propósito específico y responderá una pregunta concreta.
+La documentación se estructura en diferentes niveles, cada uno con un propósito
+específico.
 
-La documentación evolucionará junto con la plataforma.
+Los documentos fundacionales describen la visión, la misión y los principios de
+ingeniería que orientan el desarrollo de la plataforma.
+
+Los **Architecture Decision Records (ADR)** documentan las decisiones
+arquitectónicas más importantes, explicando el contexto en el que fueron
+tomadas, las alternativas evaluadas y las razones que justifican la solución
+adoptada.
+
+Las **Missions** representan los grandes objetivos funcionales del proyecto,
+mientras que los **Sprints** organizan el trabajo incremental necesario para
+alcanzarlos.
+
+De esta manera, cualquier persona podrá comprender no solamente el estado
+actual de la plataforma, sino también la evolución que la condujo hasta ese
+punto.
+
+La documentación crecerá junto con la plataforma.
+
+Nunca será considerada un elemento secundario.
+
+---
+
+# Evolución del proyecto
+
+Las primeras etapas del proyecto estuvieron dedicadas a demostrar que era
+posible construir una infraestructura profesional utilizando exclusivamente
+tecnologías abiertas.
+
+Cada Mission permitió consolidar un nuevo componente de la arquitectura,
+incorporando progresivamente capacidades de recepción, distribución y
+administración de flujos Broadcast IP.
+
+Conforme el proyecto fue creciendo apareció una nueva necesidad.
+
+Distribuir correctamente el contenido resolvía solamente una parte del
+problema.
+
+Una plataforma profesional también necesita comprender lo que ocurre en su
+interior.
+
+Necesita conocer el estado del sistema operativo, los servicios, las interfaces
+de red, las sesiones activas, los protocolos de streaming, el consumo de
+recursos y el comportamiento de cada componente que participa en la operación.
+
+Esta necesidad dio origen a una nueva etapa del proyecto.
+
+Una etapa orientada no solamente a distribuir contenido, sino también a
+observar, diagnosticar y administrar toda la infraestructura desde una única
+consola de ingeniería.
+
+Así nació el concepto del **Engineering NOC (Engineering Network Operations
+Center)**.
+
+El Engineering NOC no sustituye la plataforma de distribución.
+
+La complementa.
+
+Su propósito consiste en proporcionar observabilidad, facilitar el diagnóstico,
+centralizar la administración técnica y preparar la plataforma para futuras
+capacidades de resiliencia y alta disponibilidad.
+
+Su desarrollo se realizará de manera incremental mediante nuevas Missions y
+Sprints, preservando siempre la compatibilidad con los componentes ya
+implementados.
+
+---
+
+# Estado actual del proyecto
+
+Actualmente la plataforma dispone de un núcleo funcional para la recepción y
+distribución de contenido Broadcast IP basado en tecnologías abiertas.
+
+La arquitectura continúa evolucionando hacia un sistema integral de ingeniería
+capaz de administrar, monitorear y diagnosticar todos los componentes que
+participan en la operación del servicio.
+
+Las siguientes etapas estarán orientadas principalmente hacia tres grandes
+objetivos.
+
+La **observabilidad**, para comprender el comportamiento de toda la
+infraestructura en tiempo real.
+
+La **portabilidad**, para permitir que la plataforma pueda desplegarse sobre
+diferentes tipos de hardware y entornos sin modificar su arquitectura.
+
+Y la **resiliencia**, incorporando progresivamente mecanismos de redundancia,
+recuperación y continuidad del servicio.
+
+Cada nueva funcionalidad deberá fortalecer al menos uno de estos tres pilares.
 
 ---
 
@@ -190,13 +370,26 @@ La documentación evolucionará junto con la plataforma.
 
 Más que construir un servidor, queremos construir conocimiento.
 
-Esperamos que cualquier persona que recorra esta documentación pueda comprender cómo nació la plataforma, cuáles fueron los problemas que intentó resolver, por qué se tomaron determinadas decisiones y cómo continuar su evolución en el futuro.
+Esperamos que cualquier persona que recorra esta documentación pueda comprender
+cómo nació la plataforma, cuáles fueron los problemas que intentó resolver, por
+qué se tomaron determinadas decisiones y cómo continuar su evolución en el
+futuro.
 
-Creemos que una plataforma bien documentada puede mantenerse durante muchos años, independientemente del hardware, del sistema operativo o de las personas que participen en su desarrollo.
+Nuestro compromiso no termina cuando una funcionalidad entra en producción.
 
-Ese es el verdadero objetivo de **EJTV Broadcast Platform**.
+También incluye documentar cada decisión importante, mantener actualizada la
+arquitectura y preservar el conocimiento adquirido durante el desarrollo del
+proyecto.
+
+Creemos que una plataforma bien documentada puede mantenerse durante muchos
+años, independientemente del hardware, del sistema operativo o de las personas
+que participen en su evolución.
+
+Ese continúa siendo el verdadero objetivo de Broadcast Platform.
 
 ---
 
-**Versión del documento:** 0.1.0  
-**Estado del proyecto:** Diseño de arquitectura
+**Versión del documento:** 1.0.0
+
+**Estado del proyecto:** Arquitectura consolidada e inicio de la evolución
+hacia el Engineering Network Operations Center (Engineering NOC).

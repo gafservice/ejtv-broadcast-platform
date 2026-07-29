@@ -2,9 +2,32 @@
 
 from datetime import datetime, timezone
 
+from app.domain.sessions import (
+    ActiveSession,
+    SessionMeasurement,
+    SessionProtocol,
+    SessionQuality,
+    SessionRole,
+)
+
+
+from datetime import timedelta
+
+from app.domain.system import (
+    CPUInfo,
+    DiskInfo,
+    MemoryInfo,
+    NetworkInfo,
+    SystemResources,
+    UptimeInfo,
+)
+
 import pytest
 
 from app.dashboard.services.dashboard_service import DashboardService
+from app.domain.sessions.measurement import SessionMeasurement
+from app.domain.sessions.quality import SessionQuality
+
 from app.domain.streaming import (
     MeasurementQuality,
     MediaMTXSnapshot,
@@ -15,6 +38,91 @@ from app.domain.streaming import (
     StreamingPathMeasurement,
 )
 
+def test_build_system_panel_calculates_network_rates() -> None:
+    """Debe calcular RX/TX usando dos capturas consecutivas."""
+
+    service = DashboardService()
+
+    captured_at = datetime(
+        2026,
+        7,
+        20,
+        12,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    previous = SystemResources(
+        cpu=CPUInfo(
+            usage_percent=10,
+            per_core_usage_percent=(10,),
+            logical_cores=1,
+            physical_cores=1,
+            frequency_mhz=3000,
+        ),
+        memory=MemoryInfo(
+            total_bytes=100,
+            available_bytes=40,
+            used_bytes=60,
+            usage_percent=60,
+        ),
+        disk=DiskInfo(
+            total_bytes=100,
+            used_bytes=50,
+            free_bytes=50,
+            usage_percent=50,
+        ),
+        network=NetworkInfo(
+            interface="ens2f0",
+            bytes_sent=500_000,
+            bytes_received=1_000_000,
+            packets_sent=0,
+            packets_received=0,
+            errors_in=1,
+            errors_out=2,
+            dropped_in=3,
+            dropped_out=4,
+        ),
+        uptime=UptimeInfo(
+            uptime_seconds=100,
+        ),
+        captured_at=captured_at,
+    )
+
+    current = SystemResources(
+        cpu=previous.cpu,
+        memory=previous.memory,
+        disk=previous.disk,
+        network=NetworkInfo(
+            interface="ens2f0",
+            bytes_sent=1_000_000,
+            bytes_received=2_000_000,
+            packets_sent=0,
+            packets_received=0,
+            errors_in=5,
+            errors_out=6,
+            dropped_in=7,
+            dropped_out=8,
+        ),
+        uptime=UptimeInfo(
+            uptime_seconds=101,
+        ),
+        captured_at=captured_at + timedelta(seconds=1),
+    )
+
+    panel = service.build_system_panel(
+        resources=current,
+        previous_resources=previous,
+    )
+
+    assert panel.network.rx_bps == 8_000_000
+    assert panel.network.tx_bps == 4_000_000
+
+    assert panel.network.errors_in == 5
+    assert panel.network.errors_out == 6
+
+    assert panel.network.dropped_in == 7
+    assert panel.network.dropped_out == 8
 
 def test_dashboard_service_can_be_created() -> None:
     service = DashboardService()
@@ -297,7 +405,7 @@ def test_build_dashboard_from_measurement() -> None:
     assert path.inbound_bitrate_bps == 4_000_000
     assert path.outbound_bitrate_bps == 8_000_000
     assert path.quality == "AVAILABLE"
-    assert path.source == "udpSource"
+    assert path.source == "UDP"
 
 
 def test_build_dashboard_uses_none_source_when_path_is_missing() -> None:
@@ -575,3 +683,264 @@ def test_build_dashboard_rejects_duplicate_measurement_paths() -> None:
             snapshot=snapshot,
             measurement=measurement,
         )
+
+
+def test_build_dashboard_rejects_mismatched_health_capture_time() -> None:
+    """Health debe corresponder al mismo instante que el snapshot."""
+
+    from datetime import timedelta
+
+    from app.domain.streaming import HealthStatus, StreamingHealth
+
+    service = DashboardService()
+
+    captured_at = datetime(
+        2026,
+        7,
+        22,
+        12,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=0,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=None,
+        interval_seconds=None,
+        paths=(),
+        total_inbound_bitrate_bps=None,
+        total_outbound_bitrate_bps=None,
+        quality=MeasurementQuality.NOT_AVAILABLE,
+    )
+
+    health = StreamingHealth(
+        captured_at=captured_at + timedelta(seconds=1),
+        paths=(),
+        status=HealthStatus.UNKNOWN,
+        message="Sin métricas.",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="deben pertenecer al mismo instante",
+    ):
+        service.build_dashboard_from_measurement(
+            hostname="server-01",
+            mediamtx_online=True,
+            api_online=True,
+            snapshot=snapshot,
+            measurement=measurement,
+            health=health,
+        )
+
+def test_resolve_source_formats_mpegts_source() -> None:
+    service = DashboardService()
+
+    captured_at = datetime(
+        2026,
+        7,
+        20,
+        20,
+        30,
+        tzinfo=timezone.utc,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(
+            MediaPath(
+                name="canal-mpegts",
+                configuration_name="canal-mpegts",
+                status=MediaPathStatus.ACTIVE,
+                ready=True,
+                available=True,
+                online=True,
+                source=MediaSource(
+                    source_type="mpegtsSource",
+                    source_id="source-mpegts-001",
+                ),
+                readers=(),
+                inbound_bytes=0,
+                outbound_bytes=0,
+            ),
+        ),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    source = service._resolve_source(
+        snapshot=snapshot,
+        path_name="canal-mpegts",
+    )
+
+    assert source == "MPEG-TS"
+
+def test_build_session_panel_data() -> None:
+    """Debe convertir SessionMeasurement en SessionPanelData."""
+
+    captured_at = datetime(
+        2026,
+        7,
+        24,
+        14,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    quality = tuple(SessionQuality)[0]
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(),
+        paths=(),
+        total_sessions=0,
+        reader_count=0,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=8.5,
+        total_outbound_bitrate_mbps=42.25,
+        worst_quality=quality,
+        protocols=(),
+    )
+
+    panel = DashboardService().build_session_panel(
+        measurement=measurement,
+    )
+
+    assert panel.total_sessions == 0
+    assert panel.readers == 0
+    assert panel.publishers == 0
+    assert panel.degraded_sessions == 0
+    assert panel.critical_sessions == 0
+    assert panel.inbound_bitrate_bps == 8_500_000
+    assert panel.outbound_bitrate_bps == 42_250_000
+    assert panel.quality == quality.value
+
+def test_build_active_connections_panel_data() -> None:
+    """Debe convertir las sesiones activas en filas del panel."""
+
+    captured_at = datetime(
+        2026,
+        7,
+        26,
+        18,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    session = ActiveSession(
+        session_id="session-001",
+        protocol=SessionProtocol.SRT,
+        role=SessionRole.READER,
+        state="active",
+        remote_ip="201.192.154.130",
+        remote_port=26676,
+        path="canal-principal",
+        connected_since=datetime(
+            2026,
+            7,
+            26,
+            17,
+            0,
+            tzinfo=timezone.utc,
+        ),
+        country_name="Costa Rica",
+        bitrate_send_mbps=4.31,
+        username="cliente-norte",
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=1,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=4.31,
+        worst_quality=SessionQuality.GOOD,
+        protocols=(SessionProtocol.SRT,),
+    )
+
+    panel = DashboardService().build_active_connections_panel(
+        measurement=measurement,
+    )
+
+    assert panel.captured_at == captured_at
+    assert panel.connection_count == 1
+
+    connection = panel.connections[0]
+
+    assert connection.remote_address == "201.192.154.130:26676"
+    assert connection.country == "Costa Rica"
+    assert connection.protocol == "SRT"
+    assert connection.path == "canal-principal"
+    assert connection.role == "READER"
+    assert connection.bitrate_bps == pytest.approx(4_310_000)
+    assert connection.uptime_seconds == 3_600
+    assert connection.username == "cliente-norte"
+
+
+def test_build_active_connections_panel_handles_missing_values() -> None:
+    """Debe presentar valores seguros cuando faltan datos opcionales."""
+
+    captured_at = datetime(
+        2026,
+        7,
+        26,
+        18,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    session = ActiveSession(
+        session_id="session-002",
+        protocol=SessionProtocol.UNKNOWN,
+        role=SessionRole.UNKNOWN,
+        state="active",
+        remote_ip="10.20.30.15",
+        remote_port=None,
+        path=None,
+        connected_since=captured_at,
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=0,
+        publisher_count=0,
+        unknown_role_count=1,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=0.0,
+        worst_quality=SessionQuality.UNKNOWN,
+        protocols=(SessionProtocol.UNKNOWN,),
+    )
+
+    panel = DashboardService().build_active_connections_panel(
+        measurement=measurement,
+    )
+
+    connection = panel.connections[0]
+
+    assert connection.remote_address == "10.20.30.15"
+    assert connection.country == "Red local"
+    assert connection.path == "(sin path)"
+    assert connection.bitrate_bps is None
+    assert connection.uptime_seconds == 0
+    assert connection.username is None
