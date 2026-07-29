@@ -1,6 +1,4 @@
-"""Endpoints REST del dashboard del NOC."""
-
-from __future__ import annotations
+"""Endpoints REST del dashboard."""
 
 from fastapi import APIRouter, Request, status
 
@@ -15,11 +13,11 @@ router = APIRouter(
 
 @router.get(
     "",
-    summary="Obtiene el snapshot actual del dashboard",
+    summary="Obtiene el estado del dashboard",
     status_code=status.HTTP_200_OK,
 )
-async def get_dashboard(request: Request) -> dict[str, object]:
-    """Retorna temporalmente un snapshot vacío del dashboard."""
+def get_dashboard(request: Request) -> dict[str, object]:
+    """Confirma que el endpoint del dashboard está disponible."""
 
     return success_response(
         message="Dashboard endpoint disponible.",

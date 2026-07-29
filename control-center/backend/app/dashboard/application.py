@@ -14,6 +14,7 @@ from app.adapters.mediamtx.metrics_client import MediaMTXMetricsClient
 from app.adapters.mediamtx.metrics_parser import MediaMTXMetricsParser
 from app.adapters.mediamtx.session_adapter import MediaMTXSessionAdapter
 from app.dashboard.renderers.dashboard_renderer import DashboardRenderer
+from app.dashboard.models import DashboardData
 from app.dashboard.services.dashboard_service import DashboardService
 from app.dashboard.services.dashboard_snapshot_service import (
     DashboardSnapshotInput,
@@ -78,8 +79,8 @@ class DashboardApplication:
 
         return self._latest_health
 
-    def run_once(self) -> Layout:
-        """Obtiene una medición y renderiza una iteración del dashboard."""
+    def build_dashboard(self) -> DashboardData:
+        """Construye el estado completo del dashboard sin renderizar."""
 
         api_online = self._mediamtx_adapter.health()
 
@@ -123,16 +124,22 @@ class DashboardApplication:
             snapshot_input
         )
 
-        rendered_dashboard = self._dashboard_renderer.render(
-            dashboard_data
-        )
-
         self._previous_snapshot = snapshot
         self._previous_session_snapshot = session_snapshot
         self._previous_system_resources = system_resources
         self._latest_health = streaming_health
 
-        return rendered_dashboard
+        return dashboard_data
+
+
+    def run_once(self) -> Layout:
+        """Obtiene una medición y renderiza una iteración del dashboard."""
+
+        dashboard_data = self.build_dashboard()
+
+        return self._dashboard_renderer.render(
+            dashboard_data
+    )
 
     def run(
         self,
