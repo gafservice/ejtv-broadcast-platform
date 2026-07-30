@@ -7,3 +7,5 @@ httpx
 psutil
 rich
 geoip2
+
+bcrypt>=5.0,<6.0
