@@ -51,6 +51,36 @@ class Settings(BaseSettings):
         "data/geoip/GeoLite2-Country.mmdb"
     )
 
+    # ------------------------------------------------------------------
+    # Identity
+    # ------------------------------------------------------------------
+
+    identity_database_url: str = (
+        "sqlite:///data/control-center.db"
+    )
+
+    jwt_secret_key: str = (
+        "CHANGE_THIS_SECRET_KEY_WITH_AT_LEAST_32_BYTES"
+    )
+
+    jwt_issuer: str = "control-center"
+    jwt_audience: str = "control-center-api"
+
+    jwt_expiration_seconds: int = Field(
+        default=900,
+        gt=0,
+    )
+
+    bcrypt_rounds: int = Field(
+        default=12,
+        ge=4,
+        le=31,
+    )
+
+    bootstrap_admin_username: str = "administrator"
+    bootstrap_admin_email: str = "admin@example.com"
+    bootstrap_admin_password: str | None = None
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

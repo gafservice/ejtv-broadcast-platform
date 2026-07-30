@@ -2,9 +2,28 @@
 
 from functools import lru_cache
 
+from sqlalchemy import Engine
+from sqlalchemy.orm import Session, sessionmaker
+
 from app.adapters.linux.linux_system_adapter import LinuxSystemAdapter
+from app.core.config import get_settings
 from app.dashboard.application import DashboardApplication
 from app.dashboard.live_monitor import build_dashboard_application
+from app.infrastructure.persistence.audit.sqlalchemy_audit_repository import (
+    SQLAlchemyAuditRepository,
+)
+from app.infrastructure.persistence.database import (
+    create_database_engine,
+    create_session_factory,
+)
+from app.infrastructure.persistence.identity.sqlalchemy_user_repository import (
+    SQLAlchemyUserRepository,
+)
+from app.infrastructure.security.bcrypt_password_hasher import (
+    BcryptPasswordHasher,
+)
+from app.infrastructure.security.jwt_token_provider import JWTTokenProvider
+from app.services.authentication_service import AuthenticationService
 from app.services.system_service import SystemService
 
 
@@ -21,3 +40,58 @@ def get_dashboard_application() -> DashboardApplication:
     """Construye la aplicación coordinadora del dashboard."""
 
     return build_dashboard_application()
+
+
+@lru_cache
+def get_identity_database_engine() -> Engine:
+    """Construye el motor de persistencia de Identity."""
+
+    settings = get_settings()
+
+    return create_database_engine(
+        settings.identity_database_url,
+        echo=False,
+    )
+
+
+@lru_cache
+def get_identity_session_factory() -> sessionmaker[Session]:
+    """Construye la fábrica de sesiones de Identity."""
+
+    return create_session_factory(
+        get_identity_database_engine()
+    )
+
+
+@lru_cache
+def get_authentication_service() -> AuthenticationService:
+    """Construye el servicio de autenticación."""
+
+    settings = get_settings()
+    session_factory = get_identity_session_factory()
+
+    user_repository = SQLAlchemyUserRepository(
+        session_factory
+    )
+
+    audit_repository = SQLAlchemyAuditRepository(
+        session_factory
+    )
+
+    password_hasher = BcryptPasswordHasher(
+        rounds=settings.bcrypt_rounds
+    )
+
+    token_provider = JWTTokenProvider(
+        secret_key=settings.jwt_secret_key,
+        issuer=settings.jwt_issuer,
+        audience=settings.jwt_audience,
+        expiration_seconds=settings.jwt_expiration_seconds,
+    )
+
+    return AuthenticationService(
+        user_repository=user_repository,
+        password_hasher=password_hasher,
+        token_provider=token_provider,
+        audit_repository=audit_repository,
+    )

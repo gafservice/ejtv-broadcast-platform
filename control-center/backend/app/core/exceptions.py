@@ -1,4 +1,4 @@
-"""Excepciones de dominio y manejadores HTTP."""
+"""Excepciones controladas y manejadores HTTP globales."""
 
 import logging
 from typing import Any
@@ -9,12 +9,17 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.responses import error_response
+from app.domain.identity.exceptions import (
+    InvalidCredentials,
+    UserDisabled,
+    UserLocked,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class ControlCenterError(Exception):
-    """Excepción base controlada del EJTV Control Center."""
+    """Excepción base controlada del Control Center."""
 
     def __init__(
         self,
@@ -66,6 +71,8 @@ class OperationNotAllowedError(ControlCenterError):
 
 
 def _request_id(request: Request) -> str | None:
+    """Obtiene el identificador de la solicitud actual."""
+
     return getattr(request.state, "request_id", None)
 
 
@@ -73,6 +80,8 @@ async def control_center_error_handler(
     request: Request,
     exc: ControlCenterError,
 ) -> JSONResponse:
+    """Maneja errores controlados de la aplicación."""
+
     logger.warning(
         "Error controlado: %s",
         exc.message,
@@ -90,10 +99,61 @@ async def control_center_error_handler(
     )
 
 
+async def invalid_credentials_handler(
+    request: Request,
+    _: InvalidCredentials,
+) -> JSONResponse:
+    """Traduce credenciales inválidas a HTTP 401."""
+
+    return JSONResponse(
+        status_code=401,
+        headers={"WWW-Authenticate": "Bearer"},
+        content=error_response(
+            message="Las credenciales proporcionadas no son válidas.",
+            error_code="INVALID_CREDENTIALS",
+            request_id=_request_id(request),
+        ),
+    )
+
+
+async def user_disabled_handler(
+    request: Request,
+    _: UserDisabled,
+) -> JSONResponse:
+    """Traduce un usuario deshabilitado a HTTP 403."""
+
+    return JSONResponse(
+        status_code=403,
+        content=error_response(
+            message="La cuenta de usuario está deshabilitada.",
+            error_code="USER_DISABLED",
+            request_id=_request_id(request),
+        ),
+    )
+
+
+async def user_locked_handler(
+    request: Request,
+    _: UserLocked,
+) -> JSONResponse:
+    """Traduce un usuario bloqueado a HTTP 423."""
+
+    return JSONResponse(
+        status_code=423,
+        content=error_response(
+            message="La cuenta de usuario está bloqueada.",
+            error_code="USER_LOCKED",
+            request_id=_request_id(request),
+        ),
+    )
+
+
 async def http_error_handler(
     request: Request,
     exc: StarletteHTTPException,
 ) -> JSONResponse:
+    """Maneja excepciones HTTP de Starlette y FastAPI."""
+
     return JSONResponse(
         status_code=exc.status_code,
         content=error_response(
@@ -108,6 +168,8 @@ async def validation_error_handler(
     request: Request,
     exc: RequestValidationError,
 ) -> JSONResponse:
+    """Maneja errores de validación de solicitudes."""
+
     return JSONResponse(
         status_code=422,
         content=error_response(
@@ -123,6 +185,8 @@ async def unexpected_error_handler(
     request: Request,
     exc: Exception,
 ) -> JSONResponse:
+    """Maneja errores inesperados sin exponer detalles internos."""
+
     logger.exception(
         "Error inesperado durante la solicitud.",
         extra={"request_id": _request_id(request)},
@@ -144,6 +208,18 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(
         ControlCenterError,
         control_center_error_handler,
+    )
+    app.add_exception_handler(
+        InvalidCredentials,
+        invalid_credentials_handler,
+    )
+    app.add_exception_handler(
+        UserDisabled,
+        user_disabled_handler,
+    )
+    app.add_exception_handler(
+        UserLocked,
+        user_locked_handler,
     )
     app.add_exception_handler(
         StarletteHTTPException,

@@ -20,3 +20,8 @@ engineering-noc-project.tar.gz
 
 # Runtime and diagnostic logs
 *.log
+
+# Local databases
+**/*.db
+**/*.sqlite
+**/*.sqlite3

@@ -1,0 +1,72 @@
+"""Catálogo oficial de permisos y roles del dominio Identity."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from app.domain.identity.value_objects import PermissionName, RoleName
+
+
+@dataclass(frozen=True, slots=True)
+class RoleDefinition:
+    """Define un rol reservado y sus permisos."""
+
+    name: RoleName
+    permissions: frozenset[PermissionName]
+
+
+SYSTEM_READ = PermissionName("system.read")
+SYSTEM_WRITE = PermissionName("system.write")
+
+DASHBOARD_READ = PermissionName("dashboard.read")
+DASHBOARD_WRITE = PermissionName("dashboard.write")
+
+STREAMING_READ = PermissionName("streaming.read")
+STREAMING_WRITE = PermissionName("streaming.write")
+
+IDENTITY_READ = PermissionName("identity.read")
+IDENTITY_WRITE = PermissionName("identity.write")
+
+USERS_READ = PermissionName("users.read")
+USERS_WRITE = PermissionName("users.write")
+USERS_MANAGE = PermissionName("users.manage")
+
+ROLES_READ = PermissionName("roles.read")
+ROLES_WRITE = PermissionName("roles.write")
+
+ALARMS_READ = PermissionName("alarms.read")
+ALARMS_WRITE = PermissionName("alarms.write")
+
+
+ALL_PERMISSIONS = frozenset(
+    {
+        SYSTEM_READ,
+        SYSTEM_WRITE,
+        DASHBOARD_READ,
+        DASHBOARD_WRITE,
+        STREAMING_READ,
+        STREAMING_WRITE,
+        IDENTITY_READ,
+        IDENTITY_WRITE,
+        USERS_READ,
+        USERS_WRITE,
+        USERS_MANAGE,
+        ROLES_READ,
+        ROLES_WRITE,
+        ALARMS_READ,
+        ALARMS_WRITE,
+    }
+)
+
+
+ADMINISTRATOR_ROLE = RoleDefinition(
+    name=RoleName("administrator"),
+    permissions=ALL_PERMISSIONS,
+)
+
+
+DEFAULT_ROLES = frozenset(
+    {
+        ADMINISTRATOR_ROLE,
+    }
+)
