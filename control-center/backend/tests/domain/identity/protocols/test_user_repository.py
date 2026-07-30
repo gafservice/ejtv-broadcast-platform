@@ -21,7 +21,7 @@ class InMemoryUserRepository:
         return self._users_by_username.get(username)
 
     def save(self, user: User) -> None:
-        self._users_by_id[user.user_id] = user
+        self._users_by_id[user.id] = user
         self._users_by_username[user.username] = user
 
 
@@ -67,3 +67,34 @@ def test_protocol_does_not_define_unneeded_crud_operations() -> None:
     assert not hasattr(UserRepository, "delete")
     assert not hasattr(UserRepository, "list")
     assert not hasattr(UserRepository, "find_all")
+
+
+def test_fake_repository_can_save_and_retrieve_user() -> None:
+    """Validate the representative repository implementation end to end."""
+    from uuid import UUID
+
+    from app.domain.identity.enums import UserStatus
+    from app.domain.identity.value_objects import (
+        Email,
+        PasswordHash,
+    )
+
+    repository = InMemoryUserRepository()
+
+    user = User(
+        id=UserId(
+            UUID("00000000-0000-0000-0000-000000000001")
+        ),
+        username=Username("administrator"),
+        email=Email("administrator@example.com"),
+        password_hash=PasswordHash(
+            "$2b$12$abcdefghijklmnopqrstuu"
+            "abcdefghijklmnopqrstuu1234567890"
+        ),
+        status=UserStatus.ACTIVE,
+    )
+
+    repository.save(user)
+
+    assert repository.get_by_id(user.id) == user
+    assert repository.get_by_username(user.username) == user
