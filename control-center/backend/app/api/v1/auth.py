@@ -77,4 +77,3 @@ def get_current_user(
         message="Identidad autenticada obtenida correctamente.",
         request_id=request.state.request_id,
     )
-
