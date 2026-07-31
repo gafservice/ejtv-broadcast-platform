@@ -24,6 +24,7 @@ from app.infrastructure.security.bcrypt_password_hasher import (
 )
 from app.infrastructure.security.jwt_token_provider import JWTTokenProvider
 from app.services.authentication_service import AuthenticationService
+from app.services.authorization_service import AuthorizationService
 from app.services.system_service import SystemService
 
 
@@ -64,6 +65,38 @@ def get_identity_session_factory() -> sessionmaker[Session]:
 
 
 @lru_cache
+def get_token_provider() -> JWTTokenProvider:
+    """Construye el proveedor JWT compartido por la API."""
+
+    settings = get_settings()
+
+    return JWTTokenProvider(
+        secret_key=settings.jwt_secret_key,
+        issuer=settings.jwt_issuer,
+        audience=settings.jwt_audience,
+        expiration_seconds=settings.jwt_expiration_seconds,
+    )
+
+
+@lru_cache
+def get_audit_repository() -> SQLAlchemyAuditRepository:
+    """Construye el repositorio de auditoría de Identity."""
+
+    return SQLAlchemyAuditRepository(
+        get_identity_session_factory()
+    )
+
+
+@lru_cache
+def get_authorization_service() -> AuthorizationService:
+    """Construye el servicio de autorización."""
+
+    return AuthorizationService(
+        audit_repository=get_audit_repository()
+    )
+
+
+@lru_cache
 def get_authentication_service() -> AuthenticationService:
     """Construye el servicio de autenticación."""
 
@@ -74,24 +107,13 @@ def get_authentication_service() -> AuthenticationService:
         session_factory
     )
 
-    audit_repository = SQLAlchemyAuditRepository(
-        session_factory
-    )
-
     password_hasher = BcryptPasswordHasher(
         rounds=settings.bcrypt_rounds
-    )
-
-    token_provider = JWTTokenProvider(
-        secret_key=settings.jwt_secret_key,
-        issuer=settings.jwt_issuer,
-        audience=settings.jwt_audience,
-        expiration_seconds=settings.jwt_expiration_seconds,
     )
 
     return AuthenticationService(
         user_repository=user_repository,
         password_hasher=password_hasher,
-        token_provider=token_provider,
-        audit_repository=audit_repository,
+        token_provider=get_token_provider(),
+        audit_repository=get_audit_repository(),
     )
