@@ -1,9 +1,19 @@
 """Pruebas de la API de información del sistema."""
 
+import pytest
 from fastapi.testclient import TestClient
 from datetime import UTC, datetime
+from uuid import UUID
 from app.adapters.base.system_adapter import SystemAdapter
 from app.api.dependencies import get_system_service
+from app.api.security import get_current_identity
+from app.domain.identity.entities import AuthenticatedIdentity
+from app.domain.identity.value_objects import (
+    PermissionName,
+    RoleName,
+    UserId,
+    Username,
+)
 from app.main import app
 from app.services.system_service import SystemService
 from app.domain.system import (
@@ -100,12 +110,72 @@ def override_system_service() -> SystemService:
     return SystemService(FakeSystemAdapter())
 
 
-app.dependency_overrides[get_system_service] = override_system_service
+def override_current_identity() -> AuthenticatedIdentity:
+    """Retorna una identidad autorizada para consultar System."""
 
-client = TestClient(app)
+    return AuthenticatedIdentity(
+        user_id=UserId(
+            UUID("01900000-0000-7000-8000-000000000012")
+        ),
+        username=Username("systemtester"),
+        roles=frozenset(
+            {
+                RoleName("administrator"),
+            }
+        ),
+        permissions=frozenset(
+            {
+                PermissionName("system.read"),
+            }
+        ),
+    )
 
 
-def test_system_info_endpoint() -> None:
+@pytest.fixture
+def client() -> TestClient:
+    """Proporciona un cliente con dependencias aisladas."""
+
+    previous_system_service = app.dependency_overrides.get(
+        get_system_service
+    )
+    previous_identity = app.dependency_overrides.get(
+        get_current_identity
+    )
+
+    app.dependency_overrides[get_system_service] = (
+        override_system_service
+    )
+    app.dependency_overrides[get_current_identity] = (
+        override_current_identity
+    )
+
+    with TestClient(app) as test_client:
+        yield test_client
+
+    if previous_system_service is None:
+        app.dependency_overrides.pop(
+            get_system_service,
+            None,
+        )
+    else:
+        app.dependency_overrides[
+            get_system_service
+        ] = previous_system_service
+
+    if previous_identity is None:
+        app.dependency_overrides.pop(
+            get_current_identity,
+            None,
+        )
+    else:
+        app.dependency_overrides[
+            get_current_identity
+        ] = previous_identity
+
+
+def test_system_info_endpoint(
+    client: TestClient,
+) -> None:
     response = client.get("/api/v1/system/info")
 
     assert response.status_code == 200
@@ -124,7 +194,9 @@ def test_system_info_endpoint() -> None:
     assert payload["request_id"]
 
 
-def test_system_info_preserves_request_id() -> None:
+def test_system_info_preserves_request_id(
+    client: TestClient,
+) -> None:
     request_id = "system-api-test"
 
     response = client.get(
@@ -136,7 +208,9 @@ def test_system_info_preserves_request_id() -> None:
     assert response.headers["X-Request-ID"] == request_id
     assert response.json()["request_id"] == request_id
 
-def test_system_resources_endpoint() -> None:
+def test_system_resources_endpoint(
+    client: TestClient,
+) -> None:
     response = client.get("/api/v1/system/resources")
 
     assert response.status_code == 200
@@ -183,7 +257,9 @@ def test_system_resources_endpoint() -> None:
     )
     assert payload["request_id"]
     
-def test_system_services_endpoint() -> None:
+def test_system_services_endpoint(
+    client: TestClient,
+) -> None:
     response = client.get("/api/v1/system/services")
 
     assert response.status_code == 200

@@ -24,7 +24,7 @@ def get_dashboard(
     request: Request,
     identity: Annotated[
         AuthenticatedIdentity,
-        Depends(require_permission("dashboard.view")),
+        Depends(require_permission("dashboard.read")),
     ],
 ) -> dict[str, object]:
     """Confirma que el dashboard está disponible para el usuario."""

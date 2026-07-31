@@ -7,10 +7,17 @@ from app.api.serializers import serialize
 from fastapi import APIRouter, Depends, Request
 
 from app.api.dependencies import get_system_service
+from app.api.security import require_permission
 from app.core.responses import success_response
 from app.services.system_service import SystemService
 
-router = APIRouter(prefix="/system", tags=["System"])
+router = APIRouter(
+    prefix="/system",
+    tags=["System"],
+    dependencies=[
+        Depends(require_permission("system.read")),
+    ],
+)
 
 
 @router.get("/info")
