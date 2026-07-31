@@ -11,6 +11,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.core.responses import error_response
 from app.domain.identity.exceptions import (
     InvalidCredentials,
+    PermissionDenied,
     UserDisabled,
     UserLocked,
 )
@@ -116,6 +117,25 @@ async def invalid_credentials_handler(
     )
 
 
+async def permission_denied_handler(
+    request: Request,
+    _: PermissionDenied,
+) -> JSONResponse:
+    """Traduce la ausencia de permisos a HTTP 403."""
+
+    return JSONResponse(
+        status_code=403,
+        content=error_response(
+            message=(
+                "La identidad autenticada no posee el permiso "
+                "requerido."
+            ),
+            error_code="PERMISSION_DENIED",
+            request_id=_request_id(request),
+        ),
+    )
+
+
 async def user_disabled_handler(
     request: Request,
     _: UserDisabled,
@@ -156,6 +176,7 @@ async def http_error_handler(
 
     return JSONResponse(
         status_code=exc.status_code,
+        headers=exc.headers,
         content=error_response(
             message=str(exc.detail),
             error_code=f"HTTP_{exc.status_code}",
@@ -212,6 +233,10 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(
         InvalidCredentials,
         invalid_credentials_handler,
+    )
+    app.add_exception_handler(
+        PermissionDenied,
+        permission_denied_handler,
     )
     app.add_exception_handler(
         UserDisabled,
