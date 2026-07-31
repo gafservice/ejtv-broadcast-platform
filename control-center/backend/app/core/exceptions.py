@@ -10,10 +10,12 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.responses import error_response
 from app.domain.identity.exceptions import (
+    EmailAlreadyExists,
     InvalidCredentials,
     PermissionDenied,
     UserDisabled,
     UserLocked,
+    UsernameAlreadyExists,
 )
 
 logger = logging.getLogger(__name__)
@@ -112,6 +114,38 @@ async def invalid_credentials_handler(
         content=error_response(
             message="Las credenciales proporcionadas no son válidas.",
             error_code="INVALID_CREDENTIALS",
+            request_id=_request_id(request),
+        ),
+    )
+
+
+async def username_already_exists_handler(
+    request: Request,
+    _: UsernameAlreadyExists,
+) -> JSONResponse:
+    """Traduce un username duplicado a HTTP 409."""
+
+    return JSONResponse(
+        status_code=409,
+        content=error_response(
+            message="El nombre de usuario ya está registrado.",
+            error_code="USERNAME_ALREADY_EXISTS",
+            request_id=_request_id(request),
+        ),
+    )
+
+
+async def email_already_exists_handler(
+    request: Request,
+    _: EmailAlreadyExists,
+) -> JSONResponse:
+    """Traduce un correo duplicado a HTTP 409."""
+
+    return JSONResponse(
+        status_code=409,
+        content=error_response(
+            message="El correo electrónico ya está registrado.",
+            error_code="EMAIL_ALREADY_EXISTS",
             request_id=_request_id(request),
         ),
     )
@@ -233,6 +267,14 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(
         InvalidCredentials,
         invalid_credentials_handler,
+    )
+    app.add_exception_handler(
+        UsernameAlreadyExists,
+        username_already_exists_handler,
+    )
+    app.add_exception_handler(
+        EmailAlreadyExists,
+        email_already_exists_handler,
     )
     app.add_exception_handler(
         PermissionDenied,

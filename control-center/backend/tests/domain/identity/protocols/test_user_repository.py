@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from app.domain.identity.entities import User
 from app.domain.identity.protocols import UserRepository
-from app.domain.identity.value_objects import UserId, Username
+from app.domain.identity.value_objects import (
+    Email,
+    UserId,
+    Username,
+)
 
 
 class InMemoryUserRepository:
@@ -13,6 +17,7 @@ class InMemoryUserRepository:
     def __init__(self) -> None:
         self._users_by_id: dict[UserId, User] = {}
         self._users_by_username: dict[Username, User] = {}
+        self._users_by_email: dict[Email, User] = {}
 
     def get_by_id(self, user_id: UserId) -> User | None:
         return self._users_by_id.get(user_id)
@@ -20,9 +25,21 @@ class InMemoryUserRepository:
     def get_by_username(self, username: Username) -> User | None:
         return self._users_by_username.get(username)
 
+    def get_by_email(self, email: Email) -> User | None:
+        return self._users_by_email.get(email)
+
+    def list(self) -> tuple[User, ...]:
+        return tuple(
+            sorted(
+                self._users_by_id.values(),
+                key=lambda user: user.username.value,
+            )
+        )
+
     def save(self, user: User) -> None:
         self._users_by_id[user.id] = user
         self._users_by_username[user.username] = user
+        self._users_by_email[user.email] = user
 
 
 class IncompleteRepository:
@@ -52,6 +69,14 @@ def test_protocol_exposes_get_by_username_operation() -> None:
     assert callable(getattr(UserRepository, "get_by_username"))
 
 
+def test_protocol_exposes_get_by_email_operation() -> None:
+    assert callable(getattr(UserRepository, "get_by_email"))
+
+
+def test_protocol_exposes_list_operation() -> None:
+    assert callable(getattr(UserRepository, "list"))
+
+
 def test_protocol_exposes_save_operation() -> None:
     assert callable(getattr(UserRepository, "save"))
 
@@ -63,9 +88,8 @@ def test_protocol_does_not_define_infrastructure_operations() -> None:
     assert not hasattr(UserRepository, "connect")
 
 
-def test_protocol_does_not_define_unneeded_crud_operations() -> None:
+def test_protocol_does_not_define_destructive_operations() -> None:
     assert not hasattr(UserRepository, "delete")
-    assert not hasattr(UserRepository, "list")
     assert not hasattr(UserRepository, "find_all")
 
 
@@ -98,3 +122,5 @@ def test_fake_repository_can_save_and_retrieve_user() -> None:
 
     assert repository.get_by_id(user.id) == user
     assert repository.get_by_username(user.username) == user
+    assert repository.get_by_email(user.email) == user
+    assert repository.list() == (user,)

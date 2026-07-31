@@ -24,6 +24,9 @@ from app.infrastructure.security.bcrypt_password_hasher import (
 )
 from app.infrastructure.security.jwt_token_provider import JWTTokenProvider
 from app.services.authentication_service import AuthenticationService
+from app.services.identity_administration_service import (
+    IdentityAdministrationService,
+)
 from app.services.authorization_service import AuthorizationService
 from app.services.system_service import SystemService
 
@@ -93,6 +96,24 @@ def get_authorization_service() -> AuthorizationService:
 
     return AuthorizationService(
         audit_repository=get_audit_repository()
+    )
+
+
+@lru_cache
+def get_identity_administration_service(
+) -> IdentityAdministrationService:
+    """Construye el servicio administrativo de Identity."""
+
+    settings = get_settings()
+
+    return IdentityAdministrationService(
+        user_repository=SQLAlchemyUserRepository(
+            get_identity_session_factory()
+        ),
+        password_hasher=BcryptPasswordHasher(
+            rounds=settings.bcrypt_rounds
+        ),
+        audit_repository=get_audit_repository(),
     )
 
 

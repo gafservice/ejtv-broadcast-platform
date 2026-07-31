@@ -303,3 +303,70 @@ def test_rejects_invalid_domain_arguments(
 
     with pytest.raises(TypeError):
         method(invalid_value)
+
+
+def test_save_and_get_by_email(
+    repository: SQLAlchemyUserRepository,
+) -> None:
+    user = make_user()
+
+    repository.save(user)
+
+    assert repository.get_by_email(user.email) == user
+
+
+def test_get_by_email_returns_none_for_unknown_user(
+    repository: SQLAlchemyUserRepository,
+) -> None:
+    assert (
+        repository.get_by_email(
+            Email("unknown@example.com")
+        )
+        is None
+    )
+
+
+def test_list_returns_empty_tuple(
+    repository: SQLAlchemyUserRepository,
+) -> None:
+    assert repository.list() == ()
+
+
+def test_list_returns_users_ordered_by_username(
+    repository: SQLAlchemyUserRepository,
+) -> None:
+    first_user = make_user(
+        username="zeta-user",
+        email="zeta-user@example.com",
+    )
+
+    second_user = User(
+        id=UserId(
+            UUID("00000000-0000-0000-0000-000000000002")
+        ),
+        username=Username("alpha-user"),
+        email=Email("alpha-user@example.com"),
+        password_hash=first_user.password_hash,
+        roles=first_user.roles,
+        status=UserStatus.ACTIVE,
+    )
+
+    repository.save(first_user)
+    repository.save(second_user)
+
+    users = repository.list()
+
+    assert isinstance(users, tuple)
+    assert [user.username.value for user in users] == [
+        "alpha-user",
+        "zeta-user",
+    ]
+
+
+def test_get_by_email_rejects_invalid_argument(
+    repository: SQLAlchemyUserRepository,
+) -> None:
+    with pytest.raises(TypeError):
+        repository.get_by_email(
+            "administrator@example.com"  # type: ignore[arg-type]
+        )

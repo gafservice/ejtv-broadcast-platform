@@ -15,6 +15,7 @@ from app.domain.identity.entities import (
     User,
 )
 from app.domain.identity.value_objects import (
+    Email,
     UserId,
     Username,
 )
@@ -86,6 +87,41 @@ class SQLAlchemyUserRepository:
                 return None
 
             return user_model_to_domain(model)
+
+    def get_by_email(
+        self,
+        email: Email,
+    ) -> User | None:
+        """Return the user identified by ``email``."""
+        if not isinstance(email, Email):
+            raise TypeError("email must be an Email")
+
+        with self._session_factory() as session:
+            model = session.scalar(
+                self._user_query().where(
+                    UserModel.email == email.value
+                )
+            )
+
+            if model is None:
+                return None
+
+            return user_model_to_domain(model)
+
+    def list(self) -> tuple[User, ...]:
+        """Return all users ordered by username."""
+
+        with self._session_factory() as session:
+            models = session.scalars(
+                self._user_query().order_by(
+                    UserModel.username
+                )
+            ).all()
+
+            return tuple(
+                user_model_to_domain(model)
+                for model in models
+            )
 
     def save(
         self,
