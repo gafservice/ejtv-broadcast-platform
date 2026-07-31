@@ -15,6 +15,7 @@ from app.domain.identity.exceptions import (
     PermissionDenied,
     UserDisabled,
     UserLocked,
+    UserNotFound,
     UsernameAlreadyExists,
 )
 
@@ -114,6 +115,22 @@ async def invalid_credentials_handler(
         content=error_response(
             message="Las credenciales proporcionadas no son válidas.",
             error_code="INVALID_CREDENTIALS",
+            request_id=_request_id(request),
+        ),
+    )
+
+
+async def user_not_found_handler(
+    request: Request,
+    _: UserNotFound,
+) -> JSONResponse:
+    """Traduce un usuario inexistente a HTTP 404."""
+
+    return JSONResponse(
+        status_code=404,
+        content=error_response(
+            message="El usuario solicitado no existe.",
+            error_code="USER_NOT_FOUND",
             request_id=_request_id(request),
         ),
     )
@@ -267,6 +284,10 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(
         InvalidCredentials,
         invalid_credentials_handler,
+    )
+    app.add_exception_handler(
+        UserNotFound,
+        user_not_found_handler,
     )
     app.add_exception_handler(
         UsernameAlreadyExists,

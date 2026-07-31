@@ -45,3 +45,21 @@ class UserListResponse(BaseModel):
 
     users: list[UserResponse]
     total: int
+
+
+class ChangeUserStatusRequest(BaseModel):
+    """Nuevo estado operativo de un usuario."""
+
+    status: UserStatus
+
+
+class ChangeUserPasswordRequest(BaseModel):
+    """Nueva contraseña administrativa de un usuario."""
+
+    password: str = Field(
+        min_length=1,
+        max_length=72,
+        description="Nueva contraseña del usuario.",
+        examples=["new-secure-password"],
+    )
+

@@ -181,3 +181,65 @@ def test_user_has_permission_name_returns_false() -> None:
     assert user.has_permission_name(
         PermissionName("dashboard.view")
     ) is False
+
+
+def test_with_status_returns_updated_user() -> None:
+    user = make_user()
+
+    updated = user.with_status(UserStatus.DISABLED)
+
+    assert updated is not user
+    assert updated.id == user.id
+    assert updated.username == user.username
+    assert updated.email == user.email
+    assert updated.password_hash == user.password_hash
+    assert updated.roles == user.roles
+    assert updated.status is UserStatus.DISABLED
+
+    assert user.status is UserStatus.ACTIVE
+
+
+def test_with_status_accepts_locked_status() -> None:
+    user = make_user()
+
+    updated = user.with_status(UserStatus.LOCKED)
+
+    assert updated.status is UserStatus.LOCKED
+    assert updated.is_locked()
+
+
+def test_with_status_rejects_invalid_value() -> None:
+    user = make_user()
+
+    with pytest.raises(TypeError):
+        user.with_status("disabled")  # type: ignore[arg-type]
+
+
+def test_with_password_hash_returns_updated_user() -> None:
+    user = make_user()
+
+    new_hash = PasswordHash(
+        "$2b$12$zyxwvutsrqponmlkjihgfe"
+        "zyxwvutsrqponmlkjihgfe1234567890"
+    )
+
+    updated = user.with_password_hash(new_hash)
+
+    assert updated is not user
+    assert updated.id == user.id
+    assert updated.username == user.username
+    assert updated.email == user.email
+    assert updated.roles == user.roles
+    assert updated.status == user.status
+    assert updated.password_hash == new_hash
+
+    assert user.password_hash != new_hash
+
+
+def test_with_password_hash_rejects_invalid_value() -> None:
+    user = make_user()
+
+    with pytest.raises(TypeError):
+        user.with_password_hash(
+            "not-a-password-hash"  # type: ignore[arg-type]
+        )

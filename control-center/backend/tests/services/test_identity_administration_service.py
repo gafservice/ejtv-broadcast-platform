@@ -80,8 +80,8 @@ class FakePasswordHasher:
     def hash(self, plain_password: str) -> PasswordHash:
         self.received_password = plain_password
         return PasswordHash(
-            "$2b$12$abcdefghijklmnopqrstuu"
-            "abcdefghijklmnopqrstuu1234567890"
+            "$2b$12$zyxwvutsrqponmlkjihgfe"
+            "zyxwvutsrqponmlkjihgfe1234567890"
         )
 
     def verify(
@@ -319,3 +319,175 @@ def test_operations_reject_invalid_actor(
 
     with pytest.raises(TypeError):
         method(**arguments)
+
+
+def test_get_user_returns_existing_user() -> None:
+    service, repository, _, audit = build_service()
+
+    user = make_user(
+        user_id=(
+            "01900000-0000-7000-8000-000000000106"
+        ),
+        username="operator",
+        email="operator@example.com",
+    )
+    repository.save(user)
+
+    actor = make_actor()
+
+    restored = service.get_user(
+        actor=actor,
+        user_id=str(user.id),
+    )
+
+    assert restored == user
+    assert audit.records == [
+        (
+            "identity.user.retrieved",
+            actor,
+            {
+                "target_user_id": str(user.id),
+                "target_username": "operator",
+            },
+        )
+    ]
+
+
+def test_get_user_raises_when_unknown() -> None:
+    from app.domain.identity.exceptions import UserNotFound
+
+    service, _, _, audit = build_service()
+
+    with pytest.raises(UserNotFound):
+        service.get_user(
+            actor=make_actor(),
+            user_id=(
+                "01900000-0000-7000-8000-000000000199"
+            ),
+        )
+
+    assert audit.records == []
+
+
+def test_change_user_status_persists_update() -> None:
+    from app.domain.identity.enums import UserStatus
+
+    service, repository, _, audit = build_service()
+
+    user = make_user(
+        user_id=(
+            "01900000-0000-7000-8000-000000000107"
+        ),
+        username="operator",
+        email="operator@example.com",
+    )
+    repository.save(user)
+
+    actor = make_actor()
+
+    updated = service.change_user_status(
+        actor=actor,
+        user_id=str(user.id),
+        status=UserStatus.DISABLED,
+    )
+
+    assert updated.status is UserStatus.DISABLED
+    assert repository.get_by_id(user.id) == updated
+
+    assert audit.records == [
+        (
+            "identity.user.status_changed",
+            actor,
+            {
+                "target_user_id": str(user.id),
+                "target_username": "operator",
+                "previous_status": "active",
+                "new_status": "disabled",
+            },
+        )
+    ]
+
+
+def test_change_user_status_rejects_invalid_status() -> None:
+    service, _, _, audit = build_service()
+
+    with pytest.raises(TypeError):
+        service.change_user_status(
+            actor=make_actor(),
+            user_id=(
+                "01900000-0000-7000-8000-000000000107"
+            ),
+            status="disabled",  # type: ignore[arg-type]
+        )
+
+    assert audit.records == []
+
+
+def test_change_password_hashes_and_persists() -> None:
+    service, repository, hasher, audit = build_service()
+
+    user = make_user(
+        user_id=(
+            "01900000-0000-7000-8000-000000000108"
+        ),
+        username="operator",
+        email="operator@example.com",
+    )
+    repository.save(user)
+
+    actor = make_actor()
+
+    updated = service.change_password(
+        actor=actor,
+        user_id=str(user.id),
+        password="new-secure-password",
+    )
+
+    assert hasher.received_password == (
+        "new-secure-password"
+    )
+    assert updated.password_hash != user.password_hash
+    assert repository.get_by_id(user.id) == updated
+
+    assert audit.records == [
+        (
+            "identity.user.password_changed",
+            actor,
+            {
+                "target_user_id": str(user.id),
+                "target_username": "operator",
+            },
+        )
+    ]
+
+
+@pytest.mark.parametrize(
+    "method_name",
+    [
+        "get_user",
+        "change_user_status",
+        "change_password",
+    ],
+)
+def test_new_operations_reject_invalid_actor(
+    method_name: str,
+) -> None:
+    from app.domain.identity.enums import UserStatus
+
+    service, _, _, _ = build_service()
+
+    arguments: dict[str, object] = {
+        "actor": object(),
+        "user_id": (
+            "01900000-0000-7000-8000-000000000109"
+        ),
+    }
+
+    if method_name == "change_user_status":
+        arguments["status"] = UserStatus.ACTIVE
+
+    if method_name == "change_password":
+        arguments["password"] = "secure-password"
+
+    with pytest.raises(TypeError):
+        getattr(service, method_name)(**arguments)

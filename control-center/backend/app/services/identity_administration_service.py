@@ -8,6 +8,7 @@ from app.domain.identity.entities import (
 )
 from app.domain.identity.exceptions import (
     EmailAlreadyExists,
+    UserNotFound,
     UsernameAlreadyExists,
 )
 from app.domain.identity.protocols import (
@@ -15,6 +16,7 @@ from app.domain.identity.protocols import (
     PasswordHasher,
     UserRepository,
 )
+from app.domain.identity.enums import UserStatus
 from app.domain.identity.value_objects import (
     Email,
     UserId,
@@ -91,6 +93,91 @@ class IdentityAdministrationService:
 
         return user
 
+    def get_user(
+        self,
+        *,
+        actor: AuthenticatedIdentity,
+        user_id: str,
+    ) -> User:
+        """Return a user by identifier."""
+
+        self._validate_actor(actor)
+
+        user = self._get_required_user(user_id)
+
+        self._audit_repository.record(
+            "identity.user.retrieved",
+            actor,
+            {
+                "target_user_id": str(user.id),
+                "target_username": user.username.value,
+            },
+        )
+
+        return user
+
+    def change_user_status(
+        self,
+        *,
+        actor: AuthenticatedIdentity,
+        user_id: str,
+        status: UserStatus,
+    ) -> User:
+        """Change the operational status of a user."""
+
+        self._validate_actor(actor)
+
+        if not isinstance(status, UserStatus):
+            raise TypeError("status must be a UserStatus")
+
+        user = self._get_required_user(user_id)
+        updated_user = user.with_status(status)
+
+        self._user_repository.save(updated_user)
+
+        self._audit_repository.record(
+            "identity.user.status_changed",
+            actor,
+            {
+                "target_user_id": str(updated_user.id),
+                "target_username": updated_user.username.value,
+                "previous_status": user.status.value,
+                "new_status": updated_user.status.value,
+            },
+        )
+
+        return updated_user
+
+    def change_password(
+        self,
+        *,
+        actor: AuthenticatedIdentity,
+        user_id: str,
+        password: str,
+    ) -> User:
+        """Replace a user's password hash."""
+
+        self._validate_actor(actor)
+
+        user = self._get_required_user(user_id)
+
+        updated_user = user.with_password_hash(
+            self._password_hasher.hash(password)
+        )
+
+        self._user_repository.save(updated_user)
+
+        self._audit_repository.record(
+            "identity.user.password_changed",
+            actor,
+            {
+                "target_user_id": str(updated_user.id),
+                "target_username": updated_user.username.value,
+            },
+        )
+
+        return updated_user
+
     def list_users(
         self,
         *,
@@ -98,10 +185,7 @@ class IdentityAdministrationService:
     ) -> tuple[User, ...]:
         """Return all users ordered by the repository."""
 
-        if not isinstance(actor, AuthenticatedIdentity):
-            raise TypeError(
-                "actor must be an AuthenticatedIdentity"
-            )
+        self._validate_actor(actor)
 
         users = self._user_repository.list()
 
@@ -114,3 +198,30 @@ class IdentityAdministrationService:
         )
 
         return users
+
+    @staticmethod
+    def _validate_actor(
+        actor: AuthenticatedIdentity,
+    ) -> None:
+        """Validate administrative actor."""
+
+        if not isinstance(actor, AuthenticatedIdentity):
+            raise TypeError(
+                "actor must be an AuthenticatedIdentity"
+            )
+
+    def _get_required_user(
+        self,
+        user_id: str,
+    ) -> User:
+        """Return an existing user or raise."""
+
+        user = self._user_repository.get_by_id(
+            UserId.from_string(user_id)
+        )
+
+        if user is None:
+            raise UserNotFound
+
+        return user
+

@@ -8,6 +8,8 @@ from app.api.dependencies import (
     get_identity_administration_service,
 )
 from app.api.schemas.identity_administration import (
+    ChangeUserPasswordRequest,
+    ChangeUserStatusRequest,
     CreateUserRequest,
     UserListResponse,
     UserResponse,
@@ -106,3 +108,86 @@ def list_users(
         message="Usuarios obtenidos correctamente.",
         request_id=request.state.request_id,
     )
+
+
+@router.get("/users/{user_id}")
+def get_user(
+    user_id: str,
+    request: Request,
+    actor: Annotated[
+        AuthenticatedIdentity,
+        Depends(require_permission("users.read")),
+    ],
+    service: IdentityAdministrationService = Depends(
+        get_identity_administration_service
+    ),
+) -> dict[str, object]:
+    """Obtiene un usuario por identificador."""
+
+    user = service.get_user(
+        actor=actor,
+        user_id=user_id,
+    )
+
+    return success_response(
+        data=_serialize_user(user).model_dump(),
+        message="Usuario obtenido correctamente.",
+        request_id=request.state.request_id,
+    )
+
+
+@router.patch("/users/{user_id}/status")
+def change_user_status(
+    user_id: str,
+    payload: ChangeUserStatusRequest,
+    request: Request,
+    actor: Annotated[
+        AuthenticatedIdentity,
+        Depends(require_permission("users.manage")),
+    ],
+    service: IdentityAdministrationService = Depends(
+        get_identity_administration_service
+    ),
+) -> dict[str, object]:
+    """Cambia el estado operativo de un usuario."""
+
+    user = service.change_user_status(
+        actor=actor,
+        user_id=user_id,
+        status=payload.status,
+    )
+
+    return success_response(
+        data=_serialize_user(user).model_dump(),
+        message="Estado del usuario actualizado correctamente.",
+        request_id=request.state.request_id,
+    )
+
+
+@router.post("/users/{user_id}/password")
+def change_user_password(
+    user_id: str,
+    payload: ChangeUserPasswordRequest,
+    request: Request,
+    actor: Annotated[
+        AuthenticatedIdentity,
+        Depends(require_permission("users.manage")),
+    ],
+    service: IdentityAdministrationService = Depends(
+        get_identity_administration_service
+    ),
+) -> dict[str, object]:
+    """Cambia administrativamente la contraseña de un usuario."""
+
+    user = service.change_password(
+        actor=actor,
+        user_id=user_id,
+        password=payload.password,
+    )
+
+    return success_response(
+        data=_serialize_user(user).model_dump(),
+        message="Contraseña del usuario actualizada correctamente.",
+        request_id=request.state.request_id,
+    )
+

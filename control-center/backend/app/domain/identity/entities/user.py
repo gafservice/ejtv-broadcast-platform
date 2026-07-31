@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from app.domain.identity.entities.permission import Permission
 from app.domain.identity.entities.role import Role
@@ -41,6 +41,36 @@ class User:
         """Return whether the user is locked."""
 
         return self.status is UserStatus.LOCKED
+
+    def with_status(
+        self,
+        status: UserStatus,
+    ) -> "User":
+        """Return a copy of the user with a new status."""
+
+        if not isinstance(status, UserStatus):
+            raise TypeError("status must be a UserStatus")
+
+        return replace(
+            self,
+            status=status,
+        )
+
+    def with_password_hash(
+        self,
+        password_hash: PasswordHash,
+    ) -> "User":
+        """Return a copy of the user with a new password hash."""
+
+        if not isinstance(password_hash, PasswordHash):
+            raise TypeError(
+                "password_hash must be a PasswordHash"
+            )
+
+        return replace(
+            self,
+            password_hash=password_hash,
+        )
 
     def has_role(self, role: Role) -> bool:
         """Return whether the user owns the given role."""
