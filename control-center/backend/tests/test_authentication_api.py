@@ -261,3 +261,115 @@ def test_login_is_registered_in_openapi(
     ]["post"]
 
     assert "Authentication" in operation["tags"]
+
+
+def test_current_identity_requires_authentication(
+    client: TestClient,
+) -> None:
+    response = client.get("/api/v1/auth/me")
+
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+
+    payload = response.json()
+
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "HTTP_401"
+
+
+def test_current_identity_returns_authenticated_user(
+    client: TestClient,
+) -> None:
+    from uuid import UUID
+
+    from app.api.security import get_current_identity
+    from app.domain.identity.entities import AuthenticatedIdentity
+    from app.domain.identity.value_objects import (
+        PermissionName,
+        RoleName,
+        UserId,
+        Username,
+    )
+
+    identity = AuthenticatedIdentity(
+        user_id=UserId(
+            UUID("01900000-0000-7000-8000-000000000013")
+        ),
+        username=Username("administrator"),
+        roles=frozenset(
+            {
+                RoleName("operator"),
+                RoleName("administrator"),
+            }
+        ),
+        permissions=frozenset(
+            {
+                PermissionName("system.read"),
+                PermissionName("dashboard.read"),
+            }
+        ),
+    )
+
+    previous_override = app.dependency_overrides.get(
+        get_current_identity
+    )
+
+    app.dependency_overrides[
+        get_current_identity
+    ] = lambda: identity
+
+    try:
+        response = client.get("/api/v1/auth/me")
+    finally:
+        if previous_override is None:
+            app.dependency_overrides.pop(
+                get_current_identity,
+                None,
+            )
+        else:
+            app.dependency_overrides[
+                get_current_identity
+            ] = previous_override
+
+    assert response.status_code == 200
+
+    payload = response.json()
+
+    assert payload["success"] is True
+    assert payload["data"] == {
+        "user_id": (
+            "01900000-0000-7000-8000-000000000013"
+        ),
+        "username": "administrator",
+        "roles": [
+            "administrator",
+            "operator",
+        ],
+        "permissions": [
+            "dashboard.read",
+            "system.read",
+        ],
+    }
+    assert payload["message"] == (
+        "Identidad autenticada obtenida correctamente."
+    )
+    assert payload["request_id"]
+
+
+def test_current_identity_is_registered_in_openapi(
+    client: TestClient,
+) -> None:
+    response = client.get("/openapi.json")
+
+    assert response.status_code == 200
+
+    operation = response.json()["paths"][
+        "/api/v1/auth/me"
+    ]["get"]
+
+    assert "Authentication" in operation["tags"]
+    assert operation["security"] == [
+        {
+            "BearerAuth": [],
+        }
+    ]

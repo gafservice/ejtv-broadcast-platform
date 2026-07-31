@@ -26,3 +26,12 @@ class LoginResponse(BaseModel):
     access_token: str
     token_type: str = "Bearer"
     expires_in: int
+
+
+class CurrentIdentityResponse(BaseModel):
+    """Identidad autenticada representada en la API."""
+
+    user_id: str
+    username: str
+    roles: list[str]
+    permissions: list[str]
