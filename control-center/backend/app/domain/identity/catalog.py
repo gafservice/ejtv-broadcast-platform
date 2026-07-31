@@ -65,8 +65,57 @@ ADMINISTRATOR_ROLE = RoleDefinition(
 )
 
 
+OPERATOR_ROLE = RoleDefinition(
+    name=RoleName("operator"),
+    permissions=frozenset(
+        {
+            SYSTEM_READ,
+            DASHBOARD_READ,
+            STREAMING_READ,
+            STREAMING_WRITE,
+            ALARMS_READ,
+            ALARMS_WRITE,
+        }
+    ),
+)
+
+
+VIEWER_ROLE = RoleDefinition(
+    name=RoleName("viewer"),
+    permissions=frozenset(
+        {
+            SYSTEM_READ,
+            DASHBOARD_READ,
+            STREAMING_READ,
+            ALARMS_READ,
+        }
+    ),
+)
+
+
 DEFAULT_ROLES = frozenset(
     {
         ADMINISTRATOR_ROLE,
+        OPERATOR_ROLE,
+        VIEWER_ROLE,
     }
 )
+
+
+def get_role_definition(
+    role_name: RoleName,
+) -> RoleDefinition | None:
+    """Return a reserved role definition by name."""
+
+    if not isinstance(role_name, RoleName):
+        raise TypeError("role_name must be a RoleName")
+
+    return next(
+        (
+            role
+            for role in DEFAULT_ROLES
+            if role.name == role_name
+        ),
+        None,
+    )
+

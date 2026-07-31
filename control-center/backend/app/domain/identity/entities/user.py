@@ -72,6 +72,46 @@ class User:
             password_hash=password_hash,
         )
 
+    def with_role(
+        self,
+        role: Role,
+    ) -> "User":
+        """Return a copy of the user with the role assigned."""
+
+        if not isinstance(role, Role):
+            raise TypeError("role must be a Role")
+
+        if role in self.roles:
+            return self
+
+        return replace(
+            self,
+            roles=self.roles | {role},
+        )
+
+    def without_role(
+        self,
+        role_name: RoleName,
+    ) -> "User":
+        """Return a copy of the user without the named role."""
+
+        if not isinstance(role_name, RoleName):
+            raise TypeError("role_name must be a RoleName")
+
+        remaining_roles = frozenset(
+            role
+            for role in self.roles
+            if role.name != role_name
+        )
+
+        if remaining_roles == self.roles:
+            return self
+
+        return replace(
+            self,
+            roles=remaining_roles,
+        )
+
     def has_role(self, role: Role) -> bool:
         """Return whether the user owns the given role."""
 

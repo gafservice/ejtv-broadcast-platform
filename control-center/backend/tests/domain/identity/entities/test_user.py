@@ -243,3 +243,100 @@ def test_with_password_hash_rejects_invalid_value() -> None:
         user.with_password_hash(
             "not-a-password-hash"  # type: ignore[arg-type]
         )
+
+
+def test_with_role_returns_user_with_assigned_role() -> None:
+    user = make_user()
+
+    role = Role(
+        name=RoleName("operator"),
+    )
+
+    updated = user.with_role(role)
+
+    assert updated is not user
+    assert updated.has_role(role)
+    assert updated.has_role_name(RoleName("operator"))
+    assert user.roles == frozenset()
+
+
+def test_with_role_is_idempotent() -> None:
+    role = Role(
+        name=RoleName("operator"),
+    )
+
+    user = make_user(
+        roles=frozenset({role}),
+    )
+
+    updated = user.with_role(role)
+
+    assert updated is user
+    assert updated.roles == frozenset({role})
+
+
+def test_with_role_rejects_invalid_value() -> None:
+    user = make_user()
+
+    with pytest.raises(TypeError):
+        user.with_role("operator")  # type: ignore[arg-type]
+
+
+def test_without_role_returns_user_without_named_role() -> None:
+    operator_role = Role(
+        name=RoleName("operator"),
+    )
+    viewer_role = Role(
+        name=RoleName("viewer"),
+    )
+
+    user = make_user(
+        roles=frozenset(
+            {
+                operator_role,
+                viewer_role,
+            }
+        ),
+    )
+
+    updated = user.without_role(
+        RoleName("operator")
+    )
+
+    assert updated is not user
+    assert not updated.has_role_name(
+        RoleName("operator")
+    )
+    assert updated.has_role_name(
+        RoleName("viewer")
+    )
+
+    assert user.has_role_name(
+        RoleName("operator")
+    )
+
+
+def test_without_role_is_idempotent_for_unknown_role() -> None:
+    role = Role(
+        name=RoleName("viewer"),
+    )
+
+    user = make_user(
+        roles=frozenset({role}),
+    )
+
+    updated = user.without_role(
+        RoleName("operator")
+    )
+
+    assert updated is user
+    assert updated.roles == frozenset({role})
+
+
+def test_without_role_rejects_invalid_value() -> None:
+    user = make_user()
+
+    with pytest.raises(TypeError):
+        user.without_role(
+            "operator"  # type: ignore[arg-type]
+        )

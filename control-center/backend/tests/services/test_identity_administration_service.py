@@ -491,3 +491,359 @@ def test_new_operations_reject_invalid_actor(
 
     with pytest.raises(TypeError):
         getattr(service, method_name)(**arguments)
+
+
+def test_list_roles_returns_canonical_roles() -> None:
+    service, _, _, audit = build_service()
+    actor = make_actor()
+
+    roles = service.list_roles(actor=actor)
+
+    assert [
+        role.name.value
+        for role in roles
+    ] == [
+        "administrator",
+        "operator",
+        "viewer",
+    ]
+
+    assert audit.records == [
+        (
+            "identity.roles.listed",
+            actor,
+            {"result_count": 3},
+        )
+    ]
+
+
+def test_assign_role_persists_canonical_role() -> None:
+    service, repository, _, audit = build_service()
+
+    user = make_user(
+        user_id=(
+            "01900000-0000-7000-8000-000000000110"
+        ),
+        username="operator-user",
+        email="operator-user@example.com",
+    )
+    repository.save(user)
+
+    actor = make_actor()
+
+    updated = service.assign_role(
+        actor=actor,
+        user_id=str(user.id),
+        role_name="operator",
+    )
+
+    assert updated.has_role_name(
+        RoleName("operator")
+    )
+    assert repository.get_by_id(user.id) == updated
+
+    operator_role = next(
+        role
+        for role in updated.roles
+        if role.name == RoleName("operator")
+    )
+
+    assert {
+        permission.name.value
+        for permission in operator_role.permissions
+    } == {
+        "system.read",
+        "dashboard.read",
+        "streaming.read",
+        "streaming.write",
+        "alarms.read",
+        "alarms.write",
+    }
+
+    assert audit.records == [
+        (
+            "identity.user.role_assigned",
+            actor,
+            {
+                "target_user_id": str(user.id),
+                "target_username": "operator-user",
+                "role": "operator",
+                "changed": True,
+            },
+        )
+    ]
+
+
+def test_assign_role_is_idempotent() -> None:
+    from app.domain.identity.entities import Permission, Role
+    from app.domain.identity.value_objects import PermissionName
+
+    service, repository, _, audit = build_service()
+
+    operator_role = Role(
+        name=RoleName("operator"),
+        permissions=frozenset(
+            {
+                Permission(
+                    name=PermissionName("system.read")
+                )
+            }
+        ),
+    )
+
+    user = User(
+        id=UserId(
+            UUID(
+                "01900000-0000-7000-8000-000000000111"
+            )
+        ),
+        username=Username("existing-operator"),
+        email=Email("existing-operator@example.com"),
+        password_hash=PasswordHash(
+            "$2b$12$abcdefghijklmnopqrstuu"
+            "abcdefghijklmnopqrstuu1234567890"
+        ),
+        roles=frozenset({operator_role}),
+    )
+    repository.save(user)
+
+    actor = make_actor()
+
+    updated = service.assign_role(
+        actor=actor,
+        user_id=str(user.id),
+        role_name="operator",
+    )
+
+    assert updated is user
+    assert repository.get_by_id(user.id) == user
+    assert audit.records[0][2]["changed"] is False
+
+
+def test_assign_role_rejects_unknown_role() -> None:
+    from app.domain.identity.exceptions import RoleNotFound
+
+    service, repository, _, audit = build_service()
+
+    user = make_user(
+        user_id=(
+            "01900000-0000-7000-8000-000000000112"
+        ),
+        username="role-test",
+        email="role-test@example.com",
+    )
+    repository.save(user)
+
+    with pytest.raises(RoleNotFound):
+        service.assign_role(
+            actor=make_actor(),
+            user_id=str(user.id),
+            role_name="unknown_role",
+        )
+
+    assert audit.records == []
+
+
+def test_remove_role_persists_updated_user() -> None:
+    from app.domain.identity.entities import Role
+
+    service, repository, _, audit = build_service()
+
+    viewer_role = Role(
+        name=RoleName("viewer"),
+    )
+
+    user = User(
+        id=UserId(
+            UUID(
+                "01900000-0000-7000-8000-000000000113"
+            )
+        ),
+        username=Username("viewer-user"),
+        email=Email("viewer-user@example.com"),
+        password_hash=PasswordHash(
+            "$2b$12$abcdefghijklmnopqrstuu"
+            "abcdefghijklmnopqrstuu1234567890"
+        ),
+        roles=frozenset({viewer_role}),
+    )
+    repository.save(user)
+
+    actor = make_actor()
+
+    updated = service.remove_role(
+        actor=actor,
+        user_id=str(user.id),
+        role_name="viewer",
+    )
+
+    assert not updated.has_role_name(
+        RoleName("viewer")
+    )
+    assert repository.get_by_id(user.id) == updated
+
+    assert audit.records == [
+        (
+            "identity.user.role_removed",
+            actor,
+            {
+                "target_user_id": str(user.id),
+                "target_username": "viewer-user",
+                "role": "viewer",
+                "changed": True,
+            },
+        )
+    ]
+
+
+def test_remove_role_is_idempotent() -> None:
+    service, repository, _, audit = build_service()
+
+    user = make_user(
+        user_id=(
+            "01900000-0000-7000-8000-000000000114"
+        ),
+        username="no-role-user",
+        email="no-role-user@example.com",
+    )
+    repository.save(user)
+
+    updated = service.remove_role(
+        actor=make_actor(),
+        user_id=str(user.id),
+        role_name="viewer",
+    )
+
+    assert updated is user
+    assert audit.records[0][2]["changed"] is False
+
+
+def test_remove_last_administrator_is_rejected() -> None:
+    from app.domain.identity.entities import Role
+    from app.domain.identity.exceptions import (
+        CannotRemoveLastAdministrator,
+    )
+
+    service, repository, _, audit = build_service()
+
+    administrator_role = Role(
+        name=RoleName("administrator"),
+    )
+
+    user = User(
+        id=UserId(
+            UUID(
+                "01900000-0000-7000-8000-000000000115"
+            )
+        ),
+        username=Username("sole-admin"),
+        email=Email("sole-admin@example.com"),
+        password_hash=PasswordHash(
+            "$2b$12$abcdefghijklmnopqrstuu"
+            "abcdefghijklmnopqrstuu1234567890"
+        ),
+        roles=frozenset({administrator_role}),
+    )
+    repository.save(user)
+
+    with pytest.raises(
+        CannotRemoveLastAdministrator
+    ):
+        service.remove_role(
+            actor=make_actor(),
+            user_id=str(user.id),
+            role_name="administrator",
+        )
+
+    assert repository.get_by_id(user.id) == user
+    assert audit.records == []
+
+
+def test_remove_administrator_when_another_exists() -> None:
+    from app.domain.identity.entities import Role
+
+    service, repository, _, _ = build_service()
+
+    administrator_role = Role(
+        name=RoleName("administrator"),
+    )
+
+    first = User(
+        id=UserId(
+            UUID(
+                "01900000-0000-7000-8000-000000000116"
+            )
+        ),
+        username=Username("first-admin"),
+        email=Email("first-admin@example.com"),
+        password_hash=PasswordHash(
+            "$2b$12$abcdefghijklmnopqrstuu"
+            "abcdefghijklmnopqrstuu1234567890"
+        ),
+        roles=frozenset({administrator_role}),
+    )
+
+    second = User(
+        id=UserId(
+            UUID(
+                "01900000-0000-7000-8000-000000000117"
+            )
+        ),
+        username=Username("second-admin"),
+        email=Email("second-admin@example.com"),
+        password_hash=PasswordHash(
+            "$2b$12$abcdefghijklmnopqrstuu"
+            "abcdefghijklmnopqrstuu1234567890"
+        ),
+        roles=frozenset({administrator_role}),
+    )
+
+    repository.save(first)
+    repository.save(second)
+
+    updated = service.remove_role(
+        actor=make_actor(),
+        user_id=str(first.id),
+        role_name="administrator",
+    )
+
+    assert not updated.has_role_name(
+        RoleName("administrator")
+    )
+
+    assert repository.get_by_id(
+        second.id
+    ).has_role_name(
+        RoleName("administrator")
+    )
+
+
+@pytest.mark.parametrize(
+    "method_name",
+    [
+        "list_roles",
+        "assign_role",
+        "remove_role",
+    ],
+)
+def test_role_operations_reject_invalid_actor(
+    method_name: str,
+) -> None:
+    service, _, _, _ = build_service()
+
+    arguments: dict[str, object] = {
+        "actor": object(),
+    }
+
+    if method_name != "list_roles":
+        arguments.update(
+            {
+                "user_id": (
+                    "01900000-0000-7000-8000-000000000118"
+                ),
+                "role_name": "viewer",
+            }
+        )
+
+    with pytest.raises(TypeError):
+        getattr(service, method_name)(**arguments)

@@ -63,3 +63,28 @@ class ChangeUserPasswordRequest(BaseModel):
         examples=["new-secure-password"],
     )
 
+
+class AssignUserRoleRequest(BaseModel):
+    """Rol canónico que será asignado a un usuario."""
+
+    role_name: str = Field(
+        min_length=3,
+        max_length=64,
+        description="Nombre del rol oficial.",
+        examples=["operator"],
+    )
+
+
+class RoleResponse(BaseModel):
+    """Representación pública de un rol canónico."""
+
+    name: str
+    permissions: list[str]
+
+
+class RoleListResponse(BaseModel):
+    """Colección de roles oficiales."""
+
+    roles: list[RoleResponse]
+    total: int
+

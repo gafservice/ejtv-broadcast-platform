@@ -10,9 +10,11 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.responses import error_response
 from app.domain.identity.exceptions import (
+    CannotRemoveLastAdministrator,
     EmailAlreadyExists,
     InvalidCredentials,
     PermissionDenied,
+    RoleNotFound,
     UserDisabled,
     UserLocked,
     UserNotFound,
@@ -115,6 +117,43 @@ async def invalid_credentials_handler(
         content=error_response(
             message="Las credenciales proporcionadas no son válidas.",
             error_code="INVALID_CREDENTIALS",
+            request_id=_request_id(request),
+        ),
+    )
+
+
+async def cannot_remove_last_administrator_handler(
+    request: Request,
+    _: CannotRemoveLastAdministrator,
+) -> JSONResponse:
+    """Impide dejar el sistema sin administradores."""
+
+    return JSONResponse(
+        status_code=409,
+        content=error_response(
+            message=(
+                "No se puede revocar el último "
+                "administrador del sistema."
+            ),
+            error_code=(
+                "CANNOT_REMOVE_LAST_ADMINISTRATOR"
+            ),
+            request_id=_request_id(request),
+        ),
+    )
+
+
+async def role_not_found_handler(
+    request: Request,
+    _: RoleNotFound,
+) -> JSONResponse:
+    """Traduce un rol inexistente a HTTP 404."""
+
+    return JSONResponse(
+        status_code=404,
+        content=error_response(
+            message="El rol solicitado no existe.",
+            error_code="ROLE_NOT_FOUND",
             request_id=_request_id(request),
         ),
     )
@@ -284,6 +323,14 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(
         InvalidCredentials,
         invalid_credentials_handler,
+    )
+    app.add_exception_handler(
+        CannotRemoveLastAdministrator,
+        cannot_remove_last_administrator_handler,
+    )
+    app.add_exception_handler(
+        RoleNotFound,
+        role_not_found_handler,
     )
     app.add_exception_handler(
         UserNotFound,

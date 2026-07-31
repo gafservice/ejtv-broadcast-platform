@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+from app.domain.identity.catalog import (
+    ADMINISTRATOR_ROLE,
+    DEFAULT_ROLES,
+    RoleDefinition,
+    get_role_definition,
+)
 from app.domain.identity.entities import (
     AuthenticatedIdentity,
+    Permission,
+    Role,
     User,
 )
 from app.domain.identity.exceptions import (
+    CannotRemoveLastAdministrator,
     EmailAlreadyExists,
+    RoleNotFound,
     UserNotFound,
     UsernameAlreadyExists,
 )
@@ -19,6 +29,7 @@ from app.domain.identity.protocols import (
 from app.domain.identity.enums import UserStatus
 from app.domain.identity.value_objects import (
     Email,
+    RoleName,
     UserId,
     Username,
 )
@@ -178,6 +189,108 @@ class IdentityAdministrationService:
 
         return updated_user
 
+    def list_roles(
+        self,
+        *,
+        actor: AuthenticatedIdentity,
+    ) -> tuple[Role, ...]:
+        """Return all canonical roles ordered by name."""
+
+        self._validate_actor(actor)
+
+        roles = tuple(
+            self._build_role(definition)
+            for definition in sorted(
+                DEFAULT_ROLES,
+                key=lambda item: item.name.value,
+            )
+        )
+
+        self._audit_repository.record(
+            "identity.roles.listed",
+            actor,
+            {
+                "result_count": len(roles),
+            },
+        )
+
+        return roles
+
+    def assign_role(
+        self,
+        *,
+        actor: AuthenticatedIdentity,
+        user_id: str,
+        role_name: str,
+    ) -> User:
+        """Assign a canonical role to a user."""
+
+        self._validate_actor(actor)
+
+        user = self._get_required_user(user_id)
+        role = self._get_required_role(role_name)
+
+        if user.has_role_name(role.name):
+            updated_user = user
+            changed = False
+        else:
+            updated_user = user.with_role(role)
+            self._user_repository.save(updated_user)
+            changed = True
+
+        self._audit_repository.record(
+            "identity.user.role_assigned",
+            actor,
+            {
+                "target_user_id": str(user.id),
+                "target_username": user.username.value,
+                "role": role.name.value,
+                "changed": changed,
+            },
+        )
+
+        return updated_user
+
+    def remove_role(
+        self,
+        *,
+        actor: AuthenticatedIdentity,
+        user_id: str,
+        role_name: str,
+    ) -> User:
+        """Remove a canonical role from a user."""
+
+        self._validate_actor(actor)
+
+        user = self._get_required_user(user_id)
+        role = self._get_required_role(role_name)
+
+        if not user.has_role_name(role.name):
+            updated_user = user
+            changed = False
+        else:
+            if role.name == ADMINISTRATOR_ROLE.name:
+                self._ensure_other_administrator_exists(
+                    user.id
+                )
+
+            updated_user = user.without_role(role.name)
+            self._user_repository.save(updated_user)
+            changed = True
+
+        self._audit_repository.record(
+            "identity.user.role_removed",
+            actor,
+            {
+                "target_user_id": str(user.id),
+                "target_username": user.username.value,
+                "role": role.name.value,
+                "changed": changed,
+            },
+        )
+
+        return updated_user
+
     def list_users(
         self,
         *,
@@ -224,4 +337,55 @@ class IdentityAdministrationService:
             raise UserNotFound
 
         return user
+
+    @staticmethod
+    def _build_role(
+        definition: RoleDefinition,
+    ) -> Role:
+        """Build a domain Role from the canonical catalog."""
+
+        if not isinstance(definition, RoleDefinition):
+            raise TypeError(
+                "definition must be a RoleDefinition"
+            )
+
+        return Role(
+            name=definition.name,
+            permissions=frozenset(
+                Permission(name=permission_name)
+                for permission_name in definition.permissions
+            ),
+        )
+
+    def _get_required_role(
+        self,
+        role_name: str,
+    ) -> Role:
+        """Return a canonical role or raise."""
+
+        definition = get_role_definition(
+            RoleName(role_name)
+        )
+
+        if definition is None:
+            raise RoleNotFound
+
+        return self._build_role(definition)
+
+    def _ensure_other_administrator_exists(
+        self,
+        excluded_user_id: UserId,
+    ) -> None:
+        """Prevent removal of the last administrator."""
+
+        has_other_administrator = any(
+            user.id != excluded_user_id
+            and user.has_role_name(
+                ADMINISTRATOR_ROLE.name
+            )
+            for user in self._user_repository.list()
+        )
+
+        if not has_other_administrator:
+            raise CannotRemoveLastAdministrator
 

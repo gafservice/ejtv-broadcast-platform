@@ -8,9 +8,12 @@ from app.api.dependencies import (
     get_identity_administration_service,
 )
 from app.api.schemas.identity_administration import (
+    AssignUserRoleRequest,
     ChangeUserPasswordRequest,
     ChangeUserStatusRequest,
     CreateUserRequest,
+    RoleListResponse,
+    RoleResponse,
     UserListResponse,
     UserResponse,
 )
@@ -32,6 +35,18 @@ router = APIRouter(
     prefix="/identity",
     tags=["Identity Administration"],
 )
+
+
+def _serialize_role(role) -> RoleResponse:
+    """Convierte una entidad Role en una respuesta pública."""
+
+    return RoleResponse(
+        name=role.name.value,
+        permissions=sorted(
+            permission.name.value
+            for permission in role.permissions
+        ),
+    )
 
 
 def _serialize_user(user: User) -> UserResponse:
@@ -188,6 +203,94 @@ def change_user_password(
     return success_response(
         data=_serialize_user(user).model_dump(),
         message="Contraseña del usuario actualizada correctamente.",
+        request_id=request.state.request_id,
+    )
+
+
+@router.get("/roles")
+def list_roles(
+    request: Request,
+    actor: Annotated[
+        AuthenticatedIdentity,
+        Depends(require_permission("roles.read")),
+    ],
+    service: IdentityAdministrationService = Depends(
+        get_identity_administration_service
+    ),
+) -> dict[str, object]:
+    """Lista los roles canónicos disponibles."""
+
+    roles = service.list_roles(actor=actor)
+
+    response = RoleListResponse(
+        roles=[
+            _serialize_role(role)
+            for role in roles
+        ],
+        total=len(roles),
+    )
+
+    return success_response(
+        data=response.model_dump(),
+        message="Roles obtenidos correctamente.",
+        request_id=request.state.request_id,
+    )
+
+
+@router.post("/users/{user_id}/roles")
+def assign_role(
+    user_id: str,
+    payload: AssignUserRoleRequest,
+    request: Request,
+    actor: Annotated[
+        AuthenticatedIdentity,
+        Depends(require_permission("roles.write")),
+    ],
+    service: IdentityAdministrationService = Depends(
+        get_identity_administration_service
+    ),
+) -> dict[str, object]:
+    """Asigna un rol canónico a un usuario."""
+
+    user = service.assign_role(
+        actor=actor,
+        user_id=user_id,
+        role_name=payload.role_name,
+    )
+
+    return success_response(
+        data=_serialize_user(user).model_dump(),
+        message="Rol asignado correctamente.",
+        request_id=request.state.request_id,
+    )
+
+
+@router.delete(
+    "/users/{user_id}/roles/{role_name}"
+)
+def remove_role(
+    user_id: str,
+    role_name: str,
+    request: Request,
+    actor: Annotated[
+        AuthenticatedIdentity,
+        Depends(require_permission("roles.write")),
+    ],
+    service: IdentityAdministrationService = Depends(
+        get_identity_administration_service
+    ),
+) -> dict[str, object]:
+    """Revoca un rol canónico de un usuario."""
+
+    user = service.remove_role(
+        actor=actor,
+        user_id=user_id,
+        role_name=role_name,
+    )
+
+    return success_response(
+        data=_serialize_user(user).model_dump(),
+        message="Rol revocado correctamente.",
         request_id=request.state.request_id,
     )
 

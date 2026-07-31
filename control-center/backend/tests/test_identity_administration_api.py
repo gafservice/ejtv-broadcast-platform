@@ -37,9 +37,11 @@ class FakeIdentityAdministrationService:
         *,
         users: tuple[User, ...] = (),
         create_error: Exception | None = None,
+        operation_error: Exception | None = None,
     ) -> None:
         self.users = users
         self.create_error = create_error
+        self.operation_error = operation_error
         self.received_actor: AuthenticatedIdentity | None = None
         self.received_username: str | None = None
         self.received_email: str | None = None
@@ -82,6 +84,104 @@ class FakeIdentityAdministrationService:
     ) -> tuple[User, ...]:
         self.received_actor = actor
         return self.users
+
+
+    def list_roles(
+        self,
+        *,
+        actor: AuthenticatedIdentity,
+    ):
+        from app.domain.identity.entities import (
+            Permission,
+            Role,
+        )
+        from app.domain.identity.value_objects import (
+            PermissionName,
+            RoleName,
+        )
+
+        self.received_actor = actor
+
+        if self.operation_error is not None:
+            raise self.operation_error
+
+        return (
+            Role(
+                name=RoleName("administrator"),
+                permissions=frozenset(
+                    {
+                        Permission(
+                            name=PermissionName(
+                                "users.manage"
+                            )
+                        )
+                    }
+                ),
+            ),
+            Role(
+                name=RoleName("operator"),
+                permissions=frozenset(
+                    {
+                        Permission(
+                            name=PermissionName(
+                                "streaming.read"
+                            )
+                        )
+                    }
+                ),
+            ),
+            Role(
+                name=RoleName("viewer"),
+                permissions=frozenset(
+                    {
+                        Permission(
+                            name=PermissionName(
+                                "dashboard.read"
+                            )
+                        )
+                    }
+                ),
+            ),
+        )
+
+    def assign_role(
+        self,
+        *,
+        actor: AuthenticatedIdentity,
+        user_id: str,
+        role_name: str,
+    ) -> User:
+        from app.domain.identity.entities import Role
+        from app.domain.identity.value_objects import RoleName
+
+        self.received_actor = actor
+
+        if self.operation_error is not None:
+            raise self.operation_error
+
+        return self.users[0].with_role(
+            Role(
+                name=RoleName(role_name)
+            )
+        )
+
+    def remove_role(
+        self,
+        *,
+        actor: AuthenticatedIdentity,
+        user_id: str,
+        role_name: str,
+    ) -> User:
+        from app.domain.identity.value_objects import RoleName
+
+        self.received_actor = actor
+
+        if self.operation_error is not None:
+            raise self.operation_error
+
+        return self.users[0].without_role(
+            RoleName(role_name)
+        )
 
 
 def make_actor(
@@ -429,3 +529,361 @@ def test_identity_user_routes_are_registered_in_openapi(
     assert "Identity Administration" in (
         operations["get"]["tags"]
     )
+
+
+def test_list_roles_returns_canonical_roles(
+    client: TestClient,
+) -> None:
+    configure_dependencies(
+        service=FakeIdentityAdministrationService(),
+        identity=make_actor("roles.read"),
+    )
+
+    response = client.get(
+        "/api/v1/identity/roles"
+    )
+
+    assert response.status_code == 200
+
+    payload = response.json()
+
+    assert payload["success"] is True
+    assert payload["data"]["total"] == 3
+    assert [
+        role["name"]
+        for role in payload["data"]["roles"]
+    ] == [
+        "administrator",
+        "operator",
+        "viewer",
+    ]
+
+
+def test_assign_role_returns_updated_user(
+    client: TestClient,
+) -> None:
+    user = make_user(
+        user_id=(
+            "01900000-0000-7000-8000-000000000210"
+        ),
+        username="role-user",
+        email="role-user@example.com",
+    )
+
+    configure_dependencies(
+        service=FakeIdentityAdministrationService(
+            users=(user,)
+        ),
+        identity=make_actor("roles.write"),
+    )
+
+    response = client.post(
+        f"/api/v1/identity/users/{user.id}/roles",
+        json={
+            "role_name": "operator",
+        },
+    )
+
+    assert response.status_code == 200
+
+    payload = response.json()
+
+    assert payload["success"] is True
+    assert payload["data"]["roles"] == [
+        "operator",
+    ]
+    assert payload["message"] == (
+        "Rol asignado correctamente."
+    )
+
+
+def test_remove_role_returns_updated_user(
+    client: TestClient,
+) -> None:
+    from app.domain.identity.entities import Role
+    from app.domain.identity.value_objects import RoleName
+
+    user = User(
+        id=UserId(
+            UUID(
+                "01900000-0000-7000-8000-000000000211"
+            )
+        ),
+        username=Username("viewer-user"),
+        email=Email("viewer-user@example.com"),
+        password_hash=PasswordHash(
+            "$2b$12$abcdefghijklmnopqrstuu"
+            "abcdefghijklmnopqrstuu1234567890"
+        ),
+        roles=frozenset(
+            {
+                Role(
+                    name=RoleName("viewer")
+                )
+            }
+        ),
+    )
+
+    configure_dependencies(
+        service=FakeIdentityAdministrationService(
+            users=(user,)
+        ),
+        identity=make_actor("roles.write"),
+    )
+
+    response = client.delete(
+        (
+            f"/api/v1/identity/users/{user.id}"
+            "/roles/viewer"
+        )
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["roles"] == []
+    assert response.json()["message"] == (
+        "Rol revocado correctamente."
+    )
+
+
+@pytest.mark.parametrize(
+    (
+        "method",
+        "path",
+        "payload",
+    ),
+    [
+        (
+            "post",
+            (
+                "/api/v1/identity/users/"
+                "01900000-0000-7000-8000-000000000212"
+                "/roles"
+            ),
+            {"role_name": "unknown-role"},
+        ),
+        (
+            "delete",
+            (
+                "/api/v1/identity/users/"
+                "01900000-0000-7000-8000-000000000212"
+                "/roles/unknown-role"
+            ),
+            None,
+        ),
+    ],
+)
+def test_role_routes_translate_role_not_found(
+    client: TestClient,
+    method: str,
+    path: str,
+    payload: dict[str, str] | None,
+) -> None:
+    from app.domain.identity.exceptions import RoleNotFound
+
+    configure_dependencies(
+        service=FakeIdentityAdministrationService(
+            operation_error=RoleNotFound()
+        ),
+        identity=make_actor("roles.write"),
+    )
+
+    kwargs: dict[str, object] = {}
+
+    if payload is not None:
+        kwargs["json"] = payload
+
+    response = getattr(client, method)(
+        path,
+        **kwargs,
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == (
+        "ROLE_NOT_FOUND"
+    )
+
+
+def test_remove_last_administrator_returns_conflict(
+    client: TestClient,
+) -> None:
+    from app.domain.identity.exceptions import (
+        CannotRemoveLastAdministrator,
+    )
+
+    configure_dependencies(
+        service=FakeIdentityAdministrationService(
+            operation_error=(
+                CannotRemoveLastAdministrator()
+            )
+        ),
+        identity=make_actor("roles.write"),
+    )
+
+    response = client.delete(
+        (
+            "/api/v1/identity/users/"
+            "01900000-0000-7000-8000-000000000213"
+            "/roles/administrator"
+        )
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == (
+        "CANNOT_REMOVE_LAST_ADMINISTRATOR"
+    )
+
+
+def test_list_roles_requires_roles_read(
+    client: TestClient,
+) -> None:
+    configure_dependencies(
+        service=FakeIdentityAdministrationService(),
+        identity=make_actor("roles.write"),
+    )
+
+    response = client.get(
+        "/api/v1/identity/roles"
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == (
+        "PERMISSION_DENIED"
+    )
+
+
+@pytest.mark.parametrize(
+    (
+        "method",
+        "path",
+        "payload",
+    ),
+    [
+        (
+            "post",
+            (
+                "/api/v1/identity/users/"
+                "01900000-0000-7000-8000-000000000214"
+                "/roles"
+            ),
+            {"role_name": "viewer"},
+        ),
+        (
+            "delete",
+            (
+                "/api/v1/identity/users/"
+                "01900000-0000-7000-8000-000000000214"
+                "/roles/viewer"
+            ),
+            None,
+        ),
+    ],
+)
+def test_role_write_routes_require_roles_write(
+    client: TestClient,
+    method: str,
+    path: str,
+    payload: dict[str, str] | None,
+) -> None:
+    configure_dependencies(
+        service=FakeIdentityAdministrationService(),
+        identity=make_actor("roles.read"),
+    )
+
+    kwargs: dict[str, object] = {}
+
+    if payload is not None:
+        kwargs["json"] = payload
+
+    response = getattr(client, method)(
+        path,
+        **kwargs,
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == (
+        "PERMISSION_DENIED"
+    )
+
+
+@pytest.mark.parametrize(
+    (
+        "method",
+        "path",
+        "payload",
+    ),
+    [
+        (
+            "get",
+            "/api/v1/identity/roles",
+            None,
+        ),
+        (
+            "post",
+            (
+                "/api/v1/identity/users/"
+                "01900000-0000-7000-8000-000000000215"
+                "/roles"
+            ),
+            {"role_name": "operator"},
+        ),
+        (
+            "delete",
+            (
+                "/api/v1/identity/users/"
+                "01900000-0000-7000-8000-000000000215"
+                "/roles/operator"
+            ),
+            None,
+        ),
+    ],
+)
+def test_role_routes_require_authentication(
+    client: TestClient,
+    method: str,
+    path: str,
+    payload: dict[str, str] | None,
+) -> None:
+    kwargs: dict[str, object] = {}
+
+    if payload is not None:
+        kwargs["json"] = payload
+
+    response = getattr(client, method)(
+        path,
+        **kwargs,
+    )
+
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == (
+        "Bearer"
+    )
+
+
+def test_role_routes_are_protected_in_openapi(
+    client: TestClient,
+) -> None:
+    response = client.get("/openapi.json")
+
+    paths = response.json()["paths"]
+
+    operations = (
+        paths[
+            "/api/v1/identity/roles"
+        ]["get"],
+        paths[
+            "/api/v1/identity/users/{user_id}/roles"
+        ]["post"],
+        paths[
+            (
+                "/api/v1/identity/users/{user_id}"
+                "/roles/{role_name}"
+            )
+        ]["delete"],
+    )
+
+    for operation in operations:
+        assert operation["security"] == [
+            {
+                "BearerAuth": [],
+            }
+        ]
