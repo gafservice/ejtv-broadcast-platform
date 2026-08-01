@@ -10,6 +10,9 @@ from app.infrastructure.persistence.identity.models import (
     identity_role_permissions,
     identity_user_roles,
 )
+from app.infrastructure.persistence.identity.sqlalchemy_identity_catalog_repository import (
+    SQLAlchemyIdentityCatalogRepository,
+)
 from app.infrastructure.persistence.identity.sqlalchemy_user_repository import (
     SQLAlchemyUserRepository,
 )
@@ -17,6 +20,7 @@ from app.infrastructure.persistence.identity.sqlalchemy_user_repository import (
 __all__ = [
     "PermissionModel",
     "RoleModel",
+    "SQLAlchemyIdentityCatalogRepository",
     "SQLAlchemyUserRepository",
     "UserModel",
     "identity_role_permissions",

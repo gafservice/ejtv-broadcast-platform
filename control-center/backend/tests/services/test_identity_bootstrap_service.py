@@ -1,11 +1,28 @@
 """Tests for the Identity bootstrap application service."""
 
+import pytest
+
+from app.domain.identity.catalog import DEFAULT_ROLES
+from app.domain.identity.entities import (
+    Permission,
+    Role,
+    User,
+)
+from app.domain.identity.value_objects import (
+    Email,
+    PasswordHash,
+    PermissionName,
+    RoleName,
+    UserId,
+    Username,
+)
 from collections.abc import Mapping
 
-from app.domain.identity.entities import AuthenticatedIdentity, User
-from app.domain.identity.value_objects import PasswordHash, Username
+from app.domain.identity.entities import AuthenticatedIdentity
 from app.services.identity_bootstrap_service import (
     BootstrapStatus,
+    CatalogIntegrityResult,
+    CatalogSynchronizationResult,
     IdentityBootstrapService,
 )
 
@@ -249,3 +266,481 @@ def test_created_audit_contains_identity_and_role() -> None:
         "username": "administrator",
         "role": "administrator",
     }
+
+
+class FakeIdentityCatalogRepository:
+    """Repositorio en memoria para probar el catálogo canónico."""
+
+    def __init__(
+        self,
+        roles: tuple[Role, ...] = (),
+    ) -> None:
+        self.roles = {
+            role.name: role
+            for role in roles
+        }
+        self.saved_roles: list[Role] = []
+
+    def get_role(
+        self,
+        role_name: RoleName,
+    ) -> Role | None:
+        return self.roles.get(role_name)
+
+    def list_roles(self) -> tuple[Role, ...]:
+        return tuple(
+            sorted(
+                self.roles.values(),
+                key=lambda role: role.name.value,
+            )
+        )
+
+    def save_role(
+        self,
+        role: Role,
+    ) -> None:
+        self.roles[role.name] = role
+        self.saved_roles.append(role)
+
+
+def make_catalog_role(
+    role_name: str,
+    *permission_names: str,
+) -> Role:
+    return Role(
+        name=RoleName(role_name),
+        permissions=frozenset(
+            Permission(
+                name=PermissionName(permission_name)
+            )
+            for permission_name in permission_names
+        ),
+    )
+
+
+def build_bootstrap_service_with_catalog(
+    *,
+    roles: tuple[Role, ...] = (),
+) -> tuple[
+    IdentityBootstrapService,
+    FakeIdentityCatalogRepository,
+    FakeAuditRepository,
+]:
+    user_repository = FakeUserRepository()
+    password_hasher = FakePasswordHasher()
+    audit_repository = FakeAuditRepository()
+    catalog_repository = FakeIdentityCatalogRepository(
+        roles
+    )
+
+    service = IdentityBootstrapService(
+        user_repository=user_repository,
+        password_hasher=password_hasher,
+        audit_repository=audit_repository,
+        catalog_repository=catalog_repository,
+    )
+
+    return (
+        service,
+        catalog_repository,
+        audit_repository,
+    )
+
+
+def test_synchronize_catalog_creates_missing_roles() -> None:
+    (
+        service,
+        catalog_repository,
+        audit_repository,
+    ) = build_bootstrap_service_with_catalog()
+
+    result = service.synchronize_catalog()
+
+    assert result.created == (
+        "administrator",
+        "operator",
+        "viewer",
+    )
+    assert result.updated == ()
+    assert result.unchanged == ()
+    assert result.changed is True
+    assert result.total == 3
+
+    assert [
+        role.name.value
+        for role in catalog_repository.saved_roles
+    ] == [
+        "administrator",
+        "operator",
+        "viewer",
+    ]
+
+    assert [
+        event[0]
+        for event in audit_repository.records
+    ] == [
+        "identity.bootstrap.role_created",
+        "identity.bootstrap.role_created",
+        "identity.bootstrap.role_created",
+        "identity.bootstrap.catalog_synchronized",
+    ]
+
+
+def test_synchronize_catalog_updates_modified_role() -> None:
+    modified_operator = make_catalog_role(
+        "operator",
+        "system.read",
+    )
+
+    (
+        service,
+        catalog_repository,
+        audit_repository,
+    ) = build_bootstrap_service_with_catalog(
+        roles=(
+            modified_operator,
+        )
+    )
+
+    result = service.synchronize_catalog()
+
+    assert result.created == (
+        "administrator",
+        "viewer",
+    )
+    assert result.updated == (
+        "operator",
+    )
+    assert result.unchanged == ()
+
+    restored_operator = catalog_repository.get_role(
+        RoleName("operator")
+    )
+
+    assert {
+        permission.name.value
+        for permission in restored_operator.permissions
+    } == {
+        "system.read",
+        "dashboard.read",
+        "streaming.read",
+        "streaming.write",
+        "alarms.read",
+        "alarms.write",
+    }
+
+    assert any(
+        event_type == "identity.bootstrap.role_updated"
+        and details == {"role": "operator"}
+        for event_type, _, details
+        in audit_repository.records
+    )
+
+
+def test_synchronize_catalog_leaves_valid_roles_unchanged() -> None:
+    canonical_roles = tuple(
+        IdentityBootstrapService._build_role(
+            definition
+        )
+        for definition in DEFAULT_ROLES
+    )
+
+    (
+        service,
+        catalog_repository,
+        audit_repository,
+    ) = build_bootstrap_service_with_catalog(
+        roles=canonical_roles
+    )
+
+    result = service.synchronize_catalog()
+
+    assert result.created == ()
+    assert result.updated == ()
+    assert result.unchanged == (
+        "administrator",
+        "operator",
+        "viewer",
+    )
+    assert result.changed is False
+    assert result.total == 3
+
+    assert catalog_repository.saved_roles == []
+
+    assert audit_repository.records == [
+        (
+            "identity.bootstrap.catalog_synchronized",
+            None,
+            {
+                "created": "",
+                "updated": "",
+                "unchanged": (
+                    "administrator,operator,viewer"
+                ),
+                "total": "3",
+            },
+        )
+    ]
+
+
+def test_synchronize_catalog_is_idempotent() -> None:
+    (
+        service,
+        catalog_repository,
+        audit_repository,
+    ) = build_bootstrap_service_with_catalog()
+
+    first = service.synchronize_catalog()
+    saved_after_first = len(
+        catalog_repository.saved_roles
+    )
+
+    second = service.synchronize_catalog()
+    saved_after_second = len(
+        catalog_repository.saved_roles
+    )
+
+    assert first.created == (
+        "administrator",
+        "operator",
+        "viewer",
+    )
+
+    assert second.created == ()
+    assert second.updated == ()
+    assert second.unchanged == (
+        "administrator",
+        "operator",
+        "viewer",
+    )
+    assert second.changed is False
+
+    assert saved_after_first == 3
+    assert saved_after_second == 3
+
+    assert [
+        event_type
+        for event_type, _, _
+        in audit_repository.records
+    ].count(
+        "identity.bootstrap.catalog_synchronized"
+    ) == 2
+
+
+def test_synchronize_catalog_requires_repository() -> None:
+    service = IdentityBootstrapService(
+        user_repository=FakeUserRepository(),
+        password_hasher=FakePasswordHasher(),
+        audit_repository=FakeAuditRepository(),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match=(
+            "catalog_repository is required "
+            "to synchronize the Identity catalog"
+        ),
+    ):
+        service.synchronize_catalog()
+
+
+def test_catalog_synchronization_result_properties() -> None:
+    result = CatalogSynchronizationResult(
+        created=("operator",),
+        updated=("viewer",),
+        unchanged=("administrator",),
+    )
+
+    assert result.changed is True
+    assert result.total == 3
+
+
+def test_build_role_rejects_invalid_definition() -> None:
+    with pytest.raises(
+        TypeError,
+        match="definition must be a RoleDefinition",
+    ):
+        IdentityBootstrapService._build_role(
+            object()  # type: ignore[arg-type]
+        )
+
+
+def test_verify_integrity_accepts_canonical_catalog() -> None:
+    canonical_roles = tuple(
+        IdentityBootstrapService._build_role(
+            definition
+        )
+        for definition in DEFAULT_ROLES
+    )
+
+    (
+        service,
+        _,
+        audit_repository,
+    ) = build_bootstrap_service_with_catalog(
+        roles=canonical_roles
+    )
+
+    result = service.verify_integrity()
+
+    assert result.valid is True
+    assert result.missing_roles == ()
+    assert result.unexpected_roles == ()
+    assert result.mismatched_roles == ()
+
+    assert audit_repository.records[-1] == (
+        "identity.bootstrap.integrity_verified",
+        None,
+        {
+            "valid": "true",
+            "missing_roles": "",
+            "unexpected_roles": "",
+            "mismatched_roles": "",
+        },
+    )
+
+
+def test_verify_integrity_detects_missing_roles() -> None:
+    administrator = IdentityBootstrapService._build_role(
+        next(
+            definition
+            for definition in DEFAULT_ROLES
+            if definition.name.value == "administrator"
+        )
+    )
+
+    (
+        service,
+        _,
+        _,
+    ) = build_bootstrap_service_with_catalog(
+        roles=(administrator,)
+    )
+
+    result = service.verify_integrity()
+
+    assert result.valid is False
+    assert result.missing_roles == (
+        "operator",
+        "viewer",
+    )
+    assert result.unexpected_roles == ()
+    assert result.mismatched_roles == ()
+
+
+def test_verify_integrity_detects_unexpected_roles() -> None:
+    canonical_roles = tuple(
+        IdentityBootstrapService._build_role(
+            definition
+        )
+        for definition in DEFAULT_ROLES
+    )
+
+    support_role = make_catalog_role(
+        "support",
+        "system.read",
+    )
+
+    (
+        service,
+        _,
+        _,
+    ) = build_bootstrap_service_with_catalog(
+        roles=canonical_roles + (support_role,)
+    )
+
+    result = service.verify_integrity()
+
+    assert result.valid is False
+    assert result.missing_roles == ()
+    assert result.unexpected_roles == (
+        "support",
+    )
+    assert result.mismatched_roles == ()
+
+
+def test_verify_integrity_detects_mismatched_roles() -> None:
+    canonical_roles = tuple(
+        IdentityBootstrapService._build_role(
+            definition
+        )
+        for definition in DEFAULT_ROLES
+        if definition.name.value != "operator"
+    )
+
+    modified_operator = make_catalog_role(
+        "operator",
+        "system.read",
+    )
+
+    (
+        service,
+        _,
+        _,
+    ) = build_bootstrap_service_with_catalog(
+        roles=canonical_roles + (
+            modified_operator,
+        )
+    )
+
+    result = service.verify_integrity()
+
+    assert result.valid is False
+    assert result.missing_roles == ()
+    assert result.unexpected_roles == ()
+    assert result.mismatched_roles == (
+        "operator",
+    )
+
+
+def test_verify_integrity_detects_multiple_problems() -> None:
+    modified_administrator = make_catalog_role(
+        "administrator",
+        "system.read",
+    )
+    unexpected_role = make_catalog_role(
+        "support",
+        "system.read",
+    )
+
+    (
+        service,
+        _,
+        _,
+    ) = build_bootstrap_service_with_catalog(
+        roles=(
+            modified_administrator,
+            unexpected_role,
+        )
+    )
+
+    result = service.verify_integrity()
+
+    assert result.valid is False
+    assert result.missing_roles == (
+        "operator",
+        "viewer",
+    )
+    assert result.unexpected_roles == (
+        "support",
+    )
+    assert result.mismatched_roles == (
+        "administrator",
+    )
+
+
+def test_verify_integrity_requires_repository() -> None:
+    service = IdentityBootstrapService(
+        user_repository=FakeUserRepository(),
+        password_hasher=FakePasswordHasher(),
+        audit_repository=FakeAuditRepository(),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match=(
+            "catalog_repository is required "
+            "to synchronize the Identity catalog"
+        ),
+    ):
+        service.verify_integrity()

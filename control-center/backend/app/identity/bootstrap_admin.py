@@ -12,7 +12,8 @@ from app.infrastructure.persistence.database import create_session_factory
 from app.infrastructure.persistence.identity.database_initializer import (
     initialize_identity_database,
 )
-from app.infrastructure.persistence.identity.sqlalchemy_user_repository import (
+from app.infrastructure.persistence.identity import (
+    SQLAlchemyIdentityCatalogRepository,
     SQLAlchemyUserRepository,
 )
 from app.infrastructure.security.bcrypt_password_hasher import (
@@ -46,6 +47,9 @@ def build_bootstrap_service(
         audit_repository=SQLAlchemyAuditRepository(
             session_factory
         ),
+        catalog_repository=SQLAlchemyIdentityCatalogRepository(
+            session_factory
+        ),
     )
 
 
@@ -68,6 +72,27 @@ def run() -> int:
 
     try:
         service = build_bootstrap_service(settings)
+
+        catalog_result = service.synchronize_catalog()
+
+        print(
+            "Identity catalog synchronized: "
+            f"created={len(catalog_result.created)}, "
+            f"updated={len(catalog_result.updated)}, "
+            f"unchanged={len(catalog_result.unchanged)}."
+        )
+
+        integrity_result = service.verify_integrity()
+
+        if not integrity_result.valid:
+            raise RuntimeError(
+                "Identity catalog integrity verification failed: "
+                f"missing={integrity_result.missing_roles}, "
+                f"unexpected={integrity_result.unexpected_roles}, "
+                f"mismatched={integrity_result.mismatched_roles}"
+            )
+
+        print("Identity catalog integrity verified.")
 
         result = service.bootstrap_administrator(
             username=settings.bootstrap_admin_username,
