@@ -16,12 +16,14 @@ from app.domain.identity.entities import (
     User,
 )
 from app.domain.identity.exceptions import (
+    CannotDisableLastAdministrator,
     CannotRemoveLastAdministrator,
     EmailAlreadyExists,
     RoleNotFound,
     UserNotFound,
     UsernameAlreadyExists,
 )
+from app.domain.identity.password_policy import PasswordPolicy
 from app.domain.identity.protocols import (
     AuditRepository,
     PasswordHasher,
@@ -81,6 +83,8 @@ class IdentityAdministrationService:
             is not None
         ):
             raise EmailAlreadyExists
+
+        PasswordPolicy.validate(password)
 
         user = User(
             id=UserId.generate(),
@@ -143,6 +147,22 @@ class IdentityAdministrationService:
             raise TypeError("status must be a UserStatus")
 
         user = self._get_required_user(user_id)
+
+        if (
+            user.is_active()
+            and user.has_role_name(
+                ADMINISTRATOR_ROLE.name
+            )
+            and status in (
+                UserStatus.DISABLED,
+                UserStatus.LOCKED,
+            )
+        ):
+            self._ensure_other_active_administrator_exists(
+                user.id,
+                error=CannotDisableLastAdministrator,
+            )
+
         updated_user = user.with_status(status)
 
         self._user_repository.save(updated_user)
@@ -172,6 +192,8 @@ class IdentityAdministrationService:
         self._validate_actor(actor)
 
         user = self._get_required_user(user_id)
+
+        PasswordPolicy.validate(password)
 
         updated_user = user.with_password_hash(
             self._password_hasher.hash(password)
@@ -297,8 +319,9 @@ class IdentityAdministrationService:
             changed = False
         else:
             if role.name == ADMINISTRATOR_ROLE.name:
-                self._ensure_other_administrator_exists(
-                    user.id
+                self._ensure_other_active_administrator_exists(
+                    user.id,
+                    error=CannotRemoveLastAdministrator,
                 )
 
             updated_user = user.without_role(role.name)
@@ -399,20 +422,36 @@ class IdentityAdministrationService:
 
         return self._build_role(definition)
 
-    def _ensure_other_administrator_exists(
+    def _ensure_other_active_administrator_exists(
         self,
         excluded_user_id: UserId,
+        *,
+        error: type[Exception],
     ) -> None:
-        """Prevent removal of the last administrator."""
+        """Require another active administrator."""
 
-        has_other_administrator = any(
+        if not isinstance(excluded_user_id, UserId):
+            raise TypeError(
+                "excluded_user_id must be a UserId"
+            )
+
+        if not isinstance(error, type) or not issubclass(
+            error,
+            Exception,
+        ):
+            raise TypeError(
+                "error must be an Exception type"
+            )
+
+        has_other_active_administrator = any(
             user.id != excluded_user_id
+            and user.is_active()
             and user.has_role_name(
                 ADMINISTRATOR_ROLE.name
             )
             for user in self._user_repository.list()
         )
 
-        if not has_other_administrator:
-            raise CannotRemoveLastAdministrator
+        if not has_other_active_administrator:
+            raise error
 

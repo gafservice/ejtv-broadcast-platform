@@ -10,6 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.responses import error_response
 from app.domain.identity.exceptions import (
+    CannotDisableLastAdministrator,
     CannotRemoveLastAdministrator,
     EmailAlreadyExists,
     InvalidCredentials,
@@ -19,6 +20,7 @@ from app.domain.identity.exceptions import (
     UserLocked,
     UserNotFound,
     UsernameAlreadyExists,
+    WeakPassword,
 )
 
 logger = logging.getLogger(__name__)
@@ -122,6 +124,27 @@ async def invalid_credentials_handler(
     )
 
 
+async def cannot_disable_last_administrator_handler(
+    request: Request,
+    _: CannotDisableLastAdministrator,
+) -> JSONResponse:
+    """Impide deshabilitar al último administrador activo."""
+
+    return JSONResponse(
+        status_code=409,
+        content=error_response(
+            message=(
+                "No se puede deshabilitar ni bloquear "
+                "al último administrador activo."
+            ),
+            error_code=(
+                "CANNOT_DISABLE_LAST_ADMINISTRATOR"
+            ),
+            request_id=_request_id(request),
+        ),
+    )
+
+
 async def cannot_remove_last_administrator_handler(
     request: Request,
     _: CannotRemoveLastAdministrator,
@@ -170,6 +193,25 @@ async def user_not_found_handler(
         content=error_response(
             message="El usuario solicitado no existe.",
             error_code="USER_NOT_FOUND",
+            request_id=_request_id(request),
+        ),
+    )
+
+
+async def weak_password_handler(
+    request: Request,
+    _: WeakPassword,
+) -> JSONResponse:
+    """Traduce una contraseña débil a una respuesta HTTP."""
+
+    return JSONResponse(
+        status_code=422,
+        content=error_response(
+            message=(
+                "La contraseña no cumple la política "
+                "de seguridad requerida."
+            ),
+            error_code="WEAK_PASSWORD",
             request_id=_request_id(request),
         ),
     )
@@ -325,6 +367,10 @@ def register_exception_handlers(app: FastAPI) -> None:
         invalid_credentials_handler,
     )
     app.add_exception_handler(
+        CannotDisableLastAdministrator,
+        cannot_disable_last_administrator_handler,
+    )
+    app.add_exception_handler(
         CannotRemoveLastAdministrator,
         cannot_remove_last_administrator_handler,
     )
@@ -339,6 +385,10 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(
         UsernameAlreadyExists,
         username_already_exists_handler,
+    )
+    app.add_exception_handler(
+        WeakPassword,
+        weak_password_handler,
     )
     app.add_exception_handler(
         EmailAlreadyExists,

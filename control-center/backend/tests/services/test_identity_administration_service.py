@@ -8,6 +8,7 @@ from app.domain.identity.entities import (
     AuthenticatedIdentity,
     User,
 )
+from app.domain.identity.enums import UserStatus
 from app.domain.identity.exceptions import (
     EmailAlreadyExists,
     UsernameAlreadyExists,
@@ -181,7 +182,7 @@ def test_create_user_persists_active_user() -> None:
         actor=actor,
         username="operator",
         email="operator@example.com",
-        password="secure-password",
+        password="Secure-Password-2026!",
     )
 
     assert repository.get_by_id(user.id) == user
@@ -189,7 +190,7 @@ def test_create_user_persists_active_user() -> None:
     assert user.email == Email("operator@example.com")
     assert user.roles == frozenset()
     assert user.is_active()
-    assert hasher.received_password == "secure-password"
+    assert hasher.received_password == "Secure-Password-2026!"
 
     assert audit.records[0][0] == (
         "identity.user.created"
@@ -217,7 +218,7 @@ def test_create_user_rejects_duplicate_username() -> None:
             actor=make_actor(),
             username="operator",
             email="second@example.com",
-            password="secure-password",
+            password="Secure-Password-2026!",
         )
 
     assert len(repository.list()) == 1
@@ -241,7 +242,7 @@ def test_create_user_rejects_duplicate_email() -> None:
             actor=make_actor(),
             username="second-user",
             email="shared@example.com",
-            password="secure-password",
+            password="Secure-Password-2026!",
         )
 
     assert len(repository.list()) == 1
@@ -313,7 +314,7 @@ def test_operations_reject_invalid_actor(
             {
                 "username": "operator",
                 "email": "operator@example.com",
-                "password": "secure-password",
+                "password": "Secure-Password-2026!",
             }
         )
 
@@ -440,11 +441,11 @@ def test_change_password_hashes_and_persists() -> None:
     updated = service.change_password(
         actor=actor,
         user_id=str(user.id),
-        password="new-secure-password",
+        password="New-Secure-Password-2026!",
     )
 
     assert hasher.received_password == (
-        "new-secure-password"
+        "New-Secure-Password-2026!"
     )
     assert updated.password_hash != user.password_hash
     assert repository.get_by_id(user.id) == updated
@@ -487,7 +488,7 @@ def test_new_operations_reject_invalid_actor(
         arguments["status"] = UserStatus.ACTIVE
 
     if method_name == "change_password":
-        arguments["password"] = "secure-password"
+        arguments["password"] = "Secure-Password-2026!"
 
     with pytest.raises(TypeError):
         getattr(service, method_name)(**arguments)
@@ -893,3 +894,250 @@ def test_list_permissions_rejects_invalid_actor() -> None:
         service.list_permissions(
             actor=object()  # type: ignore[arg-type]
         )
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        UserStatus.DISABLED,
+        UserStatus.LOCKED,
+    ],
+)
+def test_change_status_rejects_last_active_administrator(
+    status: UserStatus,
+) -> None:
+    from app.domain.identity.entities import Role
+    from app.domain.identity.exceptions import (
+        CannotDisableLastAdministrator,
+    )
+
+    service, repository, _, audit = build_service()
+
+    administrator_role = Role(
+        name=RoleName("administrator"),
+    )
+
+    administrator = User(
+        id=UserId(
+            UUID(
+                "01900000-0000-7000-8000-000000000301"
+            )
+        ),
+        username=Username("sole-active-admin"),
+        email=Email("sole-active-admin@example.com"),
+        password_hash=PasswordHash(
+            "$2b$12$abcdefghijklmnopqrstuu"
+            "abcdefghijklmnopqrstuu1234567890"
+        ),
+        roles=frozenset({administrator_role}),
+        status=UserStatus.ACTIVE,
+    )
+
+    repository.save(administrator)
+
+    with pytest.raises(
+        CannotDisableLastAdministrator
+    ):
+        service.change_user_status(
+            actor=make_actor(),
+            user_id=str(administrator.id),
+            status=status,
+        )
+
+    restored = repository.get_by_id(
+        administrator.id
+    )
+
+    assert restored.status is UserStatus.ACTIVE
+    assert audit.records == []
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        UserStatus.DISABLED,
+        UserStatus.LOCKED,
+    ],
+)
+def test_change_status_allows_administrator_when_another_active_exists(
+    status: UserStatus,
+) -> None:
+    from app.domain.identity.entities import Role
+
+    service, repository, _, audit = build_service()
+
+    administrator_role = Role(
+        name=RoleName("administrator"),
+    )
+
+    first = User(
+        id=UserId(
+            UUID(
+                "01900000-0000-7000-8000-000000000302"
+            )
+        ),
+        username=Username("first-active-admin"),
+        email=Email("first-active-admin@example.com"),
+        password_hash=PasswordHash(
+            "$2b$12$abcdefghijklmnopqrstuu"
+            "abcdefghijklmnopqrstuu1234567890"
+        ),
+        roles=frozenset({administrator_role}),
+        status=UserStatus.ACTIVE,
+    )
+
+    second = User(
+        id=UserId(
+            UUID(
+                "01900000-0000-7000-8000-000000000303"
+            )
+        ),
+        username=Username("second-active-admin"),
+        email=Email("second-active-admin@example.com"),
+        password_hash=PasswordHash(
+            "$2b$12$abcdefghijklmnopqrstuu"
+            "abcdefghijklmnopqrstuu1234567890"
+        ),
+        roles=frozenset({administrator_role}),
+        status=UserStatus.ACTIVE,
+    )
+
+    repository.save(first)
+    repository.save(second)
+    audit.records.clear()
+
+    updated = service.change_user_status(
+        actor=make_actor(),
+        user_id=str(first.id),
+        status=status,
+    )
+
+    assert updated.status is status
+
+    restored_second = repository.get_by_id(
+        second.id
+    )
+
+    assert restored_second.is_active()
+    assert restored_second.has_role_name(
+        RoleName("administrator")
+    )
+
+    assert audit.records[0][0] == (
+        "identity.user.status_changed"
+    )
+
+
+def test_inactive_administrator_does_not_count_as_backup() -> None:
+    from app.domain.identity.entities import Role
+    from app.domain.identity.exceptions import (
+        CannotDisableLastAdministrator,
+    )
+
+    service, repository, _, audit = build_service()
+
+    administrator_role = Role(
+        name=RoleName("administrator"),
+    )
+
+    active_administrator = User(
+        id=UserId(
+            UUID(
+                "01900000-0000-7000-8000-000000000304"
+            )
+        ),
+        username=Username("active-admin"),
+        email=Email("active-admin@example.com"),
+        password_hash=PasswordHash(
+            "$2b$12$abcdefghijklmnopqrstuu"
+            "abcdefghijklmnopqrstuu1234567890"
+        ),
+        roles=frozenset({administrator_role}),
+        status=UserStatus.ACTIVE,
+    )
+
+    disabled_administrator = User(
+        id=UserId(
+            UUID(
+                "01900000-0000-7000-8000-000000000305"
+            )
+        ),
+        username=Username("disabled-admin"),
+        email=Email("disabled-admin@example.com"),
+        password_hash=PasswordHash(
+            "$2b$12$abcdefghijklmnopqrstuu"
+            "abcdefghijklmnopqrstuu1234567890"
+        ),
+        roles=frozenset({administrator_role}),
+        status=UserStatus.DISABLED,
+    )
+
+    repository.save(active_administrator)
+    repository.save(disabled_administrator)
+    audit.records.clear()
+
+    with pytest.raises(
+        CannotDisableLastAdministrator
+    ):
+        service.change_user_status(
+            actor=make_actor(),
+            user_id=str(active_administrator.id),
+            status=UserStatus.LOCKED,
+        )
+
+    assert audit.records == []
+
+
+@pytest.mark.parametrize(
+    "password",
+    [
+        "short",
+        "lowercase-password-2026!",
+        "UPPERCASE-PASSWORD-2026!",
+        "PasswordWithoutNumber!",
+        "PasswordWithoutSymbol2026",
+    ],
+)
+def test_create_user_rejects_weak_password(
+    password: str,
+) -> None:
+    from app.domain.identity.exceptions import WeakPassword
+
+    service, repository, hasher, audit = build_service()
+
+    with pytest.raises(WeakPassword):
+        service.create_user(
+            actor=make_actor(),
+            username="weak-password-user",
+            email="weak-password@example.com",
+            password=password,
+        )
+
+    assert repository.list() == ()
+    assert audit.records == []
+
+
+def test_change_password_rejects_weak_password() -> None:
+    from app.domain.identity.exceptions import WeakPassword
+
+    service, repository, hasher, audit = build_service()
+    user = make_user(
+        user_id="01900000-0000-7000-8000-000000000999",
+        username="operator",
+        email="operator@example.com",
+    )
+
+    repository.save(user)
+    audit.records.clear()
+
+    with pytest.raises(WeakPassword):
+        service.change_password(
+            actor=make_actor(),
+            user_id=str(user.id),
+            password="weak",
+        )
+
+    restored = repository.get_by_id(user.id)
+
+    assert restored.password_hash == user.password_hash
+    assert audit.records == []

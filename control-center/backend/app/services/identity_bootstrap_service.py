@@ -16,6 +16,7 @@ from app.domain.identity.entities import (
     Role,
     User,
 )
+from app.domain.identity.password_policy import PasswordPolicy
 from app.domain.identity.protocols import (
     AuditRepository,
     IdentityCatalogRepository,
@@ -298,6 +299,8 @@ class IdentityBootstrapService:
                 status=BootstrapStatus.ALREADY_EXISTS,
                 user=existing_user,
             )
+
+        PasswordPolicy.validate(password)
 
         administrator_role = self._build_administrator_role()
 

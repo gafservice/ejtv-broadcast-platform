@@ -23,9 +23,12 @@ class CreateUserRequest(BaseModel):
     )
 
     password: str = Field(
-        min_length=1,
+        min_length=12,
         max_length=72,
-        description="Contraseña inicial del usuario.",
+        description=(
+            "Contraseña inicial: mínimo 12 caracteres, "
+            "con mayúscula, minúscula, número y símbolo."
+        ),
         examples=["change-this-password"],
     )
 
@@ -57,9 +60,12 @@ class ChangeUserPasswordRequest(BaseModel):
     """Nueva contraseña administrativa de un usuario."""
 
     password: str = Field(
-        min_length=1,
+        min_length=12,
         max_length=72,
-        description="Nueva contraseña del usuario.",
+        description=(
+            "Nueva contraseña: mínimo 12 caracteres, "
+            "con mayúscula, minúscula, número y símbolo."
+        ),
         examples=["new-secure-password"],
     )
 

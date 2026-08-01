@@ -1,6 +1,9 @@
 from app.domain.identity.exceptions.email_already_exists import (
     EmailAlreadyExists,
 )
+from app.domain.identity.exceptions.cannot_disable_last_administrator import (
+    CannotDisableLastAdministrator,
+)
 from app.domain.identity.exceptions.cannot_remove_last_administrator import (
     CannotRemoveLastAdministrator,
 )
@@ -13,11 +16,14 @@ from app.domain.identity.exceptions.role_not_found import (
 from app.domain.identity.exceptions.user_disabled import UserDisabled
 from app.domain.identity.exceptions.user_locked import UserLocked
 from app.domain.identity.exceptions.user_not_found import UserNotFound
+from app.domain.identity.exceptions.weak_password import WeakPassword
 from app.domain.identity.exceptions.username_already_exists import (
     UsernameAlreadyExists,
 )
 
 __all__ = [
+    "WeakPassword",
+    "CannotDisableLastAdministrator",
     "CannotRemoveLastAdministrator",
     "EmailAlreadyExists",
     "IdentityError",

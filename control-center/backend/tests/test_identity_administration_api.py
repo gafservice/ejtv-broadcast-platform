@@ -77,6 +77,21 @@ class FakeIdentityAdministrationService:
             ),
         )
 
+
+    def change_user_status(
+        self,
+        *,
+        actor,
+        user_id,
+        status,
+    ):
+        if self.operation_error is not None:
+            raise self.operation_error
+
+        return make_user(
+            user_id=user_id,
+        )
+
     def list_users(
         self,
         *,
@@ -983,4 +998,49 @@ def test_permissions_route_is_protected_in_openapi(
     ]
     assert "Identity Administration" in (
         operation["tags"]
+    )
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        "disabled",
+        "locked",
+    ],
+)
+def test_last_active_administrator_status_change_returns_conflict(
+    client: TestClient,
+    status: str,
+) -> None:
+    from app.domain.identity.exceptions import (
+        CannotDisableLastAdministrator,
+    )
+
+    configure_dependencies(
+        service=FakeIdentityAdministrationService(
+            operation_error=(
+                CannotDisableLastAdministrator()
+            )
+        ),
+        identity=make_actor("users.manage"),
+    )
+
+    response = client.patch(
+        (
+            "/api/v1/identity/users/"
+            "01900000-0000-7000-8000-000000000401"
+            "/status"
+        ),
+        json={
+            "status": status,
+        },
+    )
+
+    assert response.status_code == 409
+
+    payload = response.json()
+
+    assert payload["success"] is False
+    assert payload["error"]["code"] == (
+        "CANNOT_DISABLE_LAST_ADMINISTRATOR"
     )
