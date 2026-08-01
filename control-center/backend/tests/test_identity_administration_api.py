@@ -86,6 +86,22 @@ class FakeIdentityAdministrationService:
         return self.users
 
 
+    def list_permissions(
+        self,
+        *,
+        actor: AuthenticatedIdentity,
+    ) -> tuple[str, ...]:
+        self.received_actor = actor
+
+        if self.operation_error is not None:
+            raise self.operation_error
+
+        return (
+            "alarms.read",
+            "dashboard.read",
+            "roles.read",
+        )
+
     def list_roles(
         self,
         *,
@@ -887,3 +903,84 @@ def test_role_routes_are_protected_in_openapi(
                 "BearerAuth": [],
             }
         ]
+
+
+def test_list_permissions_returns_canonical_permissions(
+    client: TestClient,
+) -> None:
+    configure_dependencies(
+        service=FakeIdentityAdministrationService(),
+        identity=make_actor("roles.read"),
+    )
+
+    response = client.get(
+        "/api/v1/identity/permissions"
+    )
+
+    assert response.status_code == 200
+
+    payload = response.json()
+
+    assert payload["success"] is True
+    assert payload["data"]["total"] == 3
+    assert [
+        permission["name"]
+        for permission in payload["data"]["permissions"]
+    ] == [
+        "alarms.read",
+        "dashboard.read",
+        "roles.read",
+    ]
+    assert payload["message"] == (
+        "Permisos obtenidos correctamente."
+    )
+
+
+def test_list_permissions_requires_roles_read(
+    client: TestClient,
+) -> None:
+    configure_dependencies(
+        service=FakeIdentityAdministrationService(),
+        identity=make_actor("roles.write"),
+    )
+
+    response = client.get(
+        "/api/v1/identity/permissions"
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == (
+        "PERMISSION_DENIED"
+    )
+
+
+def test_list_permissions_requires_authentication(
+    client: TestClient,
+) -> None:
+    response = client.get(
+        "/api/v1/identity/permissions"
+    )
+
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == (
+        "Bearer"
+    )
+
+
+def test_permissions_route_is_protected_in_openapi(
+    client: TestClient,
+) -> None:
+    response = client.get("/openapi.json")
+
+    operation = response.json()["paths"][
+        "/api/v1/identity/permissions"
+    ]["get"]
+
+    assert operation["security"] == [
+        {
+            "BearerAuth": [],
+        }
+    ]
+    assert "Identity Administration" in (
+        operation["tags"]
+    )

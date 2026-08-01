@@ -12,6 +12,8 @@ from app.api.schemas.identity_administration import (
     ChangeUserPasswordRequest,
     ChangeUserStatusRequest,
     CreateUserRequest,
+    PermissionListResponse,
+    PermissionResponse,
     RoleListResponse,
     RoleResponse,
     UserListResponse,
@@ -203,6 +205,38 @@ def change_user_password(
     return success_response(
         data=_serialize_user(user).model_dump(),
         message="Contraseña del usuario actualizada correctamente.",
+        request_id=request.state.request_id,
+    )
+
+
+@router.get("/permissions")
+def list_permissions(
+    request: Request,
+    actor: Annotated[
+        AuthenticatedIdentity,
+        Depends(require_permission("roles.read")),
+    ],
+    service: IdentityAdministrationService = Depends(
+        get_identity_administration_service
+    ),
+) -> dict[str, object]:
+    """Lista los permisos canónicos disponibles."""
+
+    permissions = service.list_permissions(
+        actor=actor
+    )
+
+    response = PermissionListResponse(
+        permissions=[
+            PermissionResponse(name=permission)
+            for permission in permissions
+        ],
+        total=len(permissions),
+    )
+
+    return success_response(
+        data=response.model_dump(),
+        message="Permisos obtenidos correctamente.",
         request_id=request.state.request_id,
     )
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from app.domain.identity.catalog import (
     ADMINISTRATOR_ROLE,
+    ALL_PERMISSIONS,
     DEFAULT_ROLES,
     RoleDefinition,
     get_role_definition,
@@ -188,6 +189,32 @@ class IdentityAdministrationService:
         )
 
         return updated_user
+
+    def list_permissions(
+        self,
+        *,
+        actor: AuthenticatedIdentity,
+    ) -> tuple[str, ...]:
+        """Return all canonical permission names."""
+
+        self._validate_actor(actor)
+
+        permissions = tuple(
+            sorted(
+                permission.value
+                for permission in ALL_PERMISSIONS
+            )
+        )
+
+        self._audit_repository.record(
+            "identity.permissions.listed",
+            actor,
+            {
+                "result_count": len(permissions),
+            },
+        )
+
+        return permissions
 
     def list_roles(
         self,

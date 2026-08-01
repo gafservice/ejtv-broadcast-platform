@@ -847,3 +847,49 @@ def test_role_operations_reject_invalid_actor(
 
     with pytest.raises(TypeError):
         getattr(service, method_name)(**arguments)
+
+
+def test_list_permissions_returns_canonical_permissions() -> None:
+    service, _, _, audit = build_service()
+    actor = make_actor()
+
+    permissions = service.list_permissions(
+        actor=actor
+    )
+
+    assert permissions == (
+        "alarms.read",
+        "alarms.write",
+        "dashboard.read",
+        "dashboard.write",
+        "identity.read",
+        "identity.write",
+        "roles.read",
+        "roles.write",
+        "streaming.read",
+        "streaming.write",
+        "system.read",
+        "system.write",
+        "users.manage",
+        "users.read",
+        "users.write",
+    )
+
+    assert audit.records == [
+        (
+            "identity.permissions.listed",
+            actor,
+            {
+                "result_count": 15,
+            },
+        )
+    ]
+
+
+def test_list_permissions_rejects_invalid_actor() -> None:
+    service, _, _, _ = build_service()
+
+    with pytest.raises(TypeError):
+        service.list_permissions(
+            actor=object()  # type: ignore[arg-type]
+        )

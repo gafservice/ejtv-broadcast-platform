@@ -88,3 +88,16 @@ class RoleListResponse(BaseModel):
     roles: list[RoleResponse]
     total: int
 
+
+class PermissionResponse(BaseModel):
+    """Representación pública de un permiso canónico."""
+
+    name: str
+
+
+class PermissionListResponse(BaseModel):
+    """Colección de permisos oficiales."""
+
+    permissions: list[PermissionResponse]
+    total: int
+
