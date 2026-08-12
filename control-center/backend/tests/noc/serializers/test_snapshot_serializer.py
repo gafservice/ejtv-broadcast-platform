@@ -454,3 +454,308 @@ def test_serialization_does_not_modify_snapshot() -> None:
         snapshot.heartbeat
         is original_heartbeat
     )
+
+
+def test_minimal_snapshot_round_trip() -> None:
+    serializer = SnapshotSerializer()
+    original = make_minimal_snapshot()
+
+    encoded = serializer.dumps(original)
+    reconstructed = serializer.loads(encoded)
+
+    assert reconstructed == original
+
+
+def test_complete_snapshot_round_trip() -> None:
+    serializer = SnapshotSerializer()
+    original = make_complete_snapshot()
+
+    encoded = serializer.dumps(original)
+    reconstructed = serializer.loads(encoded)
+
+    assert reconstructed == original
+
+
+def test_dict_round_trip() -> None:
+    serializer = SnapshotSerializer()
+    original = make_complete_snapshot()
+
+    payload = serializer.to_dict(original)
+    reconstructed = serializer.from_dict(payload)
+
+    assert reconstructed == original
+
+
+def test_round_trip_preserves_instance_id_type() -> None:
+    serializer = SnapshotSerializer()
+
+    reconstructed = serializer.loads(
+        serializer.dumps(
+            make_complete_snapshot()
+        )
+    )
+
+    assert isinstance(
+        reconstructed.instance_id,
+        NodeInstanceId,
+    )
+
+    assert str(
+        reconstructed.instance_id
+    ) == "streaming-primary"
+
+
+def test_round_trip_preserves_enum_types() -> None:
+    reconstructed = SnapshotSerializer().loads(
+        SnapshotSerializer().dumps(
+            make_complete_snapshot()
+        )
+    )
+
+    assert reconstructed.node_type is (
+        NodeType.STREAMING
+    )
+
+    assert reconstructed.status.state is (
+        NodeStatusState.RUNNING
+    )
+
+    assert reconstructed.health.state is (
+        NodeHealthState.HEALTHY
+    )
+
+    assert reconstructed.availability.state is (
+        NodeAvailabilityState.AVAILABLE
+    )
+
+
+def test_round_trip_preserves_timestamps() -> None:
+    serializer = SnapshotSerializer()
+    original = make_complete_snapshot()
+
+    reconstructed = serializer.loads(
+        serializer.dumps(original)
+    )
+
+    assert (
+        reconstructed.snapshot_timestamp
+        == original.snapshot_timestamp
+    )
+
+    assert (
+        reconstructed.node_id.created_at
+        == original.node_id.created_at
+    )
+
+    assert (
+        reconstructed.metric.samples[0].timestamp
+        == original.metric.samples[0].timestamp
+    )
+
+
+def test_round_trip_preserves_capabilities() -> None:
+    reconstructed = SnapshotSerializer().loads(
+        SnapshotSerializer().dumps(
+            make_complete_snapshot()
+        )
+    )
+
+    capability = (
+        reconstructed
+        .capability
+        .capabilities[0]
+    )
+
+    assert capability.name == "SRT"
+    assert capability.category is (
+        CapabilityCategory.PROTOCOL
+    )
+    assert capability.version == "1.0"
+
+
+def test_round_trip_preserves_capacity() -> None:
+    reconstructed = SnapshotSerializer().loads(
+        SnapshotSerializer().dumps(
+            make_complete_snapshot()
+        )
+    )
+
+    resource = (
+        reconstructed
+        .capacity
+        .resources[0]
+    )
+
+    assert resource.maximum == 16
+    assert resource.allocated == 10
+    assert resource.reserved == 2
+    assert resource.available == 4
+
+
+def test_round_trip_preserves_metrics() -> None:
+    reconstructed = SnapshotSerializer().loads(
+        SnapshotSerializer().dumps(
+            make_complete_snapshot()
+        )
+    )
+
+    sample = (
+        reconstructed
+        .metric
+        .samples[0]
+    )
+
+    assert sample.metric == "cpu_usage"
+    assert sample.value == 42.5
+    assert sample.quality is MetricQuality.GOOD
+
+
+def test_round_trip_preserves_alarm() -> None:
+    reconstructed = SnapshotSerializer().loads(
+        SnapshotSerializer().dumps(
+            make_complete_snapshot()
+        )
+    )
+
+    alarm = (
+        reconstructed
+        .alarms
+        .alarms[0]
+    )
+
+    assert alarm.alarm_id == "alm-001"
+    assert alarm.severity is AlarmSeverity.MAJOR
+    assert alarm.state is AlarmState.ACTIVE
+    assert alarm.source == NodeInstanceId(
+        "streaming-primary"
+    )
+
+
+def test_round_trip_preserves_heartbeat() -> None:
+    reconstructed = SnapshotSerializer().loads(
+        SnapshotSerializer().dumps(
+            make_complete_snapshot()
+        )
+    )
+
+    heartbeat = (
+        reconstructed
+        .heartbeat
+        .latest
+    )
+
+    assert heartbeat.heartbeat_id == "hb-001"
+    assert heartbeat.sequence == 100
+    assert heartbeat.instance_id == (
+        NodeInstanceId(
+            "streaming-primary"
+        )
+    )
+
+
+def test_loads_rejects_non_object_json() -> None:
+    serializer = SnapshotSerializer()
+
+    with pytest.raises(ValueError):
+        serializer.loads(
+            '["not", "a", "snapshot"]'
+        )
+
+
+def test_loads_rejects_invalid_json() -> None:
+    serializer = SnapshotSerializer()
+
+    with pytest.raises(json.JSONDecodeError):
+        serializer.loads(
+            '{"node_id":'
+        )
+
+
+def test_from_dict_requires_identity_fields() -> None:
+    serializer = SnapshotSerializer()
+
+    with pytest.raises(ValueError):
+        serializer.from_dict(
+            {
+                "node_type": "STREAMING",
+            }
+        )
+
+
+def test_from_dict_rejects_invalid_node_type() -> None:
+    payload = SnapshotSerializer().to_dict(
+        make_minimal_snapshot()
+    )
+
+    payload["node_type"] = "INVALID_TYPE"
+
+    with pytest.raises(ValueError):
+        SnapshotSerializer().from_dict(
+            payload
+        )
+
+
+def test_from_dict_rejects_non_utc_timestamp() -> None:
+    payload = SnapshotSerializer().to_dict(
+        make_minimal_snapshot()
+    )
+
+    payload["snapshot_timestamp"] = (
+        "2026-08-12T14:30:00-06:00"
+    )
+
+    with pytest.raises(ValueError):
+        SnapshotSerializer().from_dict(
+            payload
+        )
+
+
+def test_from_dict_rejects_info_instance_mismatch() -> None:
+    payload = SnapshotSerializer().to_dict(
+        make_complete_snapshot()
+    )
+
+    payload["info"]["instance_id"] = (
+        "streaming-backup"
+    )
+
+    with pytest.raises(ValueError):
+        SnapshotSerializer().from_dict(
+            payload
+        )
+
+
+def test_unknown_top_level_fields_are_ignored() -> None:
+    payload = SnapshotSerializer().to_dict(
+        make_minimal_snapshot()
+    )
+
+    payload["future_extension"] = {
+        "value": 123,
+    }
+
+    reconstructed = (
+        SnapshotSerializer()
+        .from_dict(payload)
+    )
+
+    assert reconstructed.node_id.id == (
+        "streaming-core"
+    )
+
+
+def test_round_trip_is_wire_deterministic() -> None:
+    serializer = SnapshotSerializer()
+    original = make_complete_snapshot()
+
+    first = serializer.dumps(original)
+
+    reconstructed = serializer.loads(
+        first
+    )
+
+    second = serializer.dumps(
+        reconstructed
+    )
+
+    assert first == second
