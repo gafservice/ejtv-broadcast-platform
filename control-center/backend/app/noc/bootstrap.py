@@ -17,6 +17,9 @@ from enum import StrEnum
 from app.noc.domain.node import Node
 from app.noc.domain.node_id import NodeId
 from app.noc.domain.node_type import NodeType
+from app.noc.infrastructure.system_info_provider import (
+    LinuxSystemInfoProvider,
+)
 from app.noc.registry.registry import NodeRegistry
 
 
@@ -150,4 +153,77 @@ def _has_primary_instance(
         str(instance.instance_id)
         == DEFAULT_INSTANCE_ID
         for instance in node.instances
+    )
+
+
+def initialize_noc_runtime_info(
+    registry: NodeRegistry,
+    provider: LinuxSystemInfoProvider | None = None,
+) -> None:
+    """Populate NodeInfo for the canonical local runtime instance.
+
+    This operation observes the execution environment after the canonical
+    Node identity has been bootstrapped.
+
+    It does not synthesize status, health, availability, metrics, alarms
+    or heartbeat information.
+    """
+
+    if not isinstance(registry, NodeRegistry):
+        raise TypeError(
+            "registry must be a NodeRegistry"
+        )
+
+    if (
+        provider is not None
+        and not isinstance(
+            provider,
+            LinuxSystemInfoProvider,
+        )
+    ):
+        raise TypeError(
+            "provider must be a LinuxSystemInfoProvider or None"
+        )
+
+    node = _find_existing_node(
+        registry
+    )
+
+    if node is None:
+        raise RuntimeError(
+            "Canonical NOC Node must be bootstrapped "
+            "before runtime information is initialized"
+        )
+
+    _validate_existing_identity(
+        node
+    )
+
+    instance = next(
+        (
+            item
+            for item in node.instances
+            if str(item.instance_id)
+            == DEFAULT_INSTANCE_ID
+        ),
+        None,
+    )
+
+    if instance is None:
+        raise RuntimeError(
+            "Canonical NOC Node does not contain "
+            f"instance {DEFAULT_INSTANCE_ID!r}"
+        )
+
+    system_info_provider = (
+        provider
+        or LinuxSystemInfoProvider()
+    )
+
+    instance.info = system_info_provider.collect(
+        instance.instance_id
+    )
+
+    registry.repository.save(
+        node
     )

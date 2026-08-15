@@ -15,7 +15,10 @@ from app.core.responses import success_response
 from app.core.shutdown import application_shutdown
 from app.core.startup import application_startup
 from app.core.version import APP_VERSION
-from app.noc.bootstrap import bootstrap_noc_runtime
+from app.noc.bootstrap import (
+    bootstrap_noc_runtime,
+    initialize_noc_runtime_info,
+)
 
 settings = get_settings()
 configure_logging(settings)
@@ -26,6 +29,10 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     await application_startup(settings)
 
     bootstrap_noc_runtime(
+        get_node_registry()
+    )
+
+    initialize_noc_runtime_info(
         get_node_registry()
     )
 

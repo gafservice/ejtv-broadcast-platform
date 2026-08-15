@@ -198,3 +198,130 @@ def test_bootstrap_preserves_existing_instance_state() -> None:
     assert instance.metrics == (
         metrics_marker,
     )
+
+
+def test_runtime_info_requires_registry() -> None:
+    from app.noc.bootstrap import (
+        initialize_noc_runtime_info,
+    )
+
+    with pytest.raises(TypeError):
+        initialize_noc_runtime_info(
+            object()  # type: ignore[arg-type]
+        )
+
+
+def test_runtime_info_requires_bootstrapped_node() -> None:
+    from app.noc.bootstrap import (
+        initialize_noc_runtime_info,
+    )
+
+    registry = make_registry()
+
+    with pytest.raises(RuntimeError):
+        initialize_noc_runtime_info(
+            registry
+        )
+
+
+def test_runtime_info_populates_node_info() -> None:
+    from app.noc.bootstrap import (
+        initialize_noc_runtime_info,
+    )
+    from app.noc.domain.node_info import NodeInfo
+
+    registry = make_registry()
+
+    node = bootstrap_noc_runtime(
+        registry
+    ).node
+
+    instance = node.instances[0]
+
+    assert instance.info is None
+
+    initialize_noc_runtime_info(
+        registry
+    )
+
+    assert isinstance(
+        instance.info,
+        NodeInfo,
+    )
+
+    assert (
+        instance.info.instance_id
+        == instance.instance_id
+    )
+
+
+def test_runtime_info_preserves_other_operational_state() -> None:
+    from app.noc.bootstrap import (
+        initialize_noc_runtime_info,
+    )
+
+    registry = make_registry()
+
+    node = bootstrap_noc_runtime(
+        registry
+    ).node
+
+    instance = node.instances[0]
+
+    metrics_marker = object()
+    alarms_marker = object()
+
+    instance.metrics = (
+        metrics_marker,
+    )
+
+    instance.alarms = (
+        alarms_marker,
+    )
+
+    initialize_noc_runtime_info(
+        registry
+    )
+
+    assert instance.metrics == (
+        metrics_marker,
+    )
+
+    assert instance.alarms == (
+        alarms_marker,
+    )
+
+
+def test_runtime_info_is_reflected_in_snapshot() -> None:
+    from app.noc.bootstrap import (
+        initialize_noc_runtime_info,
+    )
+    from app.noc.services.snapshot_service import (
+        SnapshotService,
+    )
+
+    registry = make_registry()
+
+    node = bootstrap_noc_runtime(
+        registry
+    ).node
+
+    instance = node.instances[0]
+
+    initialize_noc_runtime_info(
+        registry
+    )
+
+    snapshot = SnapshotService(
+        registry
+    ).build(
+        node.node_id,
+        instance.instance_id,
+    )
+
+    assert snapshot.info is instance.info
+    assert snapshot.info is not None
+    assert (
+        snapshot.info.instance_id
+        == instance.instance_id
+    )
