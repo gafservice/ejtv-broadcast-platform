@@ -7,6 +7,7 @@ from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.health import router as health_router
 from app.api.v1.identity import router as identity_router
 from app.api.v1.system import router as system_router
+from app.noc.api.router import router as noc_router
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -15,3 +16,4 @@ api_router.include_router(auth_router)
 api_router.include_router(identity_router)
 api_router.include_router(system_router)
 api_router.include_router(dashboard_router)
+api_router.include_router(noc_router)
