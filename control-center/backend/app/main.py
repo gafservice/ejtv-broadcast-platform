@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 
+from app.api.dependencies import get_node_registry
 from app.api.router import api_router
 from app.core.config import get_settings
 from app.core.exceptions import register_exception_handlers
@@ -14,6 +15,7 @@ from app.core.responses import success_response
 from app.core.shutdown import application_shutdown
 from app.core.startup import application_startup
 from app.core.version import APP_VERSION
+from app.noc.bootstrap import bootstrap_noc_runtime
 
 settings = get_settings()
 configure_logging(settings)
@@ -22,6 +24,10 @@ configure_logging(settings)
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     await application_startup(settings)
+
+    bootstrap_noc_runtime(
+        get_node_registry()
+    )
 
     try:
         yield
