@@ -5,7 +5,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 
-from app.api.dependencies import get_node_registry
+from app.api.dependencies import (
+    get_metric_service,
+    get_node_registry,
+    get_system_service,
+)
 from app.api.router import api_router
 from app.core.config import get_settings
 from app.core.exceptions import register_exception_handlers
@@ -18,6 +22,7 @@ from app.core.version import APP_VERSION
 from app.noc.bootstrap import (
     bootstrap_noc_runtime,
     initialize_noc_runtime_info,
+    initialize_noc_runtime_metrics,
 )
 
 settings = get_settings()
@@ -34,6 +39,12 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
     initialize_noc_runtime_info(
         get_node_registry()
+    )
+
+    initialize_noc_runtime_metrics(
+        registry=get_node_registry(),
+        system_service=get_system_service(),
+        metric_service=get_metric_service(),
     )
 
     try:

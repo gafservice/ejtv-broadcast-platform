@@ -325,3 +325,82 @@ def test_runtime_info_is_reflected_in_snapshot() -> None:
         snapshot.info.instance_id
         == instance.instance_id
     )
+
+
+def test_runtime_metrics_are_reflected_in_snapshot() -> None:
+    from app.adapters.linux.linux_system_adapter import (
+        LinuxSystemAdapter,
+    )
+    from app.noc.bootstrap import (
+        initialize_noc_runtime_metrics,
+    )
+    from app.noc.services.metric_service import (
+        MetricService,
+    )
+    from app.noc.services.snapshot_service import (
+        SnapshotService,
+    )
+    from app.services.system_service import (
+        SystemService,
+    )
+
+    registry = make_registry()
+
+    node = bootstrap_noc_runtime(
+        registry
+    ).node
+
+    instance = node.instances[0]
+
+    metric_service = MetricService(
+        registry
+    )
+
+    initialize_noc_runtime_metrics(
+        registry=registry,
+        system_service=SystemService(
+            LinuxSystemAdapter()
+        ),
+        metric_service=metric_service,
+    )
+
+    current = metric_service.current(
+        node.node_id,
+        instance.instance_id,
+    )
+
+    assert len(current.samples) == 6
+
+    assert current.has_metric(
+        "system.cpu.usage_percent"
+    )
+
+    assert current.has_metric(
+        "system.memory.usage_percent"
+    )
+
+    assert current.has_metric(
+        "system.disk.usage_percent"
+    )
+
+    assert current.has_metric(
+        "system.network.rx_bytes"
+    )
+
+    assert current.has_metric(
+        "system.network.tx_bytes"
+    )
+
+    assert current.has_metric(
+        "system.uptime_seconds"
+    )
+
+    snapshot = SnapshotService(
+        registry
+    ).build(
+        node.node_id,
+        instance.instance_id,
+    )
+
+    assert snapshot.metric is not None
+    assert len(snapshot.metric.samples) == 6

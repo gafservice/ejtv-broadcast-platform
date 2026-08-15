@@ -20,6 +20,11 @@ from app.noc.domain.node_type import NodeType
 from app.noc.infrastructure.system_info_provider import (
     LinuxSystemInfoProvider,
 )
+from app.noc.infrastructure.system_metrics_provider import (
+    SystemMetricsProvider,
+)
+from app.noc.services.metric_service import MetricService
+from app.services.system_service import SystemService
 from app.noc.registry.registry import NodeRegistry
 
 
@@ -227,3 +232,82 @@ def initialize_noc_runtime_info(
     registry.repository.save(
         node
     )
+
+
+def initialize_noc_runtime_metrics(
+    registry: NodeRegistry,
+    system_service: SystemService,
+    metric_service: MetricService,
+    provider: SystemMetricsProvider | None = None,
+) -> None:
+    """Collect and publish current host metrics for the canonical instance."""
+
+    if not isinstance(registry, NodeRegistry):
+        raise TypeError(
+            "registry must be a NodeRegistry"
+        )
+
+    if not isinstance(system_service, SystemService):
+        raise TypeError(
+            "system_service must be a SystemService"
+        )
+
+    if not isinstance(metric_service, MetricService):
+        raise TypeError(
+            "metric_service must be a MetricService"
+        )
+
+    if (
+        provider is not None
+        and not isinstance(
+            provider,
+            SystemMetricsProvider,
+        )
+    ):
+        raise TypeError(
+            "provider must be a SystemMetricsProvider or None"
+        )
+
+    node = _find_existing_node(
+        registry
+    )
+
+    if node is None:
+        raise RuntimeError(
+            "Canonical NOC Node must be bootstrapped "
+            "before runtime metrics are initialized"
+        )
+
+    instance = next(
+        (
+            item
+            for item in node.instances
+            if str(item.instance_id)
+            == DEFAULT_INSTANCE_ID
+        ),
+        None,
+    )
+
+    if instance is None:
+        raise RuntimeError(
+            "Canonical NOC Node does not contain "
+            f"instance {DEFAULT_INSTANCE_ID!r}"
+        )
+
+    resources = (
+        system_service.get_system_resources()
+    )
+
+    samples = (
+        provider
+        or SystemMetricsProvider()
+    ).collect(
+        resources
+    )
+
+    for sample in samples:
+        metric_service.receive(
+            node.node_id,
+            instance.instance_id,
+            sample,
+        )
