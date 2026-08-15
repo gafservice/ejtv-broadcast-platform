@@ -1,14 +1,14 @@
 """Punto de entrada del EJTV Control Center Backend."""
 
+import asyncio
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, Request
 
 from app.api.dependencies import (
-    get_metric_service,
     get_node_registry,
-    get_system_service,
+    get_telemetry_refresh_service,
 )
 from app.api.router import api_router
 from app.core.config import get_settings
@@ -20,10 +20,11 @@ from app.core.shutdown import application_shutdown
 from app.core.startup import application_startup
 from app.core.version import APP_VERSION
 from app.noc.bootstrap import (
+    DEFAULT_INSTANCE_ID,
     bootstrap_noc_runtime,
     initialize_noc_runtime_info,
-    initialize_noc_runtime_metrics,
 )
+from app.noc.domain.node_instance import NodeInstanceId
 
 settings = get_settings()
 configure_logging(settings)
@@ -33,23 +34,35 @@ configure_logging(settings)
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     await application_startup(settings)
 
-    bootstrap_noc_runtime(
-        get_node_registry()
+    registry = get_node_registry()
+
+    bootstrap_result = bootstrap_noc_runtime(
+        registry
     )
 
     initialize_noc_runtime_info(
-        get_node_registry()
+        registry
     )
 
-    initialize_noc_runtime_metrics(
-        registry=get_node_registry(),
-        system_service=get_system_service(),
-        metric_service=get_metric_service(),
+    telemetry_task = asyncio.create_task(
+        get_telemetry_refresh_service().run_forever(
+            node_id=bootstrap_result.node.node_id,
+            instance_id=NodeInstanceId(
+                DEFAULT_INSTANCE_ID
+            ),
+            interval_seconds=5.0,
+        ),
+        name="noc-telemetry-refresh",
     )
 
     try:
         yield
     finally:
+        telemetry_task.cancel()
+
+        with suppress(asyncio.CancelledError):
+            await telemetry_task
+
         await application_shutdown()
 
 

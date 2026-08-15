@@ -31,6 +31,9 @@ from app.noc.services.alarm_service import AlarmService
 from app.noc.services.heartbeat_service import HeartbeatService
 from app.noc.services.metric_service import MetricService
 from app.noc.services.snapshot_service import SnapshotService
+from app.noc.runtime.telemetry_refresh import (
+    TelemetryRefreshService,
+)
 from app.services.authentication_service import AuthenticationService
 from app.services.identity_administration_service import (
     IdentityAdministrationService,
@@ -197,4 +200,14 @@ def get_snapshot_service() -> SnapshotService:
 
     return SnapshotService(
         get_node_registry()
+    )
+
+
+@lru_cache
+def get_telemetry_refresh_service() -> TelemetryRefreshService:
+    """Construye el refresco periódico compartido de telemetría NOC."""
+
+    return TelemetryRefreshService(
+        system_service=get_system_service(),
+        metric_service=get_metric_service(),
     )

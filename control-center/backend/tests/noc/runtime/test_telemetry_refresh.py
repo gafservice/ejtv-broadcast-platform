@@ -1,0 +1,608 @@
+"""Tests for TelemetryRefreshService."""
+
+from datetime import datetime, timezone
+
+import pytest
+
+from app.adapters.base.system_adapter import SystemAdapter
+from app.domain.system import (
+    CPUInfo,
+    DiskInfo,
+    MemoryInfo,
+    NetworkInfo,
+    SystemResources,
+    UptimeInfo,
+)
+from app.noc.domain.node import Node
+from app.noc.domain.node_id import NodeId
+from app.noc.domain.node_instance import NodeInstanceId
+from app.noc.domain.node_type import NodeType
+from app.noc.infrastructure.memory_repository import (
+    InMemoryNodeRepository,
+)
+from app.noc.registry.registry import NodeRegistry
+from app.noc.runtime.telemetry_refresh import (
+    TelemetryRefreshResult,
+    TelemetryRefreshService,
+)
+from app.noc.services.metric_service import (
+    MetricDisposition,
+    MetricService,
+)
+from app.noc.services.snapshot_service import (
+    SnapshotService,
+)
+from app.services.system_service import SystemService
+
+
+CAPTURED_AT = datetime(
+    2026,
+    8,
+    15,
+    23,
+    0,
+    tzinfo=timezone.utc,
+)
+
+
+class FakeSystemAdapter(SystemAdapter):
+    def hostname(self) -> str:
+        return "ejtv-test"
+
+    def operating_system(self) -> str:
+        return "Test Linux"
+
+    def kernel(self) -> str:
+        return "test-kernel"
+
+    def cpu_info(self) -> CPUInfo:
+        return CPUInfo(
+            usage_percent=20.0,
+            logical_cores=4,
+            physical_cores=2,
+            frequency_mhz=2500.0,
+            per_core_usage_percent=(
+                10.0,
+                20.0,
+                30.0,
+                20.0,
+            ),
+        )
+
+    def memory_info(self) -> MemoryInfo:
+        return MemoryInfo(
+            total_bytes=8_000,
+            available_bytes=5_000,
+            used_bytes=3_000,
+            usage_percent=37.5,
+        )
+
+    def disk_info(self) -> DiskInfo:
+        return DiskInfo(
+            total_bytes=100_000,
+            used_bytes=25_000,
+            free_bytes=75_000,
+            usage_percent=25.0,
+        )
+
+    def network_info(
+        self,
+        interface: str,
+    ) -> NetworkInfo:
+        return NetworkInfo(
+            interface=interface,
+            bytes_sent=2_000,
+            bytes_received=3_000,
+            packets_sent=20,
+            packets_received=30,
+            errors_in=0,
+            errors_out=0,
+            dropped_in=0,
+            dropped_out=0,
+        )
+
+    def uptime_info(self) -> UptimeInfo:
+        return UptimeInfo(
+            uptime_seconds=3600
+        )
+
+    def service_monitoring(self):
+        raise NotImplementedError
+
+
+class FixedSystemService(SystemService):
+    """SystemService with deterministic captured_at for tests."""
+
+    def get_system_resources(self) -> SystemResources:
+        adapter = self._adapter
+
+        return SystemResources(
+            cpu=adapter.cpu_info(),
+            memory=adapter.memory_info(),
+            disk=adapter.disk_info(),
+            network=adapter.network_info(
+                "ens2f0"
+            ),
+            uptime=adapter.uptime_info(),
+            captured_at=CAPTURED_AT,
+        )
+
+
+def make_context():
+    repository = InMemoryNodeRepository()
+    registry = NodeRegistry(repository)
+
+    node = Node(
+        node_id=NodeId.create(
+            id="streaming-core",
+            name="streaming",
+            display_name="Streaming Core",
+        ),
+        node_type=NodeType.STREAMING,
+    )
+
+    instance = node.create_instance(
+        instance_id="streaming-primary"
+    )
+
+    registry.register(node)
+
+    metric_service = MetricService(
+        registry
+    )
+
+    system_service = FixedSystemService(
+        FakeSystemAdapter()
+    )
+
+    refresh_service = TelemetryRefreshService(
+        system_service=system_service,
+        metric_service=metric_service,
+    )
+
+    return (
+        registry,
+        node,
+        instance,
+        metric_service,
+        refresh_service,
+    )
+
+
+def test_service_requires_system_service() -> None:
+    _, _, _, metric_service, _ = make_context()
+
+    with pytest.raises(TypeError):
+        TelemetryRefreshService(
+            system_service=object(),  # type: ignore[arg-type]
+            metric_service=metric_service,
+        )
+
+
+def test_service_requires_metric_service() -> None:
+    system_service = FixedSystemService(
+        FakeSystemAdapter()
+    )
+
+    with pytest.raises(TypeError):
+        TelemetryRefreshService(
+            system_service=system_service,
+            metric_service=object(),  # type: ignore[arg-type]
+        )
+
+
+def test_refresh_requires_node_id() -> None:
+    _, _, instance, _, service = make_context()
+
+    with pytest.raises(TypeError):
+        service.refresh_once(
+            node_id="streaming-core",  # type: ignore[arg-type]
+            instance_id=instance.instance_id,
+        )
+
+
+def test_refresh_requires_instance_id() -> None:
+    _, node, _, _, service = make_context()
+
+    with pytest.raises(TypeError):
+        service.refresh_once(
+            node_id=node.node_id,
+            instance_id="streaming-primary",  # type: ignore[arg-type]
+        )
+
+
+def test_refresh_returns_result() -> None:
+    _, node, instance, _, service = make_context()
+
+    result = service.refresh_once(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    assert isinstance(
+        result,
+        TelemetryRefreshResult,
+    )
+
+    assert result.captured_at == CAPTURED_AT
+
+
+def test_refresh_publishes_six_metrics() -> None:
+    _, node, instance, _, service = make_context()
+
+    result = service.refresh_once(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    assert result.metric_count == 6
+    assert len(result.samples) == 6
+    assert len(result.receipts) == 6
+
+
+def test_first_refresh_dispositions() -> None:
+    _, node, instance, _, service = make_context()
+
+    result = service.refresh_once(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    assert (
+        result.receipts[0].disposition
+        is MetricDisposition.FIRST
+    )
+
+    assert all(
+        receipt.disposition
+        in {
+            MetricDisposition.FIRST,
+            MetricDisposition.ADDED,
+        }
+        for receipt in result.receipts
+    )
+
+
+def test_refresh_updates_metric_service_state() -> None:
+    (
+        _,
+        node,
+        instance,
+        metric_service,
+        service,
+    ) = make_context()
+
+    service.refresh_once(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    current = metric_service.current(
+        node.node_id,
+        instance.instance_id,
+    )
+
+    assert len(current.samples) == 6
+
+    assert current.has_metric(
+        "system.cpu.usage_percent"
+    )
+
+    assert current.has_metric(
+        "system.memory.usage_percent"
+    )
+
+    assert current.has_metric(
+        "system.disk.usage_percent"
+    )
+
+    assert current.has_metric(
+        "system.network.rx_bytes"
+    )
+
+    assert current.has_metric(
+        "system.network.tx_bytes"
+    )
+
+    assert current.has_metric(
+        "system.uptime_seconds"
+    )
+
+
+def test_refresh_is_reflected_in_snapshot() -> None:
+    (
+        registry,
+        node,
+        instance,
+        _,
+        service,
+    ) = make_context()
+
+    service.refresh_once(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    snapshot = SnapshotService(
+        registry
+    ).build(
+        node.node_id,
+        instance.instance_id,
+    )
+
+    assert snapshot.metric is not None
+    assert len(snapshot.metric.samples) == 6
+
+
+def test_result_uses_single_capture_timestamp() -> None:
+    _, node, instance, _, service = make_context()
+
+    result = service.refresh_once(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    assert {
+        sample.timestamp
+        for sample in result.samples
+    } == {
+        CAPTURED_AT
+    }
+
+
+def test_second_refresh_replaces_existing_metrics() -> None:
+    from datetime import timedelta
+
+    (
+        _,
+        node,
+        instance,
+        metric_service,
+        service,
+    ) = make_context()
+
+    first = service.refresh_once(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    assert first.metric_count == 6
+
+    first_current = metric_service.current(
+        node.node_id,
+        instance.instance_id,
+    )
+
+    first_cpu = first_current.get(
+        "system.cpu.usage_percent"
+    )
+
+    assert first_cpu is not None
+    assert first_cpu.timestamp == CAPTURED_AT
+
+    original_get = (
+        service.system_service.get_system_resources
+    )
+
+    def newer_resources() -> SystemResources:
+        resources = original_get()
+
+        return SystemResources(
+            cpu=CPUInfo(
+                usage_percent=55.0,
+                logical_cores=resources.cpu.logical_cores,
+                physical_cores=resources.cpu.physical_cores,
+                frequency_mhz=resources.cpu.frequency_mhz,
+                per_core_usage_percent=(
+                    50.0,
+                    55.0,
+                    60.0,
+                    55.0,
+                ),
+            ),
+            memory=resources.memory,
+            disk=resources.disk,
+            network=NetworkInfo(
+                interface=resources.network.interface,
+                bytes_sent=resources.network.bytes_sent + 1000,
+                bytes_received=resources.network.bytes_received + 2000,
+                packets_sent=resources.network.packets_sent + 10,
+                packets_received=resources.network.packets_received + 20,
+                errors_in=resources.network.errors_in,
+                errors_out=resources.network.errors_out,
+                dropped_in=resources.network.dropped_in,
+                dropped_out=resources.network.dropped_out,
+            ),
+            uptime=UptimeInfo(
+                uptime_seconds=resources.uptime.uptime_seconds + 5,
+            ),
+            captured_at=CAPTURED_AT + timedelta(seconds=5),
+        )
+
+    service.system_service.get_system_resources = newer_resources
+
+    second = service.refresh_once(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    assert second.metric_count == 6
+
+    assert all(
+        receipt.disposition
+        is MetricDisposition.REPLACED
+        for receipt in second.receipts
+    )
+
+    current = metric_service.current(
+        node.node_id,
+        instance.instance_id,
+    )
+
+    cpu = current.get(
+        "system.cpu.usage_percent"
+    )
+
+    assert cpu is not None
+    assert cpu.value == 55.0
+    assert cpu.timestamp == (
+        CAPTURED_AT + timedelta(seconds=5)
+    )
+
+    assert len(current.samples) == 6
+
+
+
+def test_run_forever_rejects_invalid_interval() -> None:
+    import asyncio
+
+    _, node, instance, _, service = make_context()
+
+    async def scenario() -> None:
+        with pytest.raises(ValueError):
+            await service.run_forever(
+                node_id=node.node_id,
+                instance_id=instance.instance_id,
+                interval_seconds=0,
+            )
+
+    asyncio.run(
+        scenario()
+    )
+
+
+def test_run_forever_rejects_invalid_interval_type() -> None:
+    import asyncio
+
+    _, node, instance, _, service = make_context()
+
+    async def scenario() -> None:
+        with pytest.raises(TypeError):
+            await service.run_forever(
+                node_id=node.node_id,
+                instance_id=instance.instance_id,
+                interval_seconds="5",  # type: ignore[arg-type]
+            )
+
+    asyncio.run(
+        scenario()
+    )
+
+
+def test_run_forever_refreshes_until_cancelled() -> None:
+    import asyncio
+    from datetime import timedelta
+
+    _, node, instance, metric_service, service = make_context()
+
+    original_get = (
+        service.system_service.get_system_resources
+    )
+
+    call_count = 0
+
+    def advancing_resources() -> SystemResources:
+        nonlocal call_count
+
+        resources = original_get()
+
+        captured_at = (
+            resources.captured_at
+            + timedelta(
+                milliseconds=call_count * 20
+            )
+        )
+
+        call_count += 1
+
+        return SystemResources(
+            cpu=resources.cpu,
+            memory=resources.memory,
+            disk=resources.disk,
+            network=NetworkInfo(
+                interface=resources.network.interface,
+                bytes_sent=(
+                    resources.network.bytes_sent
+                    + call_count
+                ),
+                bytes_received=(
+                    resources.network.bytes_received
+                    + call_count
+                ),
+                packets_sent=resources.network.packets_sent,
+                packets_received=resources.network.packets_received,
+                errors_in=resources.network.errors_in,
+                errors_out=resources.network.errors_out,
+                dropped_in=resources.network.dropped_in,
+                dropped_out=resources.network.dropped_out,
+            ),
+            uptime=UptimeInfo(
+                uptime_seconds=(
+                    resources.uptime.uptime_seconds
+                    + call_count
+                )
+            ),
+            captured_at=captured_at,
+        )
+
+    service.system_service.get_system_resources = (
+        advancing_resources
+    )
+
+    async def scenario() -> None:
+        task = asyncio.create_task(
+            service.run_forever(
+                node_id=node.node_id,
+                instance_id=instance.instance_id,
+                interval_seconds=0.01,
+            )
+        )
+
+        await asyncio.sleep(0.04)
+
+        task.cancel()
+
+        with pytest.raises(
+            asyncio.CancelledError
+        ):
+            await task
+
+    asyncio.run(
+        scenario()
+    )
+
+    current = metric_service.current(
+        node.node_id,
+        instance.instance_id,
+    )
+
+    assert len(current.samples) == 6
+    assert call_count >= 2
+
+
+def test_run_forever_propagates_cancellation() -> None:
+    import asyncio
+
+    _, node, instance, _, service = make_context()
+
+    async def scenario() -> None:
+        task = asyncio.create_task(
+            service.run_forever(
+                node_id=node.node_id,
+                instance_id=instance.instance_id,
+                interval_seconds=60.0,
+            )
+        )
+
+        await asyncio.sleep(0)
+
+        task.cancel()
+
+        with pytest.raises(
+            asyncio.CancelledError
+        ):
+            await task
+
+    asyncio.run(
+        scenario()
+    )
