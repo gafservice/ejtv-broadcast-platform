@@ -21,6 +21,20 @@ from datetime import datetime
 from app.noc.domain.node_id import NodeId
 from app.noc.domain.node_instance import NodeInstanceId
 from app.noc.domain.node_metric import MetricSample
+from app.domain.system import (
+    NetworkRateCalculator,
+    SystemResources,
+)
+from app.noc.infrastructure.network_rate_metrics_provider import (
+    NetworkRateMetricsProvider,
+)
+from app.domain.system import (
+    NetworkRateCalculator,
+    SystemResources,
+)
+from app.noc.infrastructure.network_rate_metrics_provider import (
+    NetworkRateMetricsProvider,
+)
 from app.noc.infrastructure.system_metrics_provider import (
     SystemMetricsProvider,
 )
@@ -81,6 +95,13 @@ class TelemetryRefreshService:
             provider
             or SystemMetricsProvider()
         )
+        self._network_rate_calculator = (
+            NetworkRateCalculator()
+        )
+        self._network_rate_provider = (
+            NetworkRateMetricsProvider()
+        )
+        self._previous_resources: SystemResources | None = None
 
     @property
     def system_service(self) -> SystemService:
@@ -120,8 +141,26 @@ class TelemetryRefreshService:
             .get_system_resources()
         )
 
-        samples = self._provider.collect(
+        base_samples = self._provider.collect(
             resources
+        )
+
+        network_rate = (
+            self._network_rate_calculator.compare(
+                self._previous_resources,
+                resources,
+            )
+        )
+
+        rate_samples = (
+            self._network_rate_provider.collect(
+                network_rate
+            )
+        )
+
+        samples = (
+            base_samples
+            + rate_samples
         )
 
         receipts = tuple(
@@ -132,6 +171,8 @@ class TelemetryRefreshService:
             )
             for sample in samples
         )
+
+        self._previous_resources = resources
 
         return TelemetryRefreshResult(
             captured_at=resources.captured_at,

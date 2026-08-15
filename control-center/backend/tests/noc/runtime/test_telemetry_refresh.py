@@ -426,12 +426,32 @@ def test_second_refresh_replaces_existing_metrics() -> None:
         instance_id=instance.instance_id,
     )
 
-    assert second.metric_count == 6
+    assert second.metric_count == 8
+
+    dispositions = {
+        receipt.sample.metric: receipt.disposition
+        for receipt in second.receipts
+    }
+
+    assert dispositions[
+        "system.network.rx_bps"
+    ] is MetricDisposition.ADDED
+
+    assert dispositions[
+        "system.network.tx_bps"
+    ] is MetricDisposition.ADDED
 
     assert all(
-        receipt.disposition
+        dispositions[metric]
         is MetricDisposition.REPLACED
-        for receipt in second.receipts
+        for metric in {
+            "system.cpu.usage_percent",
+            "system.memory.usage_percent",
+            "system.disk.usage_percent",
+            "system.network.rx_bytes",
+            "system.network.tx_bytes",
+            "system.uptime_seconds",
+        }
     )
 
     current = metric_service.current(
@@ -449,7 +469,24 @@ def test_second_refresh_replaces_existing_metrics() -> None:
         CAPTURED_AT + timedelta(seconds=5)
     )
 
-    assert len(current.samples) == 6
+    assert len(current.samples) == 8
+
+    rx_bps = current.get(
+        "system.network.rx_bps"
+    )
+
+    tx_bps = current.get(
+        "system.network.tx_bps"
+    )
+
+    assert rx_bps is not None
+    assert tx_bps is not None
+
+    assert rx_bps.value == 3200.0
+    assert tx_bps.value == 1600.0
+
+    assert rx_bps.unit == "bps"
+    assert tx_bps.unit == "bps"
 
 
 
@@ -576,7 +613,16 @@ def test_run_forever_refreshes_until_cancelled() -> None:
         instance.instance_id,
     )
 
-    assert len(current.samples) == 6
+    assert len(current.samples) == 8
+
+    assert current.has_metric(
+        "system.network.rx_bps"
+    )
+
+    assert current.has_metric(
+        "system.network.tx_bps"
+    )
+
     assert call_count >= 2
 
 
