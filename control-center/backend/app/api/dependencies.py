@@ -23,6 +23,14 @@ from app.infrastructure.security.bcrypt_password_hasher import (
     BcryptPasswordHasher,
 )
 from app.infrastructure.security.jwt_token_provider import JWTTokenProvider
+from app.noc.infrastructure.memory_repository import (
+    InMemoryNodeRepository,
+)
+from app.noc.registry.registry import NodeRegistry
+from app.noc.services.alarm_service import AlarmService
+from app.noc.services.heartbeat_service import HeartbeatService
+from app.noc.services.metric_service import MetricService
+from app.noc.services.snapshot_service import SnapshotService
 from app.services.authentication_service import AuthenticationService
 from app.services.identity_administration_service import (
     IdentityAdministrationService,
@@ -137,4 +145,56 @@ def get_authentication_service() -> AuthenticationService:
         password_hasher=password_hasher,
         token_provider=get_token_provider(),
         audit_repository=get_audit_repository(),
+    )
+
+
+@lru_cache
+def get_noc_repository() -> InMemoryNodeRepository:
+    """Construye el repositorio compartido del runtime NOC."""
+
+    return InMemoryNodeRepository()
+
+
+@lru_cache
+def get_node_registry() -> NodeRegistry:
+    """Construye el registro lógico compartido de Nodes."""
+
+    return NodeRegistry(
+        get_noc_repository()
+    )
+
+
+@lru_cache
+def get_heartbeat_service() -> HeartbeatService:
+    """Construye el servicio compartido de Heartbeats."""
+
+    return HeartbeatService(
+        get_node_registry()
+    )
+
+
+@lru_cache
+def get_metric_service() -> MetricService:
+    """Construye el servicio compartido de métricas."""
+
+    return MetricService(
+        get_node_registry()
+    )
+
+
+@lru_cache
+def get_alarm_service() -> AlarmService:
+    """Construye el servicio compartido de alarmas."""
+
+    return AlarmService(
+        get_node_registry()
+    )
+
+
+@lru_cache
+def get_snapshot_service() -> SnapshotService:
+    """Construye el servicio compartido de Snapshots."""
+
+    return SnapshotService(
+        get_node_registry()
     )
