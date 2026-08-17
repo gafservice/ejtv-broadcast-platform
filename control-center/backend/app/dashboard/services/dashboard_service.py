@@ -198,6 +198,18 @@ class DashboardService:
                 errors_out=network_rate.errors_out,
                 dropped_in=network_rate.dropped_in,
                 dropped_out=network_rate.dropped_out,
+                errors_in_per_second=(
+                    network_rate.errors_in_per_second
+                ),
+                errors_out_per_second=(
+                    network_rate.errors_out_per_second
+                ),
+                dropped_in_per_second=(
+                    network_rate.dropped_in_per_second
+                ),
+                dropped_out_per_second=(
+                    network_rate.dropped_out_per_second
+                ),
             ),
             uptime=UptimePanelData(
                 seconds=resources.uptime.uptime_seconds,

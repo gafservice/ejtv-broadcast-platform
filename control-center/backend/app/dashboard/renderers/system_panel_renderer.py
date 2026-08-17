@@ -80,6 +80,18 @@ class SystemPanelRenderer:
             f"{data.network.dropped_out}\n"
         )
 
+        content.append("Tasa errores RX/TX: ")
+        content.append(
+            f"{self._format_rate(data.network.errors_in_per_second)} / "
+            f"{self._format_rate(data.network.errors_out_per_second)}\n"
+        )
+
+        content.append("Tasa drops RX/TX: ")
+        content.append(
+            f"{self._format_rate(data.network.dropped_in_per_second)} / "
+            f"{self._format_rate(data.network.dropped_out_per_second)}\n"
+        )
+
         content.append("Uptime: ")
         content.append(
             f"{self._format_uptime(data.uptime.seconds)}\n"
@@ -172,6 +184,15 @@ class SystemPanelRenderer:
             return f"{value / 1_000:.2f} Kbps"
 
         return f"{value:.0f} bps"
+
+    @staticmethod
+    def _format_rate(value: float | None) -> str:
+        """Convierte una tasa de eventos a una representación legible."""
+
+        if value is None:
+            return "N/D"
+
+        return f"{value:.2f}/s"
 
     @staticmethod
     def _format_uptime(seconds: float) -> str:

@@ -124,6 +124,11 @@ def test_build_system_panel_calculates_network_rates() -> None:
     assert panel.network.dropped_in == 7
     assert panel.network.dropped_out == 8
 
+    assert panel.network.errors_in_per_second == 4.0
+    assert panel.network.errors_out_per_second == 4.0
+    assert panel.network.dropped_in_per_second == 4.0
+    assert panel.network.dropped_out_per_second == 4.0
+
 def test_dashboard_service_can_be_created() -> None:
     service = DashboardService()
 

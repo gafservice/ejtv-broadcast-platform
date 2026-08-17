@@ -45,19 +45,19 @@ class DashboardRenderer:
 
         if data.active_connections is not None:
             layout.split_column(
-                Layout(name="summary", size=18),
+                Layout(name="summary", size=22),
                 Layout(name="active_connections", size=12),
                 Layout(name="paths"),
             )
         else:
             layout.split_column(
-                Layout(name="summary", size=18),
+                Layout(name="summary", size=22),
                 Layout(name="paths"),
             )
 
         layout["summary"].split_column(
             Layout(name="summary_top", size=8),
-            Layout(name="summary_bottom", size=10),
+            Layout(name="summary_bottom", size=14),
         )
 
         layout["summary_top"].split_row(

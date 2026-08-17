@@ -18,6 +18,11 @@ class NetworkPanelData:
     dropped_in: int
     dropped_out: int
 
+    errors_in_per_second: float | None = None
+    errors_out_per_second: float | None = None
+    dropped_in_per_second: float | None = None
+    dropped_out_per_second: float | None = None
+
     def __post_init__(self) -> None:
         """Valida las métricas de red."""
 
@@ -32,7 +37,14 @@ class NetworkPanelData:
             self.interface.strip(),
         )
 
-        for field_name in ("rx_bps", "tx_bps"):
+        for field_name in (
+            "rx_bps",
+            "tx_bps",
+            "errors_in_per_second",
+            "errors_out_per_second",
+            "dropped_in_per_second",
+            "dropped_out_per_second",
+        ):
             value = getattr(self, field_name)
 
             if value is not None and value < 0:
