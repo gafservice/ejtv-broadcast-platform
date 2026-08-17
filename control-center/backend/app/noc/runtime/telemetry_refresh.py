@@ -31,6 +31,12 @@ from app.noc.infrastructure.network_rate_metrics_provider import (
 from app.noc.infrastructure.system_metrics_provider import (
     SystemMetricsProvider,
 )
+from app.noc.services.health_evaluator import (
+    HealthEvaluator,
+)
+from app.noc.services.health_service import (
+    HealthService,
+)
 from app.noc.services.metric_service import (
     MetricReceipt,
     MetricService,
@@ -59,7 +65,9 @@ class TelemetryRefreshService:
         *,
         system_service: SystemService,
         metric_service: MetricService,
+        health_service: HealthService,
         provider: SystemMetricsProvider | None = None,
+        health_evaluator: HealthEvaluator | None = None,
     ) -> None:
         if not isinstance(system_service, SystemService):
             raise TypeError(
@@ -69,6 +77,25 @@ class TelemetryRefreshService:
         if not isinstance(metric_service, MetricService):
             raise TypeError(
                 "metric_service must be a MetricService"
+            )
+
+        if not isinstance(
+            health_service,
+            HealthService,
+        ):
+            raise TypeError(
+                "health_service must be a HealthService"
+            )
+
+        if (
+            health_evaluator is not None
+            and not isinstance(
+                health_evaluator,
+                HealthEvaluator,
+            )
+        ):
+            raise TypeError(
+                "health_evaluator must be a HealthEvaluator or None"
             )
 
         if (
@@ -84,6 +111,11 @@ class TelemetryRefreshService:
 
         self._system_service = system_service
         self._metric_service = metric_service
+        self._health_service = health_service
+        self._health_evaluator = (
+            health_evaluator
+            or HealthEvaluator()
+        )
         self._provider = (
             provider
             or SystemMetricsProvider()
@@ -107,6 +139,14 @@ class TelemetryRefreshService:
     @property
     def provider(self) -> SystemMetricsProvider:
         return self._provider
+
+    @property
+    def health_service(self) -> HealthService:
+        return self._health_service
+
+    @property
+    def health_evaluator(self) -> HealthEvaluator:
+        return self._health_evaluator
 
     def refresh_once(
         self,
@@ -163,6 +203,25 @@ class TelemetryRefreshService:
                 sample,
             )
             for sample in samples
+        )
+
+        current_metrics = (
+            self._metric_service.current(
+                node_id,
+                instance_id,
+            )
+        )
+
+        health = (
+            self._health_evaluator.evaluate(
+                current_metrics
+            )
+        )
+
+        self._health_service.publish(
+            node_id,
+            instance_id,
+            health,
         )
 
         self._previous_resources = resources

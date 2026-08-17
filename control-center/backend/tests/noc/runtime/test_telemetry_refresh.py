@@ -25,6 +25,9 @@ from app.noc.runtime.telemetry_refresh import (
     TelemetryRefreshResult,
     TelemetryRefreshService,
 )
+from app.noc.services.health_service import (
+    HealthService,
+)
 from app.noc.services.metric_service import (
     MetricDisposition,
     MetricService,
@@ -151,6 +154,10 @@ def make_context():
         registry
     )
 
+    health_service = HealthService(
+        registry
+    )
+
     system_service = FixedSystemService(
         FakeSystemAdapter()
     )
@@ -158,6 +165,7 @@ def make_context():
     refresh_service = TelemetryRefreshService(
         system_service=system_service,
         metric_service=metric_service,
+        health_service=health_service,
     )
 
     return (
@@ -651,4 +659,77 @@ def test_run_forever_propagates_cancellation() -> None:
 
     asyncio.run(
         scenario()
+    )
+
+
+def test_refresh_publishes_node_health() -> None:
+    from app.noc.domain.node_health import (
+        NodeHealth,
+        NodeHealthState,
+    )
+
+    _, node, instance, _, service = make_context()
+
+    service.refresh_once(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    assert isinstance(
+        instance.health,
+        NodeHealth,
+    )
+
+    assert instance.health.state is (
+        NodeHealthState.HEALTHY
+    )
+
+
+def test_refresh_health_uses_current_metrics() -> None:
+    from app.noc.domain.node_health import (
+        NodeHealthState,
+    )
+
+    _, node, instance, _, service = make_context()
+
+    original_get = (
+        service.system_service.get_system_resources
+    )
+
+    def critical_resources() -> SystemResources:
+        resources = original_get()
+
+        return SystemResources(
+            cpu=CPUInfo(
+                usage_percent=96.0,
+                logical_cores=resources.cpu.logical_cores,
+                physical_cores=resources.cpu.physical_cores,
+                frequency_mhz=resources.cpu.frequency_mhz,
+                per_core_usage_percent=(
+                    96.0,
+                    96.0,
+                    96.0,
+                    96.0,
+                ),
+            ),
+            memory=resources.memory,
+            disk=resources.disk,
+            network=resources.network,
+            uptime=resources.uptime,
+            captured_at=resources.captured_at,
+        )
+
+    service.system_service.get_system_resources = (
+        critical_resources
+    )
+
+    service.refresh_once(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    assert instance.health is not None
+
+    assert instance.health.state is (
+        NodeHealthState.CRITICAL
     )
