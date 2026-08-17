@@ -7,7 +7,9 @@ from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI, Request
 
 from app.api.dependencies import (
+    get_capacity_service,
     get_node_registry,
+    get_system_service,
     get_telemetry_refresh_service,
 )
 from app.api.router import api_router
@@ -22,6 +24,7 @@ from app.core.version import APP_VERSION
 from app.noc.bootstrap import (
     DEFAULT_INSTANCE_ID,
     bootstrap_noc_runtime,
+    initialize_noc_runtime_capacity,
     initialize_noc_runtime_info,
 )
 from app.noc.domain.node_instance import NodeInstanceId
@@ -42,6 +45,12 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
     initialize_noc_runtime_info(
         registry
+    )
+
+    initialize_noc_runtime_capacity(
+        registry=registry,
+        system_service=get_system_service(),
+        capacity_service=get_capacity_service(),
     )
 
     telemetry_task = asyncio.create_task(

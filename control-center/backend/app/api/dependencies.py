@@ -29,6 +29,7 @@ from app.noc.infrastructure.memory_repository import (
 from app.noc.registry.registry import NodeRegistry
 from app.noc.services.alarm_service import AlarmService
 from app.noc.services.heartbeat_service import HeartbeatService
+from app.noc.services.capacity_service import CapacityService
 from app.noc.services.metric_service import MetricService
 from app.noc.services.snapshot_service import SnapshotService
 from app.noc.runtime.telemetry_refresh import (
@@ -172,6 +173,15 @@ def get_heartbeat_service() -> HeartbeatService:
     """Construye el servicio compartido de Heartbeats."""
 
     return HeartbeatService(
+        get_node_registry()
+    )
+
+
+@lru_cache
+def get_capacity_service() -> CapacityService:
+    """Construye el servicio compartido de capacidad."""
+
+    return CapacityService(
         get_node_registry()
     )
 

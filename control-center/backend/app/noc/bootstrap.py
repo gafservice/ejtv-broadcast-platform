@@ -17,12 +17,16 @@ from enum import StrEnum
 from app.noc.domain.node import Node
 from app.noc.domain.node_id import NodeId
 from app.noc.domain.node_type import NodeType
+from app.noc.infrastructure.system_capacity_provider import (
+    SystemCapacityProvider,
+)
 from app.noc.infrastructure.system_info_provider import (
     LinuxSystemInfoProvider,
 )
 from app.noc.infrastructure.system_metrics_provider import (
     SystemMetricsProvider,
 )
+from app.noc.services.capacity_service import CapacityService
 from app.noc.services.metric_service import MetricService
 from app.services.system_service import SystemService
 from app.noc.registry.registry import NodeRegistry
@@ -311,3 +315,81 @@ def initialize_noc_runtime_metrics(
             instance.instance_id,
             sample,
         )
+
+
+def initialize_noc_runtime_capacity(
+    registry: NodeRegistry,
+    system_service: SystemService,
+    capacity_service: CapacityService,
+    provider: SystemCapacityProvider | None = None,
+) -> None:
+    """Collect and publish host capacity for the canonical instance."""
+
+    if not isinstance(registry, NodeRegistry):
+        raise TypeError(
+            "registry must be a NodeRegistry"
+        )
+
+    if not isinstance(system_service, SystemService):
+        raise TypeError(
+            "system_service must be a SystemService"
+        )
+
+    if not isinstance(capacity_service, CapacityService):
+        raise TypeError(
+            "capacity_service must be a CapacityService"
+        )
+
+    if (
+        provider is not None
+        and not isinstance(
+            provider,
+            SystemCapacityProvider,
+        )
+    ):
+        raise TypeError(
+            "provider must be a SystemCapacityProvider or None"
+        )
+
+    node = _find_existing_node(
+        registry
+    )
+
+    if node is None:
+        raise RuntimeError(
+            "Canonical NOC Node must be bootstrapped "
+            "before runtime capacity is initialized"
+        )
+
+    instance = next(
+        (
+            item
+            for item in node.instances
+            if str(item.instance_id)
+            == DEFAULT_INSTANCE_ID
+        ),
+        None,
+    )
+
+    if instance is None:
+        raise RuntimeError(
+            "Canonical NOC Node does not contain "
+            f"instance {DEFAULT_INSTANCE_ID!r}"
+        )
+
+    resources = (
+        system_service.get_system_resources()
+    )
+
+    capacity = (
+        provider
+        or SystemCapacityProvider()
+    ).collect(
+        resources
+    )
+
+    capacity_service.publish(
+        node.node_id,
+        instance.instance_id,
+        capacity,
+    )

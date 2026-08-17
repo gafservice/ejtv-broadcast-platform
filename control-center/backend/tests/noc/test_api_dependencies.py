@@ -2,6 +2,7 @@
 
 from app.api.dependencies import (
     get_alarm_service,
+    get_capacity_service,
     get_heartbeat_service,
     get_metric_service,
     get_noc_repository,
@@ -13,6 +14,7 @@ from app.noc.infrastructure.memory_repository import (
 )
 from app.noc.registry.registry import NodeRegistry
 from app.noc.services.alarm_service import AlarmService
+from app.noc.services.capacity_service import CapacityService
 from app.noc.services.heartbeat_service import HeartbeatService
 from app.noc.services.metric_service import MetricService
 from app.noc.services.snapshot_service import SnapshotService
@@ -25,6 +27,7 @@ def clear_noc_dependency_caches() -> None:
     get_alarm_service.cache_clear()
     get_metric_service.cache_clear()
     get_heartbeat_service.cache_clear()
+    get_capacity_service.cache_clear()
     get_node_registry.cache_clear()
     get_noc_repository.cache_clear()
 
@@ -231,4 +234,25 @@ def test_registry_state_is_visible_to_services() -> None:
             instance.instance_id,
         )
         == ()
+    )
+
+
+def test_capacity_service_is_cached() -> None:
+    first = get_capacity_service()
+    second = get_capacity_service()
+
+    assert first is second
+
+    assert isinstance(
+        first,
+        CapacityService,
+    )
+
+
+def test_capacity_service_uses_shared_registry() -> None:
+    registry = get_node_registry()
+
+    assert (
+        get_capacity_service().registry
+        is registry
     )

@@ -404,3 +404,220 @@ def test_runtime_metrics_are_reflected_in_snapshot() -> None:
 
     assert snapshot.metric is not None
     assert len(snapshot.metric.samples) == 13
+
+
+def test_runtime_capacity_requires_registry() -> None:
+    from app.adapters.linux.linux_system_adapter import (
+        LinuxSystemAdapter,
+    )
+    from app.noc.bootstrap import (
+        initialize_noc_runtime_capacity,
+    )
+    from app.noc.registry.registry import NodeRegistry
+    from app.noc.services.capacity_service import (
+        CapacityService,
+    )
+    from app.services.system_service import (
+        SystemService,
+    )
+
+    registry = make_registry()
+
+    with pytest.raises(TypeError):
+        initialize_noc_runtime_capacity(
+            registry=object(),  # type: ignore[arg-type]
+            system_service=SystemService(
+                LinuxSystemAdapter()
+            ),
+            capacity_service=CapacityService(
+                registry
+            ),
+        )
+
+
+def test_runtime_capacity_requires_bootstrapped_node() -> None:
+    from app.adapters.linux.linux_system_adapter import (
+        LinuxSystemAdapter,
+    )
+    from app.noc.bootstrap import (
+        initialize_noc_runtime_capacity,
+    )
+    from app.noc.services.capacity_service import (
+        CapacityService,
+    )
+    from app.services.system_service import (
+        SystemService,
+    )
+
+    registry = make_registry()
+
+    with pytest.raises(RuntimeError):
+        initialize_noc_runtime_capacity(
+            registry=registry,
+            system_service=SystemService(
+                LinuxSystemAdapter()
+            ),
+            capacity_service=CapacityService(
+                registry
+            ),
+        )
+
+
+def test_runtime_capacity_populates_instance() -> None:
+    from app.adapters.linux.linux_system_adapter import (
+        LinuxSystemAdapter,
+    )
+    from app.noc.bootstrap import (
+        initialize_noc_runtime_capacity,
+    )
+    from app.noc.domain.node_capacity import (
+        NodeCapacity,
+    )
+    from app.noc.services.capacity_service import (
+        CapacityService,
+    )
+    from app.services.system_service import (
+        SystemService,
+    )
+
+    registry = make_registry()
+
+    node = bootstrap_noc_runtime(
+        registry
+    ).node
+
+    instance = node.instances[0]
+
+    assert instance.capacity is None
+
+    initialize_noc_runtime_capacity(
+        registry=registry,
+        system_service=SystemService(
+            LinuxSystemAdapter()
+        ),
+        capacity_service=CapacityService(
+            registry
+        ),
+    )
+
+    assert isinstance(
+        instance.capacity,
+        NodeCapacity,
+    )
+
+    assert len(
+        instance.capacity.resources
+    ) == 2
+
+
+def test_runtime_capacity_contains_host_resources() -> None:
+    from app.adapters.linux.linux_system_adapter import (
+        LinuxSystemAdapter,
+    )
+    from app.noc.bootstrap import (
+        initialize_noc_runtime_capacity,
+    )
+    from app.noc.services.capacity_service import (
+        CapacityService,
+    )
+    from app.services.system_service import (
+        SystemService,
+    )
+
+    registry = make_registry()
+
+    node = bootstrap_noc_runtime(
+        registry
+    ).node
+
+    instance = node.instances[0]
+
+    initialize_noc_runtime_capacity(
+        registry=registry,
+        system_service=SystemService(
+            LinuxSystemAdapter()
+        ),
+        capacity_service=CapacityService(
+            registry
+        ),
+    )
+
+    capacity = instance.capacity
+
+    assert capacity is not None
+
+    resources = {
+        resource.resource: resource
+        for resource in capacity.resources
+    }
+
+    assert set(resources) == {
+        "System Memory",
+        "System Storage",
+    }
+
+    memory = resources[
+        "System Memory"
+    ]
+
+    storage = resources[
+        "System Storage"
+    ]
+
+    assert memory.maximum > 0
+    assert memory.allocated >= 0
+    assert memory.available >= 0
+
+    assert storage.maximum > 0
+    assert storage.allocated >= 0
+    assert storage.available >= 0
+
+
+def test_runtime_capacity_is_reflected_in_snapshot() -> None:
+    from app.adapters.linux.linux_system_adapter import (
+        LinuxSystemAdapter,
+    )
+    from app.noc.bootstrap import (
+        initialize_noc_runtime_capacity,
+    )
+    from app.noc.services.capacity_service import (
+        CapacityService,
+    )
+    from app.noc.services.snapshot_service import (
+        SnapshotService,
+    )
+    from app.services.system_service import (
+        SystemService,
+    )
+
+    registry = make_registry()
+
+    node = bootstrap_noc_runtime(
+        registry
+    ).node
+
+    instance = node.instances[0]
+
+    initialize_noc_runtime_capacity(
+        registry=registry,
+        system_service=SystemService(
+            LinuxSystemAdapter()
+        ),
+        capacity_service=CapacityService(
+            registry
+        ),
+    )
+
+    snapshot = SnapshotService(
+        registry
+    ).build(
+        node.node_id,
+        instance.instance_id,
+    )
+
+    assert snapshot.capacity is not None
+    assert snapshot.capacity is instance.capacity
+
+    assert len(
+        snapshot.capacity.resources
+    ) == 2
