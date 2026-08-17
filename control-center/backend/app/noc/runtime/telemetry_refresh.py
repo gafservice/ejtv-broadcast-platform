@@ -28,13 +28,6 @@ from app.domain.system import (
 from app.noc.infrastructure.network_rate_metrics_provider import (
     NetworkRateMetricsProvider,
 )
-from app.domain.system import (
-    NetworkRateCalculator,
-    SystemResources,
-)
-from app.noc.infrastructure.network_rate_metrics_provider import (
-    NetworkRateMetricsProvider,
-)
 from app.noc.infrastructure.system_metrics_provider import (
     SystemMetricsProvider,
 )
