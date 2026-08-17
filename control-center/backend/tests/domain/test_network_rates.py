@@ -218,3 +218,120 @@ def test_uses_current_error_and_drop_counters() -> None:
     assert result.errors_out == 3
     assert result.dropped_in == 4
     assert result.dropped_out == 5
+
+
+def test_calculates_network_quality_rates() -> None:
+    captured_at = datetime(
+        2026,
+        8,
+        17,
+        23,
+        0,
+        tzinfo=UTC,
+    )
+
+    previous = build_resources(
+        captured_at=captured_at,
+        errors_in=10,
+        errors_out=20,
+        dropped_in=100,
+        dropped_out=50,
+    )
+
+    current = build_resources(
+        captured_at=captured_at + timedelta(seconds=5),
+        bytes_received=2_100_000,
+        bytes_sent=1_100_000,
+        errors_in=15,
+        errors_out=30,
+        dropped_in=130,
+        dropped_out=60,
+    )
+
+    result = NetworkRateCalculator().compare(
+        previous,
+        current,
+    )
+
+    assert result.errors_in_per_second == 1.0
+    assert result.errors_out_per_second == 2.0
+    assert result.dropped_in_per_second == 6.0
+    assert result.dropped_out_per_second == 2.0
+
+
+def test_unchanged_quality_counters_produce_zero_rates() -> None:
+    captured_at = datetime(
+        2026,
+        8,
+        17,
+        23,
+        0,
+        tzinfo=UTC,
+    )
+
+    previous = build_resources(
+        captured_at=captured_at,
+        errors_in=10,
+        errors_out=20,
+        dropped_in=100,
+        dropped_out=50,
+    )
+
+    current = build_resources(
+        captured_at=captured_at + timedelta(seconds=5),
+        bytes_received=2_100_000,
+        bytes_sent=1_100_000,
+        errors_in=10,
+        errors_out=20,
+        dropped_in=100,
+        dropped_out=50,
+    )
+
+    result = NetworkRateCalculator().compare(
+        previous,
+        current,
+    )
+
+    assert result.errors_in_per_second == 0.0
+    assert result.errors_out_per_second == 0.0
+    assert result.dropped_in_per_second == 0.0
+    assert result.dropped_out_per_second == 0.0
+
+
+def test_quality_counter_reset_makes_quality_rates_unavailable() -> None:
+    captured_at = datetime(
+        2026,
+        8,
+        17,
+        23,
+        0,
+        tzinfo=UTC,
+    )
+
+    previous = build_resources(
+        captured_at=captured_at,
+        errors_in=10,
+        errors_out=20,
+        dropped_in=100,
+        dropped_out=50,
+    )
+
+    current = build_resources(
+        captured_at=captured_at + timedelta(seconds=5),
+        bytes_received=2_100_000,
+        bytes_sent=1_100_000,
+        errors_in=1,
+        errors_out=2,
+        dropped_in=10,
+        dropped_out=5,
+    )
+
+    result = NetworkRateCalculator().compare(
+        previous,
+        current,
+    )
+
+    assert result.errors_in_per_second is None
+    assert result.errors_out_per_second is None
+    assert result.dropped_in_per_second is None
+    assert result.dropped_out_per_second is None

@@ -38,7 +38,7 @@ class NetworkRateMetricsProvider:
         ):
             return ()
 
-        return (
+        samples = [
             MetricSample(
                 metric="system.network.rx_bps",
                 value=rate.rx_bps,
@@ -53,4 +53,39 @@ class NetworkRateMetricsProvider:
                 timestamp=rate.captured_at,
                 quality=MetricQuality.GOOD,
             ),
+        ]
+
+        quality_rates = (
+            (
+                "system.network.errors_in_per_second",
+                rate.errors_in_per_second,
+            ),
+            (
+                "system.network.errors_out_per_second",
+                rate.errors_out_per_second,
+            ),
+            (
+                "system.network.dropped_in_per_second",
+                rate.dropped_in_per_second,
+            ),
+            (
+                "system.network.dropped_out_per_second",
+                rate.dropped_out_per_second,
+            ),
         )
+
+        for metric_name, value in quality_rates:
+            if value is None:
+                continue
+
+            samples.append(
+                MetricSample(
+                    metric=metric_name,
+                    value=value,
+                    unit="count/s",
+                    timestamp=rate.captured_at,
+                    quality=MetricQuality.GOOD,
+                )
+            )
+
+        return tuple(samples)

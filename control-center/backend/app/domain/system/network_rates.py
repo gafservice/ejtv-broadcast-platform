@@ -24,6 +24,11 @@ class NetworkRate:
 
     captured_at: datetime
 
+    errors_in_per_second: float | None = None
+    errors_out_per_second: float | None = None
+    dropped_in_per_second: float | None = None
+    dropped_out_per_second: float | None = None
+
     def __post_init__(self) -> None:
         """Valida los valores derivados de la medición."""
 
@@ -38,7 +43,14 @@ class NetworkRate:
             self.interface.strip(),
         )
 
-        for field_name in ("rx_bps", "tx_bps"):
+        for field_name in (
+            "rx_bps",
+            "tx_bps",
+            "errors_in_per_second",
+            "errors_out_per_second",
+            "dropped_in_per_second",
+            "dropped_out_per_second",
+        ):
             value = getattr(self, field_name)
 
             if value is not None and value < 0:
@@ -97,6 +109,11 @@ class NetworkRateCalculator:
         tx_bps: float | None = None
         interval_seconds: float | None = None
 
+        errors_in_per_second: float | None = None
+        errors_out_per_second: float | None = None
+        dropped_in_per_second: float | None = None
+        dropped_out_per_second: float | None = None
+
         if previous is not None:
             interval = (
                 current.captured_at - previous.captured_at
@@ -135,6 +152,48 @@ class NetworkRateCalculator:
                     / interval_seconds
                 )
 
+                quality_deltas = (
+                    current.network.errors_in
+                    - previous.network.errors_in,
+                    current.network.errors_out
+                    - previous.network.errors_out,
+                    current.network.dropped_in
+                    - previous.network.dropped_in,
+                    current.network.dropped_out
+                    - previous.network.dropped_out,
+                )
+
+                if all(
+                    delta >= 0
+                    for delta in quality_deltas
+                ):
+                    (
+                        errors_in_delta,
+                        errors_out_delta,
+                        dropped_in_delta,
+                        dropped_out_delta,
+                    ) = quality_deltas
+
+                    errors_in_per_second = (
+                        errors_in_delta
+                        / interval_seconds
+                    )
+
+                    errors_out_per_second = (
+                        errors_out_delta
+                        / interval_seconds
+                    )
+
+                    dropped_in_per_second = (
+                        dropped_in_delta
+                        / interval_seconds
+                    )
+
+                    dropped_out_per_second = (
+                        dropped_out_delta
+                        / interval_seconds
+                    )
+
         return NetworkRate(
             interface=current.network.interface,
             rx_bps=rx_bps,
@@ -145,4 +204,8 @@ class NetworkRateCalculator:
             dropped_in=current.network.dropped_in,
             dropped_out=current.network.dropped_out,
             captured_at=current.captured_at,
+            errors_in_per_second=errors_in_per_second,
+            errors_out_per_second=errors_out_per_second,
+            dropped_in_per_second=dropped_in_per_second,
+            dropped_out_per_second=dropped_out_per_second,
         )

@@ -434,7 +434,7 @@ def test_second_refresh_replaces_existing_metrics() -> None:
         instance_id=instance.instance_id,
     )
 
-    assert second.metric_count == 15
+    assert second.metric_count == 19
 
     dispositions = {
         receipt.sample.metric: receipt.disposition
@@ -477,7 +477,7 @@ def test_second_refresh_replaces_existing_metrics() -> None:
         CAPTURED_AT + timedelta(seconds=5)
     )
 
-    assert len(current.samples) == 15
+    assert len(current.samples) == 19
 
     rx_bps = current.get(
         "system.network.rx_bps"
@@ -621,7 +621,7 @@ def test_run_forever_refreshes_until_cancelled() -> None:
         instance.instance_id,
     )
 
-    assert len(current.samples) == 15
+    assert len(current.samples) == 19
 
     assert current.has_metric(
         "system.network.rx_bps"
@@ -733,3 +733,99 @@ def test_refresh_health_uses_current_metrics() -> None:
     assert instance.health.state is (
         NodeHealthState.CRITICAL
     )
+
+
+def test_second_refresh_publishes_network_quality_rates() -> None:
+    from datetime import timedelta
+
+    _, node, instance, metric_service, service = make_context()
+
+    original_get = (
+        service.system_service.get_system_resources
+    )
+
+    first_resources = original_get()
+
+    call_count = 0
+
+    def quality_resources() -> SystemResources:
+        nonlocal call_count
+
+        call_count += 1
+
+        if call_count == 1:
+            return first_resources
+
+        return SystemResources(
+            cpu=first_resources.cpu,
+            memory=first_resources.memory,
+            disk=first_resources.disk,
+            network=NetworkInfo(
+                interface=first_resources.network.interface,
+                bytes_sent=(
+                    first_resources.network.bytes_sent
+                    + 1_000
+                ),
+                bytes_received=(
+                    first_resources.network.bytes_received
+                    + 2_000
+                ),
+                packets_sent=(
+                    first_resources.network.packets_sent
+                    + 10
+                ),
+                packets_received=(
+                    first_resources.network.packets_received
+                    + 20
+                ),
+                errors_in=5,
+                errors_out=10,
+                dropped_in=30,
+                dropped_out=20,
+            ),
+            uptime=UptimeInfo(
+                uptime_seconds=(
+                    first_resources.uptime.uptime_seconds
+                    + 5
+                )
+            ),
+            captured_at=(
+                first_resources.captured_at
+                + timedelta(seconds=5)
+            ),
+        )
+
+    service.system_service.get_system_resources = (
+        quality_resources
+    )
+
+    service.refresh_once(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    second = service.refresh_once(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    assert second.metric_count == 19
+
+    current = metric_service.current(
+        node.node_id,
+        instance.instance_id,
+    )
+
+    expected = {
+        "system.network.errors_in_per_second": 1.0,
+        "system.network.errors_out_per_second": 2.0,
+        "system.network.dropped_in_per_second": 6.0,
+        "system.network.dropped_out_per_second": 4.0,
+    }
+
+    for name, value in expected.items():
+        sample = current.get(name)
+
+        assert sample is not None
+        assert sample.value == value
+        assert sample.unit == "count/s"
