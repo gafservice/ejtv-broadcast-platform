@@ -103,14 +103,14 @@ def test_provider_requires_system_resources() -> None:
         )
 
 
-def test_provider_generates_six_metrics() -> None:
+def test_provider_generates_thirteen_metrics() -> None:
     provider = SystemMetricsProvider()
 
     samples = provider.collect(
         make_resources()
     )
 
-    assert len(samples) == 6
+    assert len(samples) == 13
 
     assert all(
         isinstance(sample, MetricSample)
@@ -249,9 +249,109 @@ def test_provider_uses_canonical_metric_names() -> None:
         for sample in samples
     } == {
         "system.cpu.usage_percent",
+        "system.cpu.frequency_mhz",
         "system.memory.usage_percent",
+        "system.memory.used_bytes",
         "system.disk.usage_percent",
+        "system.disk.used_bytes",
         "system.network.rx_bytes",
         "system.network.tx_bytes",
+        "system.network.errors_in",
+        "system.network.errors_out",
+        "system.network.dropped_in",
+        "system.network.dropped_out",
         "system.uptime_seconds",
     }
+
+
+def test_provider_maps_cpu_frequency() -> None:
+    samples = samples_by_name(
+        SystemMetricsProvider().collect(
+            make_resources()
+        )
+    )
+
+    sample = samples[
+        "system.cpu.frequency_mhz"
+    ]
+
+    assert sample.value == 2800.0
+    assert sample.unit == "MHz"
+
+
+def test_provider_maps_memory_used_bytes() -> None:
+    samples = samples_by_name(
+        SystemMetricsProvider().collect(
+            make_resources()
+        )
+    )
+
+    sample = samples[
+        "system.memory.used_bytes"
+    ]
+
+    assert sample.value == 3_000_000_000
+    assert sample.unit == "bytes"
+
+
+def test_provider_maps_disk_used_bytes() -> None:
+    samples = samples_by_name(
+        SystemMetricsProvider().collect(
+            make_resources()
+        )
+    )
+
+    sample = samples[
+        "system.disk.used_bytes"
+    ]
+
+    assert sample.value == 125_000_000_000
+    assert sample.unit == "bytes"
+
+
+def test_provider_maps_network_error_counters() -> None:
+    samples = samples_by_name(
+        SystemMetricsProvider().collect(
+            make_resources()
+        )
+    )
+
+    assert samples[
+        "system.network.errors_in"
+    ].value == 0
+
+    assert samples[
+        "system.network.errors_out"
+    ].value == 0
+
+    assert samples[
+        "system.network.errors_in"
+    ].unit == "count"
+
+    assert samples[
+        "system.network.errors_out"
+    ].unit == "count"
+
+
+def test_provider_maps_network_drop_counters() -> None:
+    samples = samples_by_name(
+        SystemMetricsProvider().collect(
+            make_resources()
+        )
+    )
+
+    assert samples[
+        "system.network.dropped_in"
+    ].value == 0
+
+    assert samples[
+        "system.network.dropped_out"
+    ].value == 0
+
+    assert samples[
+        "system.network.dropped_in"
+    ].unit == "count"
+
+    assert samples[
+        "system.network.dropped_out"
+    ].unit == "count"

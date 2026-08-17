@@ -34,7 +34,7 @@ class SystemMetricsProvider:
 
         timestamp = resources.captured_at
 
-        return (
+        samples = [
             MetricSample(
                 metric="system.cpu.usage_percent",
                 value=resources.cpu.usage_percent,
@@ -50,9 +50,23 @@ class SystemMetricsProvider:
                 quality=MetricQuality.GOOD,
             ),
             MetricSample(
+                metric="system.memory.used_bytes",
+                value=resources.memory.used_bytes,
+                unit="bytes",
+                timestamp=timestamp,
+                quality=MetricQuality.GOOD,
+            ),
+            MetricSample(
                 metric="system.disk.usage_percent",
                 value=resources.disk.usage_percent,
                 unit="%",
+                timestamp=timestamp,
+                quality=MetricQuality.GOOD,
+            ),
+            MetricSample(
+                metric="system.disk.used_bytes",
+                value=resources.disk.used_bytes,
+                unit="bytes",
                 timestamp=timestamp,
                 quality=MetricQuality.GOOD,
             ),
@@ -71,10 +85,52 @@ class SystemMetricsProvider:
                 quality=MetricQuality.GOOD,
             ),
             MetricSample(
+                metric="system.network.errors_in",
+                value=resources.network.errors_in,
+                unit="count",
+                timestamp=timestamp,
+                quality=MetricQuality.GOOD,
+            ),
+            MetricSample(
+                metric="system.network.errors_out",
+                value=resources.network.errors_out,
+                unit="count",
+                timestamp=timestamp,
+                quality=MetricQuality.GOOD,
+            ),
+            MetricSample(
+                metric="system.network.dropped_in",
+                value=resources.network.dropped_in,
+                unit="count",
+                timestamp=timestamp,
+                quality=MetricQuality.GOOD,
+            ),
+            MetricSample(
+                metric="system.network.dropped_out",
+                value=resources.network.dropped_out,
+                unit="count",
+                timestamp=timestamp,
+                quality=MetricQuality.GOOD,
+            ),
+            MetricSample(
                 metric="system.uptime_seconds",
                 value=resources.uptime.uptime_seconds,
                 unit="s",
                 timestamp=timestamp,
                 quality=MetricQuality.GOOD,
             ),
-        )
+        ]
+
+        if resources.cpu.frequency_mhz is not None:
+            samples.insert(
+                1,
+                MetricSample(
+                    metric="system.cpu.frequency_mhz",
+                    value=resources.cpu.frequency_mhz,
+                    unit="MHz",
+                    timestamp=timestamp,
+                    quality=MetricQuality.GOOD,
+                ),
+            )
+
+        return tuple(samples)

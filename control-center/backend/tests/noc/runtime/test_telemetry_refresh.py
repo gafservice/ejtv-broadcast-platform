@@ -227,7 +227,7 @@ def test_refresh_returns_result() -> None:
     assert result.captured_at == CAPTURED_AT
 
 
-def test_refresh_publishes_six_metrics() -> None:
+def test_refresh_publishes_base_metrics() -> None:
     _, node, instance, _, service = make_context()
 
     result = service.refresh_once(
@@ -235,9 +235,9 @@ def test_refresh_publishes_six_metrics() -> None:
         instance_id=instance.instance_id,
     )
 
-    assert result.metric_count == 6
-    assert len(result.samples) == 6
-    assert len(result.receipts) == 6
+    assert result.metric_count == 13
+    assert len(result.samples) == 13
+    assert len(result.receipts) == 13
 
 
 def test_first_refresh_dispositions() -> None:
@@ -282,7 +282,7 @@ def test_refresh_updates_metric_service_state() -> None:
         instance.instance_id,
     )
 
-    assert len(current.samples) == 6
+    assert len(current.samples) == 13
 
     assert current.has_metric(
         "system.cpu.usage_percent"
@@ -331,7 +331,7 @@ def test_refresh_is_reflected_in_snapshot() -> None:
     )
 
     assert snapshot.metric is not None
-    assert len(snapshot.metric.samples) == 6
+    assert len(snapshot.metric.samples) == 13
 
 
 def test_result_uses_single_capture_timestamp() -> None:
@@ -366,7 +366,7 @@ def test_second_refresh_replaces_existing_metrics() -> None:
         instance_id=instance.instance_id,
     )
 
-    assert first.metric_count == 6
+    assert first.metric_count == 13
 
     first_current = metric_service.current(
         node.node_id,
@@ -426,7 +426,7 @@ def test_second_refresh_replaces_existing_metrics() -> None:
         instance_id=instance.instance_id,
     )
 
-    assert second.metric_count == 8
+    assert second.metric_count == 15
 
     dispositions = {
         receipt.sample.metric: receipt.disposition
@@ -469,7 +469,7 @@ def test_second_refresh_replaces_existing_metrics() -> None:
         CAPTURED_AT + timedelta(seconds=5)
     )
 
-    assert len(current.samples) == 8
+    assert len(current.samples) == 15
 
     rx_bps = current.get(
         "system.network.rx_bps"
@@ -613,7 +613,7 @@ def test_run_forever_refreshes_until_cancelled() -> None:
         instance.instance_id,
     )
 
-    assert len(current.samples) == 8
+    assert len(current.samples) == 15
 
     assert current.has_metric(
         "system.network.rx_bps"

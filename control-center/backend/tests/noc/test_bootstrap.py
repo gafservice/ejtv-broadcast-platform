@@ -369,7 +369,7 @@ def test_runtime_metrics_are_reflected_in_snapshot() -> None:
         instance.instance_id,
     )
 
-    assert len(current.samples) == 6
+    assert len(current.samples) == 13
 
     assert current.has_metric(
         "system.cpu.usage_percent"
@@ -403,4 +403,4 @@ def test_runtime_metrics_are_reflected_in_snapshot() -> None:
     )
 
     assert snapshot.metric is not None
-    assert len(snapshot.metric.samples) == 6
+    assert len(snapshot.metric.samples) == 13
