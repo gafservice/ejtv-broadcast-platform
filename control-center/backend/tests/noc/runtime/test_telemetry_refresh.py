@@ -1066,3 +1066,108 @@ def test_required_critical_ingest_down_makes_node_health_critical() -> None:
 
     assert health is not None
     assert health.state is NodeHealthState.CRITICAL
+
+
+def test_refresh_returns_health_diagnostic() -> None:
+    _, node, instance, _, service = make_context()
+
+    result = service.refresh_once(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    diagnostic = result.health_diagnostic
+
+    assert diagnostic.captured_at == CAPTURED_AT
+    assert diagnostic.health is not None
+    assert diagnostic.system_health is not None
+    assert diagnostic.network_health is not None
+    assert diagnostic.interface_count == 1
+
+
+def test_backup_down_diagnostic_preserves_effective_health() -> None:
+    (
+        node,
+        instance,
+        _,
+        service,
+    ) = make_network_policy_context(
+        interface="ens2f1",
+        role=NetworkInterfaceRole.BACKUP,
+        expected_up=False,
+        critical=False,
+        is_up=False,
+        carrier=False,
+    )
+
+    result = service.refresh_once(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    diagnostic = result.health_diagnostic
+
+    assert (
+        diagnostic.health.state
+        is NodeHealthState.HEALTHY
+    )
+
+    assert (
+        diagnostic.network_health.state
+        is NodeHealthState.HEALTHY
+    )
+
+    assert diagnostic.interface_count == 1
+
+    interface = diagnostic.network_interfaces[0]
+
+    assert interface.interface == "ens2f1"
+    assert interface.state is NodeHealthState.HEALTHY
+    assert (
+        interface.reason
+        == "Optional interface is not required to be operational"
+    )
+
+
+def test_ingest_down_diagnostic_explains_critical_health() -> None:
+    (
+        node,
+        instance,
+        _,
+        service,
+    ) = make_network_policy_context(
+        interface="enp9s0",
+        role=NetworkInterfaceRole.INGEST,
+        expected_up=True,
+        critical=True,
+        is_up=False,
+        carrier=False,
+    )
+
+    result = service.refresh_once(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    diagnostic = result.health_diagnostic
+
+    assert (
+        diagnostic.health.state
+        is NodeHealthState.CRITICAL
+    )
+
+    assert (
+        diagnostic.network_health.state
+        is NodeHealthState.CRITICAL
+    )
+
+    assert diagnostic.interface_count == 1
+
+    interface = diagnostic.network_interfaces[0]
+
+    assert interface.interface == "enp9s0"
+    assert interface.state is NodeHealthState.CRITICAL
+    assert (
+        interface.reason
+        == "Required critical interface is not operational"
+    )

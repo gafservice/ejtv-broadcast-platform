@@ -21,6 +21,9 @@ from datetime import datetime
 from app.noc.domain.node_id import NodeId
 from app.noc.domain.node_instance import NodeInstanceId
 from app.noc.domain.node_metric import MetricSample
+from app.noc.domain.node_health_diagnostic import (
+    NodeHealthDiagnostic,
+)
 from app.domain.system import (
     NetworkRateCalculator,
     SystemResources,
@@ -69,6 +72,7 @@ class TelemetryRefreshResult:
     captured_at: datetime
     samples: tuple[MetricSample, ...]
     receipts: tuple[MetricReceipt, ...]
+    health_diagnostic: NodeHealthDiagnostic
 
     @property
     def metric_count(self) -> int:
@@ -343,6 +347,16 @@ class TelemetryRefreshService:
             )
         )
 
+        health_diagnostic = NodeHealthDiagnostic(
+            captured_at=resources.captured_at,
+            health=health,
+            system_health=system_health,
+            network_health=network_health,
+            network_interfaces=tuple(
+                effective_interface_health
+            ),
+        )
+
         self._health_service.publish(
             node_id,
             instance_id,
@@ -355,6 +369,7 @@ class TelemetryRefreshService:
             captured_at=resources.captured_at,
             samples=samples,
             receipts=receipts,
+            health_diagnostic=health_diagnostic,
         )
 
 
