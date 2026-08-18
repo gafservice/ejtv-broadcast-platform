@@ -1,0 +1,27 @@
+node: ejtv-01
+
+network_interfaces:
+  - interface: enp9s0
+    role: INGEST
+    expected_up: true
+    critical: true
+
+  - interface: ens2f0
+    role: PUBLICATION
+    expected_up: true
+    critical: true
+
+  - interface: ens2f1
+    role: BACKUP
+    expected_up: false
+    critical: false
+
+  - interface: enp10s0
+    role: TEST
+    expected_up: false
+    critical: false
+
+  - interface: lo
+    role: LOOPBACK
+    expected_up: true
+    critical: false

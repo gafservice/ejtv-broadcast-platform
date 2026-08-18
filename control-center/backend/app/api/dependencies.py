@@ -26,6 +26,12 @@ from app.infrastructure.security.jwt_token_provider import JWTTokenProvider
 from app.noc.infrastructure.memory_repository import (
     InMemoryNodeRepository,
 )
+from app.noc.domain.node_network_policy_config import (
+    NodeNetworkPolicyConfig,
+)
+from app.noc.infrastructure.node_network_policy_loader import (
+    NodeNetworkPolicyLoader,
+)
 from app.noc.registry.registry import NodeRegistry
 from app.noc.services.alarm_service import AlarmService
 from app.noc.services.health_service import HealthService
@@ -224,11 +230,27 @@ def get_snapshot_service() -> SnapshotService:
 
 
 @lru_cache
+def get_node_network_policy_config() -> NodeNetworkPolicyConfig:
+    """Carga la política declarativa de red del Node actual."""
+
+    settings = get_settings()
+
+    return NodeNetworkPolicyLoader().load(
+        settings.node_network_policy_path
+    )
+
+
+@lru_cache
 def get_telemetry_refresh_service() -> TelemetryRefreshService:
     """Construye el refresco periódico compartido de telemetría NOC."""
+
+    network_policy = (
+        get_node_network_policy_config()
+    )
 
     return TelemetryRefreshService(
         system_service=get_system_service(),
         metric_service=get_metric_service(),
         health_service=get_health_service(),
+        network_policies=network_policy.interfaces,
     )

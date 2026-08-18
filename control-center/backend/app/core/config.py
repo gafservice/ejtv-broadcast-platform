@@ -1,6 +1,7 @@
 """Configuración centralizada de la aplicación."""
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
@@ -49,6 +50,19 @@ class Settings(BaseSettings):
 
     geoip_database_path: str = (
         "data/geoip/GeoLite2-Country.mmdb"
+    )
+
+    # ------------------------------------------------------------------
+    # NOC Node
+    # ------------------------------------------------------------------
+
+    node_network_policy_path: str = str(
+        (
+            Path(__file__).resolve().parents[2]
+            / "config"
+            / "nodes"
+            / "ejtv-01.yaml"
+        )
     )
 
     # ------------------------------------------------------------------
