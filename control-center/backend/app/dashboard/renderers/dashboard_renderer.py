@@ -6,6 +6,9 @@ from app.dashboard.models import DashboardData
 from app.dashboard.renderers.active_connections_panel_renderer import (
     ActiveConnectionsPanelRenderer,
 )
+from app.dashboard.renderers.network_interfaces_panel_renderer import (
+    NetworkInterfacesPanelRenderer,
+)
 from app.dashboard.renderers.path_table_renderer import PathTableRenderer
 from app.dashboard.renderers.server_panel_renderer import (
     ServerPanelRenderer,
@@ -36,6 +39,9 @@ class DashboardRenderer:
         )
         self._health_renderer = StreamingHealthRenderer()
         self._system_renderer = SystemPanelRenderer()
+        self._network_interfaces_renderer = (
+            NetworkInterfacesPanelRenderer()
+        )
         self._path_table_renderer = PathTableRenderer()
 
     def render(self, data: DashboardData) -> Layout:
@@ -43,12 +49,31 @@ class DashboardRenderer:
 
         layout = Layout(name="dashboard")
 
-        if data.active_connections is not None:
+        if (
+            data.network_interfaces is not None
+            and data.active_connections is not None
+        ):
+            layout.split_column(
+                Layout(name="summary", size=22),
+                Layout(name="network_interfaces", size=11),
+                Layout(name="active_connections", size=12),
+                Layout(name="paths"),
+            )
+
+        elif data.network_interfaces is not None:
+            layout.split_column(
+                Layout(name="summary", size=22),
+                Layout(name="network_interfaces", size=11),
+                Layout(name="paths"),
+            )
+
+        elif data.active_connections is not None:
             layout.split_column(
                 Layout(name="summary", size=22),
                 Layout(name="active_connections", size=12),
                 Layout(name="paths"),
             )
+
         else:
             layout.split_column(
                 Layout(name="summary", size=22),
@@ -96,6 +121,13 @@ class DashboardRenderer:
         if data.sessions is not None:
             layout["sessions"].update(
                 self._session_renderer.render(data.sessions)
+            )
+
+        if data.network_interfaces is not None:
+            layout["network_interfaces"].update(
+                self._network_interfaces_renderer.render(
+                    data.network_interfaces
+                )
             )
 
         if data.active_connections is not None:

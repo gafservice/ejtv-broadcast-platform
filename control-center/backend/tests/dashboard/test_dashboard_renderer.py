@@ -186,3 +186,104 @@ def test_render_contains_active_clients_panel() -> None:
     assert "Publishers" not in output
     assert "Degraded" not in output
     assert "Critical" not in output
+
+def test_render_contains_network_interfaces_panel() -> None:
+    from app.dashboard.models import (
+        NetworkInterfaceRowData,
+        NetworkInterfacesPanelData,
+    )
+
+    renderer = DashboardRenderer()
+    base_data = build_dashboard_data()
+
+    network_interfaces = NetworkInterfacesPanelData(
+        interfaces=(
+            NetworkInterfaceRowData(
+                interface="enp9s0",
+                interface_type="ETHERNET",
+                is_up=True,
+                carrier=True,
+                link_speed_mbps=1000,
+                mtu=1500,
+                mac_address="3c:07:54:7c:b5:88",
+                ipv4_addresses=("10.0.18.54",),
+                ipv6_addresses=(),
+                rx_bps=9_000_000.0,
+                tx_bps=418.0,
+                errors_in=0,
+                errors_out=0,
+                dropped_in=0,
+                dropped_out=0,
+                dropped_in_per_second=0.0,
+            ),
+            NetworkInterfaceRowData(
+                interface="ens2f1",
+                interface_type="ETHERNET",
+                is_up=False,
+                carrier=False,
+                link_speed_mbps=None,
+                mtu=1500,
+                mac_address="00:e0:ed:2c:6d:c1",
+                ipv4_addresses=(),
+                ipv6_addresses=(),
+                rx_bps=0.0,
+                tx_bps=0.0,
+                errors_in=0,
+                errors_out=0,
+                dropped_in=0,
+                dropped_out=0,
+                dropped_in_per_second=0.0,
+            ),
+        ),
+        captured_at=base_data.server.snapshot_at,
+    )
+
+    data = DashboardData(
+        server=base_data.server,
+        streaming=base_data.streaming,
+        paths=base_data.paths,
+        health=base_data.health,
+        network_interfaces=network_interfaces,
+    )
+
+    layout = renderer.render(data)
+
+    console = Console(
+        record=True,
+        width=160,
+        height=60,
+        color_system=None,
+    )
+
+    console.print(layout)
+
+    output = console.export_text()
+
+    assert "NETWORK INTERFACES" in output
+    assert "enp9s0" in output
+    assert "ens2f1" in output
+    assert "1 Gbps" in output
+    assert "9.00 Mbps" in output
+    assert "DOWN" in output
+
+
+def test_render_preserves_legacy_layout_without_network_interfaces() -> None:
+    renderer = DashboardRenderer()
+    data = build_dashboard_data()
+
+    layout = renderer.render(data)
+
+    assert data.network_interfaces is None
+
+    console = Console(
+        record=True,
+        width=160,
+        height=60,
+        color_system=None,
+    )
+
+    console.print(layout)
+
+    output = console.export_text()
+
+    assert "NETWORK INTERFACES" not in output
