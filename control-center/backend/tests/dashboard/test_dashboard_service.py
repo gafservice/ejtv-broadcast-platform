@@ -1020,6 +1020,7 @@ def make_network_interface_telemetry(
     return NetworkInterfaceTelemetry(
         info=info,
         counters=counters,
+        captured_at=captured_at,
         rates=rates,
     )
 
@@ -1133,3 +1134,122 @@ def test_build_dashboard_transports_network_interfaces() -> None:
     )
 
     assert dashboard.network_interfaces is network_interfaces
+
+
+def test_build_node_health_panel_from_diagnostic() -> None:
+    from app.noc.domain.network_interface_health import (
+        NetworkInterfaceHealth,
+    )
+    from app.noc.domain.node_health import (
+        NodeHealth,
+        NodeHealthState,
+    )
+    from app.noc.domain.node_health_diagnostic import (
+        NodeHealthDiagnostic,
+    )
+
+    captured_at = datetime(
+        2026,
+        8,
+        18,
+        23,
+        45,
+        tzinfo=timezone.utc,
+    )
+
+    diagnostic = NodeHealthDiagnostic(
+        captured_at=captured_at,
+        health=NodeHealth(
+            NodeHealthState.WARNING
+        ),
+        system_health=NodeHealth(
+            NodeHealthState.HEALTHY
+        ),
+        network_health=NodeHealth(
+            NodeHealthState.WARNING
+        ),
+        network_interfaces=(
+            NetworkInterfaceHealth(
+                interface="enp9s0",
+                state=NodeHealthState.HEALTHY,
+                observed_at=captured_at,
+                reason="Interface operating normally",
+            ),
+            NetworkInterfaceHealth(
+                interface="ens2f0",
+                state=NodeHealthState.WARNING,
+                observed_at=captured_at,
+                reason=(
+                    "Elevated network error or drop rate"
+                ),
+            ),
+        ),
+    )
+
+    panel = DashboardService().build_node_health_panel(
+        diagnostic=diagnostic,
+    )
+
+    assert panel.state == "WARNING"
+    assert panel.system_state == "HEALTHY"
+    assert panel.network_state == "WARNING"
+    assert panel.captured_at == captured_at
+
+    assert panel.interface_count == 2
+
+    assert panel.interfaces[0].interface == "enp9s0"
+    assert panel.interfaces[0].state == "HEALTHY"
+
+    assert panel.interfaces[1].interface == "ens2f0"
+    assert panel.interfaces[1].state == "WARNING"
+    assert (
+        panel.interfaces[1].reason
+        == "Elevated network error or drop rate"
+    )
+
+
+def test_build_node_health_panel_accepts_no_interfaces() -> None:
+    from app.noc.domain.node_health import (
+        NodeHealth,
+        NodeHealthState,
+    )
+    from app.noc.domain.node_health_diagnostic import (
+        NodeHealthDiagnostic,
+    )
+
+    captured_at = datetime(
+        2026,
+        8,
+        18,
+        23,
+        45,
+        tzinfo=timezone.utc,
+    )
+
+    diagnostic = NodeHealthDiagnostic(
+        captured_at=captured_at,
+        health=NodeHealth(
+            NodeHealthState.UNKNOWN
+        ),
+        system_health=NodeHealth(
+            NodeHealthState.UNKNOWN
+        ),
+        network_health=NodeHealth(
+            NodeHealthState.UNKNOWN
+        ),
+        network_interfaces=(),
+    )
+
+    panel = DashboardService().build_node_health_panel(
+        diagnostic=diagnostic,
+    )
+
+    assert panel.state == "UNKNOWN"
+    assert panel.interface_count == 0
+
+
+def test_build_node_health_panel_rejects_invalid_type() -> None:
+    with pytest.raises(TypeError):
+        DashboardService().build_node_health_panel(
+            diagnostic=object(),  # type: ignore[arg-type]
+        )

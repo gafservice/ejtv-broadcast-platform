@@ -19,6 +19,10 @@ from app.dashboard.models.network_interfaces_panel import (
     NetworkInterfaceRowData,
     NetworkInterfacesPanelData,
 )
+from app.dashboard.models.node_health_panel import (
+    NodeHealthInterfaceRowData,
+    NodeHealthPanelData,
+)
 from app.dashboard.models.network_panel import NetworkPanelData
 from app.dashboard.models.session_panel import SessionPanelData
 from app.dashboard.models.system_panel import SystemPanelData
@@ -33,6 +37,8 @@ __all__ = [
     "MemoryPanelData",
     "NetworkInterfaceRowData",
     "NetworkInterfacesPanelData",
+    "NodeHealthInterfaceRowData",
+    "NodeHealthPanelData",
     "NetworkPanelData",
     "PathRowData",
     "ServerPanelData",

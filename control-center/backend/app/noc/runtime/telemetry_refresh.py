@@ -25,6 +25,7 @@ from app.noc.domain.node_health_diagnostic import (
     NodeHealthDiagnostic,
 )
 from app.domain.system import (
+    NetworkInterfaceInfo,
     NetworkRateCalculator,
     SystemResources,
 )
@@ -247,6 +248,72 @@ class TelemetryRefreshService:
             .get_system_resources()
         )
 
+        interface_infos = (
+            self._system_service
+            .get_network_interface_infos()
+        )
+
+        return self.refresh_from_capture(
+            node_id=node_id,
+            instance_id=instance_id,
+            resources=resources,
+            interface_infos=interface_infos,
+        )
+
+    def refresh_from_capture(
+        self,
+        *,
+        node_id: NodeId,
+        instance_id: NodeInstanceId,
+        resources: SystemResources,
+        interface_infos: tuple[
+            NetworkInterfaceInfo,
+            ...,
+        ],
+    ) -> TelemetryRefreshResult:
+        """Process and publish an already captured system state."""
+
+        if not isinstance(node_id, NodeId):
+            raise TypeError(
+                "node_id must be a NodeId"
+            )
+
+        if not isinstance(
+            instance_id,
+            NodeInstanceId,
+        ):
+            raise TypeError(
+                "instance_id must be a NodeInstanceId"
+            )
+
+        if not isinstance(
+            resources,
+            SystemResources,
+        ):
+            raise TypeError(
+                "resources must be a SystemResources"
+            )
+
+        if not isinstance(
+            interface_infos,
+            tuple,
+        ):
+            raise TypeError(
+                "interface_infos must be a tuple"
+            )
+
+        if not all(
+            isinstance(
+                interface_info,
+                NetworkInterfaceInfo,
+            )
+            for interface_info in interface_infos
+        ):
+            raise TypeError(
+                "interface_infos must contain "
+                "NetworkInterfaceInfo objects"
+            )
+
         base_samples = self._provider.collect(
             resources
         )
@@ -289,11 +356,6 @@ class TelemetryRefreshService:
             self._health_evaluator.evaluate(
                 current_metrics
             )
-        )
-
-        interface_infos = (
-            self._system_service
-            .get_network_interface_infos()
         )
 
         network_telemetry = (

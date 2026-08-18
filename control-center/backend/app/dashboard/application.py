@@ -23,6 +23,11 @@ from app.dashboard.services.dashboard_snapshot_service import (
 from app.domain.sessions import SessionSnapshot
 from app.domain.streaming import MediaMTXSnapshot, StreamingHealth
 from app.domain.system import SystemResources
+from app.noc.domain.node_id import NodeId
+from app.noc.domain.node_instance import NodeInstanceId
+from app.noc.runtime.telemetry_refresh import (
+    TelemetryRefreshService,
+)
 from app.services.network_telemetry_service import (
     NetworkTelemetryService,
 )
@@ -50,6 +55,9 @@ class DashboardApplication:
         streaming_health_service: StreamingHealthService | None = None,
         dashboard_snapshot_service: DashboardSnapshotService | None = None,
         network_telemetry_service: NetworkTelemetryService | None = None,
+        telemetry_refresh_service: TelemetryRefreshService | None = None,
+        node_id: NodeId | None = None,
+        instance_id: NodeInstanceId | None = None,
     ) -> None:
         self._mediamtx_adapter = mediamtx_adapter
         self._session_adapter = session_adapter
@@ -75,12 +83,17 @@ class DashboardApplication:
         self._metrics_parser = metrics_parser
         self._streaming_health_service = streaming_health_service
 
+        self._telemetry_refresh_service = telemetry_refresh_service
+        self._node_id = node_id
+        self._instance_id = instance_id
+
         self._previous_snapshot: MediaMTXSnapshot | None = None
         self._previous_session_snapshot: SessionSnapshot | None = None
         self._previous_system_resources: SystemResources | None = None
         self._latest_health: StreamingHealth | None = None
 
         self._validate_health_dependencies()
+        self._validate_noc_dependencies()
 
     @property
     def latest_health(self) -> StreamingHealth | None:
@@ -131,6 +144,24 @@ class DashboardApplication:
             )
         )
 
+        node_health = None
+
+        if self._telemetry_refresh_service is not None:
+            telemetry_result = (
+                self._telemetry_refresh_service.refresh_from_capture(
+                    node_id=self._node_id,
+                    instance_id=self._instance_id,
+                    resources=system_resources,
+                    interface_infos=interface_infos,
+                )
+            )
+
+            node_health = (
+                self._dashboard_service.build_node_health_panel(
+                    diagnostic=telemetry_result.health_diagnostic,
+                )
+            )
+
         snapshot_kwargs = {
             "hostname": system_info.hostname,
             "mediamtx_online": api_online,
@@ -145,6 +176,9 @@ class DashboardApplication:
 
         if streaming_health is not None:
             snapshot_kwargs["health"] = streaming_health
+
+        if node_health is not None:
+            snapshot_kwargs["node_health"] = node_health
 
         snapshot_input = DashboardSnapshotInput(**snapshot_kwargs)
 
@@ -231,6 +265,29 @@ class DashboardApplication:
             snapshot=metrics_snapshot,
             captured_at=captured_at,
         )
+
+    def _validate_noc_dependencies(self) -> None:
+        """Evita configurar parcialmente el runtime NOC."""
+
+        dependencies = (
+            self._telemetry_refresh_service,
+            self._node_id,
+            self._instance_id,
+        )
+
+        configured_count = sum(
+            dependency is not None
+            for dependency in dependencies
+        )
+
+        if configured_count not in (
+            0,
+            len(dependencies),
+        ):
+            raise ValueError(
+                "telemetry_refresh_service, node_id e "
+                "instance_id deben configurarse juntos."
+            )
 
     def _validate_health_dependencies(self) -> None:
         """Evita una configuración parcial del motor de salud."""

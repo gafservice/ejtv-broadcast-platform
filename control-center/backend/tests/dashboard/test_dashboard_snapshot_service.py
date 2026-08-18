@@ -83,3 +83,56 @@ def test_snapshot_service_transports_network_interfaces() -> None:
         result.network_interfaces.interfaces[0].interface
         == "ens2f0"
     )
+
+
+def test_snapshot_service_transports_node_health() -> None:
+    from app.dashboard.models import (
+        NodeHealthPanelData,
+    )
+
+    captured_at = datetime(
+        2026,
+        8,
+        18,
+        23,
+        55,
+        tzinfo=UTC,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=0,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=None,
+        interval_seconds=None,
+        paths=(),
+        total_inbound_bitrate_bps=None,
+        total_outbound_bitrate_bps=None,
+        quality=MeasurementQuality.NOT_AVAILABLE,
+    )
+
+    node_health = NodeHealthPanelData(
+        state="WARNING",
+        system_state="HEALTHY",
+        network_state="WARNING",
+        interfaces=(),
+        captured_at=captured_at,
+    )
+
+    result = DashboardSnapshotService().build_snapshot(
+        DashboardSnapshotInput(
+            hostname="ejtv-01",
+            mediamtx_online=True,
+            api_online=True,
+            snapshot=snapshot,
+            measurement=measurement,
+            node_health=node_health,
+        )
+    )
+
+    assert result.node_health is node_health

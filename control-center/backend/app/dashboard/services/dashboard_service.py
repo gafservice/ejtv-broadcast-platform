@@ -10,6 +10,8 @@ from app.dashboard.models import (
     NetworkInterfaceRowData,
     NetworkInterfacesPanelData,
     NetworkPanelData,
+    NodeHealthInterfaceRowData,
+    NodeHealthPanelData,
     PathRowData,
     ServerPanelData,
     SessionPanelData,
@@ -24,6 +26,10 @@ from app.domain.streaming import (
     StreamingHealth,
     StreamingMeasurement,
 )
+from app.noc.domain.node_health_diagnostic import (
+    NodeHealthDiagnostic,
+)
+
 from app.domain.system import (
     NetworkInterfaceTelemetry,
     NetworkRateCalculator,
@@ -158,6 +164,38 @@ class DashboardService:
         return ActiveConnectionsPanelData(
             captured_at=measurement.captured_at,
             connections=connections,
+        )
+
+    def build_node_health_panel(
+        self,
+        *,
+        diagnostic: NodeHealthDiagnostic,
+    ) -> NodeHealthPanelData:
+        """Prepara el diagnóstico integral del Node para presentación."""
+
+        if not isinstance(
+            diagnostic,
+            NodeHealthDiagnostic,
+        ):
+            raise TypeError(
+                "diagnostic must be a NodeHealthDiagnostic"
+            )
+
+        interfaces = tuple(
+            NodeHealthInterfaceRowData(
+                interface=item.interface,
+                state=item.state.value,
+                reason=item.reason,
+            )
+            for item in diagnostic.network_interfaces
+        )
+
+        return NodeHealthPanelData(
+            state=diagnostic.health.state.value,
+            system_state=diagnostic.system_health.state.value,
+            network_state=diagnostic.network_health.state.value,
+            interfaces=interfaces,
+            captured_at=diagnostic.captured_at,
         )
 
     def build_network_interfaces_panel(
@@ -355,6 +393,7 @@ class DashboardService:
         system: SystemPanelData | None = None,
         health: StreamingHealth | None = None,
         network_interfaces: NetworkInterfacesPanelData | None = None,
+        node_health: NodeHealthPanelData | None = None,
     ) -> DashboardData:
         """Agrupa todas las secciones del dashboard."""
 
@@ -367,6 +406,7 @@ class DashboardService:
             paths=paths,
             health=health,
             network_interfaces=network_interfaces,
+            node_health=node_health,
         )
 
     def build_dashboard_from_measurement(
@@ -382,6 +422,7 @@ class DashboardService:
         previous_system_resources: SystemResources | None = None,
         health: StreamingHealth | None = None,
         network_interfaces: NetworkInterfacesPanelData | None = None,
+        node_health: NodeHealthPanelData | None = None,
     ) -> DashboardData:
         """Construye el dashboard completo desde snapshot y medición."""
 
@@ -478,6 +519,7 @@ class DashboardService:
             paths=paths,
             health=health,
             network_interfaces=network_interfaces,
+            node_health=node_health,
         )
 
     @staticmethod

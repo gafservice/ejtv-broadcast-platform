@@ -239,3 +239,47 @@ def test_dashboard_data_accepts_network_interfaces_panel() -> None:
         dashboard.network_interfaces.interfaces[0].interface
         == "ens2f0"
     )
+
+
+def test_dashboard_data_accepts_node_health_panel() -> None:
+    from datetime import UTC, datetime
+
+    from app.dashboard.models import (
+        NodeHealthPanelData,
+    )
+
+    node_health = NodeHealthPanelData(
+        state="WARNING",
+        system_state="HEALTHY",
+        network_state="WARNING",
+        interfaces=(),
+        captured_at=datetime(
+            2026,
+            8,
+            18,
+            23,
+            50,
+            tzinfo=UTC,
+        ),
+    )
+
+    base = DashboardData(
+        server=ServerPanelData(
+            hostname="ejtv-01",
+            mediamtx_online=True,
+            api_online=True,
+            snapshot_at=None,
+            quality="AVAILABLE",
+        ),
+        streaming=StreamingPanelData(
+            active_paths=0,
+            readers=0,
+            inbound_bitrate_bps=None,
+            outbound_bitrate_bps=None,
+            quality="NOT_AVAILABLE",
+        ),
+        paths=(),
+        node_health=node_health,
+    )
+
+    assert base.node_health is node_health

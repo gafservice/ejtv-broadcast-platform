@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from app.dashboard.models import (
     DashboardData,
     NetworkInterfacesPanelData,
+    NodeHealthPanelData,
 )
 from app.dashboard.services.dashboard_service import DashboardService
 from app.domain.sessions.measurement import SessionMeasurement
@@ -45,6 +46,7 @@ class DashboardSnapshotInput:
     previous_system_resources: SystemResources | None = None
     health: StreamingHealth | None = None
     network_interfaces: NetworkInterfacesPanelData | None = None
+    node_health: NodeHealthPanelData | None = None
 
 
 class DashboardSnapshotService:
@@ -113,4 +115,5 @@ class DashboardSnapshotService:
             network_interfaces=(
                 snapshot_input.network_interfaces
             ),
+            node_health=snapshot_input.node_health,
         )

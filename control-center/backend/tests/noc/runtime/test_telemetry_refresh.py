@@ -1171,3 +1171,145 @@ def test_ingest_down_diagnostic_explains_critical_health() -> None:
         interface.reason
         == "Required critical interface is not operational"
     )
+
+
+# ---------------------------------------------------------------------------
+# Explicit capture processing boundary
+# ---------------------------------------------------------------------------
+
+
+def test_refresh_from_capture_returns_result() -> None:
+    _, node, instance, _, service = make_context()
+
+    resources = (
+        service.system_service
+        .get_system_resources()
+    )
+
+    interface_infos = (
+        service.system_service
+        .get_network_interface_infos()
+    )
+
+    result = service.refresh_from_capture(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        resources=resources,
+        interface_infos=interface_infos,
+    )
+
+    assert isinstance(
+        result,
+        TelemetryRefreshResult,
+    )
+
+    assert result.captured_at == CAPTURED_AT
+    assert result.health_diagnostic.captured_at == CAPTURED_AT
+
+
+def test_refresh_from_capture_requires_resources() -> None:
+    _, node, instance, _, service = make_context()
+
+    interface_infos = (
+        service.system_service
+        .get_network_interface_infos()
+    )
+
+    with pytest.raises(TypeError):
+        service.refresh_from_capture(
+            node_id=node.node_id,
+            instance_id=instance.instance_id,
+            resources=object(),  # type: ignore[arg-type]
+            interface_infos=interface_infos,
+        )
+
+
+def test_refresh_from_capture_requires_interface_infos_tuple() -> None:
+    _, node, instance, _, service = make_context()
+
+    resources = (
+        service.system_service
+        .get_system_resources()
+    )
+
+    with pytest.raises(TypeError):
+        service.refresh_from_capture(
+            node_id=node.node_id,
+            instance_id=instance.instance_id,
+            resources=resources,
+            interface_infos=[],  # type: ignore[arg-type]
+        )
+
+
+def test_refresh_from_capture_requires_network_interface_infos() -> None:
+    _, node, instance, _, service = make_context()
+
+    resources = (
+        service.system_service
+        .get_system_resources()
+    )
+
+    with pytest.raises(TypeError):
+        service.refresh_from_capture(
+            node_id=node.node_id,
+            instance_id=instance.instance_id,
+            resources=resources,
+            interface_infos=(
+                object(),  # type: ignore[arg-type]
+            ),
+        )
+
+
+def test_refresh_once_delegates_captured_state() -> None:
+    _, node, instance, _, service = make_context()
+
+    captured = {}
+
+    original = service.refresh_from_capture
+
+    def recording_refresh_from_capture(
+        *,
+        node_id,
+        instance_id,
+        resources,
+        interface_infos,
+    ):
+        captured["resources"] = resources
+        captured["interface_infos"] = interface_infos
+
+        return original(
+            node_id=node_id,
+            instance_id=instance_id,
+            resources=resources,
+            interface_infos=interface_infos,
+        )
+
+    service.refresh_from_capture = (
+        recording_refresh_from_capture
+    )
+
+    result = service.refresh_once(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    assert isinstance(
+        captured["resources"],
+        SystemResources,
+    )
+
+    assert isinstance(
+        captured["interface_infos"],
+        tuple,
+    )
+
+    assert all(
+        isinstance(
+            interface_info,
+            NetworkInterfaceInfo,
+        )
+        for interface_info
+        in captured["interface_infos"]
+    )
+
+    assert result.captured_at == CAPTURED_AT
