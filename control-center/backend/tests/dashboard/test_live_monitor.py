@@ -1,5 +1,6 @@
 """Pruebas del punto de entrada del monitor NOC."""
 
+from contextlib import ExitStack
 from unittest.mock import ANY, Mock, call, patch
 
 from app.dashboard.live_monitor import build_dashboard_application
@@ -15,6 +16,9 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
     settings.mediamtx_metrics_timeout_seconds = 4.0
     settings.geoip_database_path = (
         "data/geoip/GeoLite2-Country.mmdb"
+    )
+    settings.node_network_policy_path = (
+        "/tmp/ejtv-01.yaml"
     )
 
     api_http_client = Mock()
@@ -35,84 +39,211 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
     system_adapter = Mock()
     system_service = Mock()
 
+    repository = Mock()
+    node_registry = Mock()
+
+    bootstrap_result = Mock()
+    bootstrap_result.node.node_id = Mock()
+
+    node_instance_id = Mock()
+
+    metric_service = Mock()
+    node_health_service = Mock()
+
+    network_policy = Mock()
+    network_policy.interfaces = (
+        Mock(),
+    )
+
+    policy_loader = Mock()
+    policy_loader.load.return_value = network_policy
+
+    telemetry_refresh_service = Mock()
+
     streaming_service = Mock()
     dashboard_service = Mock()
     dashboard_renderer = Mock()
     dashboard_application = Mock()
 
-    with (
-        patch(
-            "app.dashboard.live_monitor.get_settings",
-            return_value=settings,
-        ),
-        patch(
-            "app.dashboard.live_monitor.HttpClient",
-            side_effect=(
-                api_http_client,
-                metrics_http_client,
-            ),
-        ) as http_client_class,
-        patch(
-            "app.dashboard.live_monitor.MediaMTXClient",
-            return_value=mediamtx_client,
-        ) as mediamtx_client_class,
-        patch(
-            "app.dashboard.live_monitor.MediaMTXAdapter",
-            return_value=mediamtx_adapter,
-        ) as mediamtx_adapter_class,
-        patch(
-            "app.dashboard.live_monitor.GeoIPService",
-            return_value=geoip_service,
-        ) as geoip_service_class,
-        patch(
-            "app.dashboard.live_monitor.MediaMTXSessionClient",
-            return_value=session_client,
-        ) as session_client_class,
-        patch(
-            "app.dashboard.live_monitor.MediaMTXSessionAdapter",
-            return_value=session_adapter,
-        ) as session_adapter_class,
-        patch(
-            "app.dashboard.live_monitor.SessionService",
-            return_value=session_service,
-        ) as session_service_class,
-        patch(
-            "app.dashboard.live_monitor.MediaMTXMetricsClient",
-            return_value=metrics_client,
-        ) as metrics_client_class,
-        patch(
-            "app.dashboard.live_monitor.MediaMTXMetricsParser",
-            return_value=metrics_parser,
-        ) as metrics_parser_class,
-        patch(
-            "app.dashboard.live_monitor.StreamingHealthService",
-            return_value=streaming_health_service,
-        ) as health_service_class,
-        patch(
-            "app.dashboard.live_monitor.LinuxSystemAdapter",
-            return_value=system_adapter,
-        ) as system_adapter_class,
-        patch(
-            "app.dashboard.live_monitor.SystemService",
-            return_value=system_service,
-        ) as system_service_class,
-        patch(
-            "app.dashboard.live_monitor.StreamingService",
-            return_value=streaming_service,
-        ) as streaming_service_class,
-        patch(
-            "app.dashboard.live_monitor.DashboardService",
-            return_value=dashboard_service,
-        ) as dashboard_service_class,
-        patch(
-            "app.dashboard.live_monitor.DashboardRenderer",
-            return_value=dashboard_renderer,
-        ) as dashboard_renderer_class,
-        patch(
-            "app.dashboard.live_monitor.DashboardApplication",
-            return_value=dashboard_application,
-        ) as dashboard_application_class,
-    ):
+    with ExitStack() as stack:
+        stack.enter_context(
+            patch(
+                        "app.dashboard.live_monitor.get_settings",
+                        return_value=settings,
+                    )
+        )
+
+        http_client_class = stack.enter_context(
+            patch(
+                        "app.dashboard.live_monitor.HttpClient",
+                        side_effect=(
+                            api_http_client,
+                            metrics_http_client,
+                        ),
+                    )
+        )
+
+        mediamtx_client_class = stack.enter_context(
+            patch(
+                        "app.dashboard.live_monitor.MediaMTXClient",
+                        return_value=mediamtx_client,
+                    )
+        )
+
+        mediamtx_adapter_class = stack.enter_context(
+            patch(
+                        "app.dashboard.live_monitor.MediaMTXAdapter",
+                        return_value=mediamtx_adapter,
+                    )
+        )
+
+        geoip_service_class = stack.enter_context(
+            patch(
+                        "app.dashboard.live_monitor.GeoIPService",
+                        return_value=geoip_service,
+                    )
+        )
+
+        session_client_class = stack.enter_context(
+            patch(
+                        "app.dashboard.live_monitor.MediaMTXSessionClient",
+                        return_value=session_client,
+                    )
+        )
+
+        session_adapter_class = stack.enter_context(
+            patch(
+                        "app.dashboard.live_monitor.MediaMTXSessionAdapter",
+                        return_value=session_adapter,
+                    )
+        )
+
+        session_service_class = stack.enter_context(
+            patch(
+                        "app.dashboard.live_monitor.SessionService",
+                        return_value=session_service,
+                    )
+        )
+
+        metrics_client_class = stack.enter_context(
+            patch(
+                        "app.dashboard.live_monitor.MediaMTXMetricsClient",
+                        return_value=metrics_client,
+                    )
+        )
+
+        metrics_parser_class = stack.enter_context(
+            patch(
+                        "app.dashboard.live_monitor.MediaMTXMetricsParser",
+                        return_value=metrics_parser,
+                    )
+        )
+
+        health_service_class = stack.enter_context(
+            patch(
+                        "app.dashboard.live_monitor.StreamingHealthService",
+                        return_value=streaming_health_service,
+                    )
+        )
+
+        system_adapter_class = stack.enter_context(
+            patch(
+                        "app.dashboard.live_monitor.LinuxSystemAdapter",
+                        return_value=system_adapter,
+                    )
+        )
+
+        system_service_class = stack.enter_context(
+            patch(
+                        "app.dashboard.live_monitor.SystemService",
+                        return_value=system_service,
+                    )
+        )
+
+        repository_class = stack.enter_context(
+            patch(
+                        "app.dashboard.live_monitor.InMemoryNodeRepository",
+                        return_value=repository,
+                    )
+        )
+
+        node_registry_class = stack.enter_context(
+            patch(
+                        "app.dashboard.live_monitor.NodeRegistry",
+                        return_value=node_registry,
+                    )
+        )
+
+        bootstrap_noc_runtime_mock = stack.enter_context(
+            patch(
+                        "app.dashboard.live_monitor.bootstrap_noc_runtime",
+                        return_value=bootstrap_result,
+                    )
+        )
+
+        node_instance_id_class = stack.enter_context(
+            patch(
+                        "app.dashboard.live_monitor.NodeInstanceId",
+                        return_value=node_instance_id,
+                    )
+        )
+
+        metric_service_class = stack.enter_context(
+            patch(
+                        "app.dashboard.live_monitor.MetricService",
+                        return_value=metric_service,
+                    )
+        )
+
+        node_health_service_class = stack.enter_context(
+            patch(
+                        "app.dashboard.live_monitor.HealthService",
+                        return_value=node_health_service,
+                    )
+        )
+
+        policy_loader_class = stack.enter_context(
+            patch(
+                        "app.dashboard.live_monitor.NodeNetworkPolicyLoader",
+                        return_value=policy_loader,
+                    )
+        )
+
+        telemetry_refresh_service_class = stack.enter_context(
+            patch(
+                        "app.dashboard.live_monitor.TelemetryRefreshService",
+                        return_value=telemetry_refresh_service,
+                    )
+        )
+
+        streaming_service_class = stack.enter_context(
+            patch(
+                        "app.dashboard.live_monitor.StreamingService",
+                        return_value=streaming_service,
+                    )
+        )
+
+        dashboard_service_class = stack.enter_context(
+            patch(
+                        "app.dashboard.live_monitor.DashboardService",
+                        return_value=dashboard_service,
+                    )
+        )
+
+        dashboard_renderer_class = stack.enter_context(
+            patch(
+                        "app.dashboard.live_monitor.DashboardRenderer",
+                        return_value=dashboard_renderer,
+                    )
+        )
+
+        dashboard_application_class = stack.enter_context(
+            patch(
+                        "app.dashboard.live_monitor.DashboardApplication",
+                        return_value=dashboard_application,
+                    )
+        )
+
         result = build_dashboard_application()
 
     assert result is dashboard_application
@@ -167,6 +298,41 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
         system_adapter
     )
 
+    repository_class.assert_called_once_with()
+
+    node_registry_class.assert_called_once_with(
+        repository
+    )
+
+    bootstrap_noc_runtime_mock.assert_called_once_with(
+        node_registry
+    )
+
+    node_instance_id_class.assert_called_once_with(
+        "streaming-primary"
+    )
+
+    metric_service_class.assert_called_once_with(
+        node_registry
+    )
+
+    node_health_service_class.assert_called_once_with(
+        node_registry
+    )
+
+    policy_loader_class.assert_called_once_with()
+
+    policy_loader.load.assert_called_once_with(
+        "/tmp/ejtv-01.yaml"
+    )
+
+    telemetry_refresh_service_class.assert_called_once_with(
+        system_service=system_service,
+        metric_service=metric_service,
+        health_service=node_health_service,
+        network_policies=network_policy.interfaces,
+    )
+
     streaming_service_class.assert_called_once_with()
     dashboard_service_class.assert_called_once_with()
     dashboard_renderer_class.assert_called_once_with()
@@ -183,4 +349,7 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
         metrics_parser=metrics_parser,
         streaming_health_service=streaming_health_service,
         dashboard_snapshot_service=ANY,
+        telemetry_refresh_service=telemetry_refresh_service,
+        node_id=bootstrap_result.node.node_id,
+        instance_id=node_instance_id,
     )

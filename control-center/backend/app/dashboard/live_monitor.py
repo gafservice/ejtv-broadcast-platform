@@ -26,6 +26,24 @@ from app.services.streaming_service import StreamingService
 from app.services.system_service import SystemService
 from app.services.geoip_service import GeoIPService
 
+from app.noc.bootstrap import (
+    DEFAULT_INSTANCE_ID,
+    bootstrap_noc_runtime,
+)
+from app.noc.domain.node_instance import NodeInstanceId
+from app.noc.infrastructure.memory_repository import (
+    InMemoryNodeRepository,
+)
+from app.noc.infrastructure.node_network_policy_loader import (
+    NodeNetworkPolicyLoader,
+)
+from app.noc.registry.registry import NodeRegistry
+from app.noc.runtime.telemetry_refresh import (
+    TelemetryRefreshService,
+)
+from app.noc.services.health_service import HealthService
+from app.noc.services.metric_service import MetricService
+
 
 def build_dashboard_application() -> DashboardApplication:
     """Construye el runtime completo del monitor NOC."""
@@ -83,6 +101,44 @@ def build_dashboard_application() -> DashboardApplication:
     network_telemetry_service = NetworkTelemetryService()
 
     #
+    # NOC Node Runtime
+    #
+    node_registry = NodeRegistry(
+        InMemoryNodeRepository()
+    )
+
+    bootstrap_result = bootstrap_noc_runtime(
+        node_registry
+    )
+
+    node_instance_id = NodeInstanceId(
+        DEFAULT_INSTANCE_ID
+    )
+
+    metric_service = MetricService(
+        node_registry
+    )
+
+    node_health_service = HealthService(
+        node_registry
+    )
+
+    network_policy = (
+        NodeNetworkPolicyLoader().load(
+            settings.node_network_policy_path
+        )
+    )
+
+    telemetry_refresh_service = (
+        TelemetryRefreshService(
+            system_service=system_service,
+            metric_service=metric_service,
+            health_service=node_health_service,
+            network_policies=network_policy.interfaces,
+        )
+    )
+
+    #
     # Dashboard
     #
     streaming_service = StreamingService()
@@ -104,6 +160,9 @@ def build_dashboard_application() -> DashboardApplication:
         metrics_parser=metrics_parser,
         streaming_health_service=streaming_health_service,
         dashboard_snapshot_service=dashboard_snapshot_service,
+        telemetry_refresh_service=telemetry_refresh_service,
+        node_id=bootstrap_result.node.node_id,
+        instance_id=node_instance_id,
     )
 
 

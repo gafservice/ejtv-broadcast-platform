@@ -58,7 +58,7 @@ class Settings(BaseSettings):
 
     node_network_policy_path: str = str(
         (
-            Path(__file__).resolve().parents[2]
+            Path(__file__).resolve().parents[3]
             / "config"
             / "nodes"
             / "ejtv-01.yaml"
