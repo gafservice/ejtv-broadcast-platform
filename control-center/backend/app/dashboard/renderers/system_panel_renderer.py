@@ -35,6 +35,25 @@ class SystemPanelRenderer:
             f"{data.cpu.logical_cores} lógicos\n"
         )
 
+        if data.cpu.per_core_usage_percent:
+            content.append("Por núcleo: ")
+
+            for index, usage in enumerate(
+                data.cpu.per_core_usage_percent
+            ):
+                if index > 0:
+                    content.append("  ")
+
+                content.append(
+                    f"CPU{index:02d}: "
+                )
+                self._append_percentage(
+                    content,
+                    usage,
+                )
+
+            content.append("\n")
+
         content.append("RAM: ")
         self._append_percentage(
             content,

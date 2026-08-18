@@ -108,3 +108,37 @@ def test_system_panel_renderer_formats_network_rates() -> None:
     assert "RX: 8.00 Mbps | TX: 4.00 Mbps" in output
     assert "Errores RX/TX: 1 / 2" in output
     assert "Descartes RX/TX: 3 / 4" in output
+
+
+def test_system_panel_renderer_shows_dynamic_per_core_usage() -> None:
+    """Debe renderizar todos los cores disponibles dinámicamente."""
+
+    data = _build_system_panel_data(
+        rx_bps=8_000_000,
+        tx_bps=4_000_000,
+    )
+
+    output = _render_to_text(data)
+
+    assert "Por núcleo:" in output
+    assert "CPU00: 20.0%" in output
+    assert "CPU01: 30.0%" in output
+
+
+def test_system_panel_renderer_does_not_assume_core_count() -> None:
+    """El renderer no debe asumir una cantidad fija de CPUs."""
+
+    data = _build_system_panel_data(
+        rx_bps=8_000_000,
+        tx_bps=4_000_000,
+    )
+
+    assert len(
+        data.cpu.per_core_usage_percent
+    ) == 2
+
+    output = _render_to_text(data)
+
+    assert "CPU00:" in output
+    assert "CPU01:" in output
+    assert "CPU02:" not in output
