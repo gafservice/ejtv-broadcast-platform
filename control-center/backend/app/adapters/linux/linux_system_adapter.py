@@ -3,6 +3,7 @@
 import platform
 import socket
 import time
+from pathlib import Path
 
 import psutil
 
@@ -15,6 +16,8 @@ from app.domain.system import (
     DiskInfo,
     MemoryInfo,
     NetworkInfo,
+    NetworkInterfaceInfo,
+    NetworkInterfaceType,
     UptimeInfo,
     MonitoredService,
     ServiceInstance,
@@ -173,6 +176,176 @@ class LinuxSystemAdapter(SystemAdapter):
             dropped_in=int(counters.dropin),
             dropped_out=int(counters.dropout),
         )
+    def network_interface_info(
+        self,
+        interface: str,
+    ) -> NetworkInterfaceInfo:
+        """Obtiene identidad, clasificación y estado de una interfaz."""
+
+        if not isinstance(interface, str):
+            raise TypeError(
+                "El nombre de la interfaz debe ser una cadena."
+            )
+
+        normalized_interface = interface.strip()
+
+        if not normalized_interface:
+            raise ValueError(
+                "El nombre de la interfaz no puede estar vacío."
+            )
+
+        stats_by_interface = psutil.net_if_stats()
+        addresses_by_interface = psutil.net_if_addrs()
+
+        stats = stats_by_interface.get(
+            normalized_interface
+        )
+
+        if stats is None:
+            raise ValueError(
+                f"La interfaz '{normalized_interface}' no existe."
+            )
+
+        addresses = addresses_by_interface.get(
+            normalized_interface,
+            (),
+        )
+
+        sysfs_path = (
+            Path("/sys/class/net")
+            / normalized_interface
+        )
+
+        interface_type = self._classify_network_interface(
+            normalized_interface,
+            sysfs_path,
+        )
+
+        carrier = self._read_carrier(
+            sysfs_path
+        )
+
+        mac_address = None
+        ipv4_addresses: list[str] = []
+        ipv6_addresses: list[str] = []
+
+        for address in addresses:
+            if address.family == socket.AF_INET:
+                ipv4_addresses.append(
+                    address.address
+                )
+
+            elif address.family == socket.AF_INET6:
+                ipv6_addresses.append(
+                    address.address.split("%", 1)[0]
+                )
+
+            elif address.family == psutil.AF_LINK:
+                mac_address = address.address
+
+        duplex = self._normalize_duplex(
+            stats.duplex
+        )
+
+        link_speed_mbps = (
+            int(stats.speed)
+            if stats.speed is not None
+            and stats.speed > 0
+            else None
+        )
+
+        return NetworkInterfaceInfo(
+            interface=normalized_interface,
+            interface_type=interface_type,
+            is_up=bool(stats.isup),
+            carrier=carrier,
+            mtu=int(stats.mtu),
+            mac_address=mac_address,
+            link_speed_mbps=link_speed_mbps,
+            duplex=duplex,
+            ipv4_addresses=tuple(
+                ipv4_addresses
+            ),
+            ipv6_addresses=tuple(
+                ipv6_addresses
+            ),
+        )
+
+    @staticmethod
+    def _classify_network_interface(
+        interface: str,
+        sysfs_path: Path,
+    ) -> NetworkInterfaceType:
+        """Clasifica una interfaz usando información del sistema."""
+
+        if interface == "lo":
+            return NetworkInterfaceType.LOOPBACK
+
+        if (sysfs_path / "wireless").exists():
+            return NetworkInterfaceType.WIFI
+
+        if (sysfs_path / "bridge").exists():
+            return NetworkInterfaceType.BRIDGE
+
+        if (sysfs_path / "bonding").exists():
+            return NetworkInterfaceType.BOND
+
+        if not (sysfs_path / "device").exists():
+            return NetworkInterfaceType.VIRTUAL
+
+        return NetworkInterfaceType.ETHERNET
+
+    @staticmethod
+    def _read_carrier(
+        sysfs_path: Path,
+    ) -> bool | None:
+        """Lee el estado físico del carrier cuando está disponible."""
+
+        carrier_path = sysfs_path / "carrier"
+
+        try:
+            value = carrier_path.read_text().strip()
+        except OSError:
+            return None
+
+        if value == "1":
+            return True
+
+        if value == "0":
+            return False
+
+        return None
+
+    @staticmethod
+    def _normalize_duplex(
+        duplex: int,
+    ) -> str | None:
+        """Convierte las constantes psutil de dúplex al dominio."""
+
+        if duplex == psutil.NIC_DUPLEX_FULL:
+            return "full"
+
+        if duplex == psutil.NIC_DUPLEX_HALF:
+            return "half"
+
+        return None
+
+    def network_interface_infos(
+        self,
+    ) -> tuple[NetworkInterfaceInfo, ...]:
+        """Descubre identidad y estado de todas las interfaces."""
+
+        interface_names = sorted(
+            psutil.net_if_stats().keys()
+        )
+
+        return tuple(
+            self.network_interface_info(
+                interface
+            )
+            for interface in interface_names
+        )
+
     def network_interfaces(self) -> tuple[NetworkInfo, ...]:
         """Descubre los contadores de todas las interfaces de red."""
 

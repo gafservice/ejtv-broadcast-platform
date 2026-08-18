@@ -1,12 +1,15 @@
 """Pruebas del contrato y del adaptador Linux."""
 
 import inspect
+from pathlib import Path
 import pytest
 from unittest.mock import patch
 
 from app.adapters.base.system_adapter import SystemAdapter
 from app.adapters.linux.linux_system_adapter import LinuxSystemAdapter
 from app.domain.system import (
+    NetworkInterfaceInfo,
+    NetworkInterfaceType,
     ServiceInstance,
     ServiceStatus,
 )
@@ -493,3 +496,159 @@ def test_network_interfaces_discovers_all_interfaces() -> None:
     assert result[0].errors_out == 2
     assert result[0].dropped_in == 3
     assert result[0].dropped_out == 4
+
+
+def test_network_interface_info_builds_ethernet_state() -> None:
+    adapter = LinuxSystemAdapter()
+
+    stats = type(
+        "NicStats",
+        (),
+        {
+            "isup": True,
+            "duplex": 2,
+            "speed": 1000,
+            "mtu": 1500,
+        },
+    )()
+
+    address = type(
+        "NicAddress",
+        (),
+        {
+            "family": 2,
+            "address": "10.0.18.54",
+        },
+    )()
+
+    with (
+        patch(
+            "app.adapters.linux.linux_system_adapter."
+            "psutil.net_if_stats",
+            return_value={
+                "enp9s0": stats,
+            },
+        ),
+        patch(
+            "app.adapters.linux.linux_system_adapter."
+            "psutil.net_if_addrs",
+            return_value={
+                "enp9s0": (
+                    address,
+                ),
+            },
+        ),
+        patch.object(
+            adapter,
+            "_classify_network_interface",
+            return_value=NetworkInterfaceType.ETHERNET,
+        ),
+        patch.object(
+            adapter,
+            "_read_carrier",
+            return_value=True,
+        ),
+    ):
+        result = adapter.network_interface_info(
+            "enp9s0"
+        )
+
+    assert isinstance(
+        result,
+        NetworkInterfaceInfo,
+    )
+
+    assert result.interface == "enp9s0"
+    assert result.interface_type is (
+        NetworkInterfaceType.ETHERNET
+    )
+
+    assert result.is_up is True
+    assert result.carrier is True
+    assert result.mtu == 1500
+    assert result.link_speed_mbps == 1000
+    assert result.duplex == "full"
+
+    assert result.ipv4_addresses == (
+        "10.0.18.54",
+    )
+
+
+def test_network_interface_info_rejects_unknown_interface() -> None:
+    adapter = LinuxSystemAdapter()
+
+    with patch(
+        "app.adapters.linux.linux_system_adapter."
+        "psutil.net_if_stats",
+        return_value={},
+    ):
+        with pytest.raises(ValueError):
+            adapter.network_interface_info(
+                "missing0"
+            )
+
+
+def test_classifies_loopback() -> None:
+    adapter = LinuxSystemAdapter()
+
+    result = adapter._classify_network_interface(
+        "lo",
+        Path("/sys/class/net/lo"),
+    )
+
+    assert result is (
+        NetworkInterfaceType.LOOPBACK
+    )
+
+
+def test_normalize_duplex() -> None:
+    adapter = LinuxSystemAdapter()
+
+    assert adapter._normalize_duplex(2) == "full"
+    assert adapter._normalize_duplex(1) == "half"
+    assert adapter._normalize_duplex(0) is None
+
+
+def test_network_interface_infos_discovers_all_interfaces() -> None:
+    adapter = LinuxSystemAdapter()
+
+    with (
+        patch(
+            "app.adapters.linux.linux_system_adapter."
+            "psutil.net_if_stats",
+            return_value={
+                "z-nic": object(),
+                "eth0": object(),
+                "lo": object(),
+            },
+        ),
+        patch.object(
+            adapter,
+            "network_interface_info",
+            side_effect=lambda interface: (
+                NetworkInterfaceInfo(
+                    interface=interface,
+                    interface_type=(
+                        NetworkInterfaceType.LOOPBACK
+                        if interface == "lo"
+                        else NetworkInterfaceType.ETHERNET
+                    ),
+                    is_up=True,
+                    carrier=True,
+                    mtu=1500,
+                )
+            ),
+        ),
+    ):
+        result = adapter.network_interface_infos()
+
+    assert isinstance(result, tuple)
+
+    assert tuple(
+        item.interface
+        for item in result
+    ) == (
+        "eth0",
+        "lo",
+        "z-nic",
+    )

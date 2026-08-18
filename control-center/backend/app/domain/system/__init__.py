@@ -10,6 +10,11 @@ from app.domain.system.models import (
     UptimeInfo,
 )
 
+from app.domain.system.network_interfaces import (
+    NetworkInterfaceInfo,
+    NetworkInterfaceType,
+)
+
 from app.domain.system.network_rates import (
     NetworkRate,
     NetworkRateCalculator,
@@ -27,6 +32,8 @@ __all__ = [
     "DiskInfo",
     "MemoryInfo",
     "NetworkInfo",
+    "NetworkInterfaceInfo",
+    "NetworkInterfaceType",
     "NetworkRate",
     "NetworkRateCalculator",
     "SystemInfo",
