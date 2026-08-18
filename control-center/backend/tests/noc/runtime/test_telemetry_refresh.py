@@ -854,3 +854,215 @@ def test_second_refresh_publishes_network_quality_rates() -> None:
         assert sample is not None
         assert sample.value == value
         assert sample.unit == "count/s"
+
+
+# ---------------------------------------------------------------------------
+# Network policy -> effective network health -> integral NodeHealth
+# ---------------------------------------------------------------------------
+
+from app.noc.domain.network_interface_policy import (
+    NetworkInterfacePolicy,
+    NetworkInterfaceRole,
+)
+from app.noc.domain.node_health import NodeHealthState
+
+
+class NetworkPolicySystemAdapter(FakeSystemAdapter):
+    """Adapter determinista para validar política operacional de NIC."""
+
+    def __init__(
+        self,
+        *,
+        interface: str,
+        is_up: bool,
+        carrier: bool,
+    ) -> None:
+        self._interface = interface
+        self._is_up = is_up
+        self._carrier = carrier
+
+    def network_info(
+        self,
+        interface: str,
+    ) -> NetworkInfo:
+        return NetworkInfo(
+            interface=interface,
+            bytes_sent=2_000,
+            bytes_received=3_000,
+            packets_sent=20,
+            packets_received=30,
+            errors_in=0,
+            errors_out=0,
+            dropped_in=0,
+            dropped_out=0,
+        )
+
+    def network_interfaces(
+        self,
+    ) -> tuple[NetworkInfo, ...]:
+        return (
+            self.network_info(
+                self._interface
+            ),
+        )
+
+    def network_interface_infos(
+        self,
+    ) -> tuple[NetworkInterfaceInfo, ...]:
+        return (
+            NetworkInterfaceInfo(
+                interface=self._interface,
+                interface_type=NetworkInterfaceType.ETHERNET,
+                is_up=self._is_up,
+                carrier=self._carrier,
+                mtu=1500,
+                link_speed_mbps=(
+                    1000
+                    if self._carrier
+                    else None
+                ),
+            ),
+        )
+
+
+class NetworkPolicySystemService(FixedSystemService):
+    """SystemService determinista para una NIC bajo prueba."""
+
+    def get_system_resources(
+        self,
+    ) -> SystemResources:
+        adapter = self._adapter
+
+        return SystemResources(
+            cpu=adapter.cpu_info(),
+            memory=adapter.memory_info(),
+            disk=adapter.disk_info(),
+            network=adapter.network_info(
+                adapter._interface
+            ),
+            uptime=adapter.uptime_info(),
+            captured_at=CAPTURED_AT,
+        )
+
+
+def make_network_policy_context(
+    *,
+    interface: str,
+    role: NetworkInterfaceRole,
+    expected_up: bool,
+    critical: bool,
+    is_up: bool,
+    carrier: bool,
+):
+    repository = InMemoryNodeRepository()
+    registry = NodeRegistry(repository)
+
+    node = Node(
+        node_id=NodeId.create(
+            id="streaming-core",
+            name="streaming",
+            display_name="Streaming Core",
+        ),
+        node_type=NodeType.STREAMING,
+    )
+
+    instance = node.create_instance(
+        instance_id="streaming-primary"
+    )
+
+    registry.register(node)
+
+    metric_service = MetricService(
+        registry
+    )
+
+    health_service = HealthService(
+        registry
+    )
+
+    system_service = NetworkPolicySystemService(
+        NetworkPolicySystemAdapter(
+            interface=interface,
+            is_up=is_up,
+            carrier=carrier,
+        )
+    )
+
+    policy = NetworkInterfacePolicy(
+        interface=interface,
+        role=role,
+        expected_up=expected_up,
+        critical=critical,
+    )
+
+    refresh_service = TelemetryRefreshService(
+        system_service=system_service,
+        metric_service=metric_service,
+        health_service=health_service,
+        network_policies=(policy,),
+    )
+
+    return (
+        node,
+        instance,
+        health_service,
+        refresh_service,
+    )
+
+
+def test_optional_backup_down_does_not_degrade_node_health() -> None:
+    (
+        node,
+        instance,
+        health_service,
+        service,
+    ) = make_network_policy_context(
+        interface="ens2f1",
+        role=NetworkInterfaceRole.BACKUP,
+        expected_up=False,
+        critical=False,
+        is_up=False,
+        carrier=False,
+    )
+
+    service.refresh_once(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    health = health_service.current(
+        node.node_id,
+        instance.instance_id,
+    )
+
+    assert health is not None
+    assert health.state is NodeHealthState.HEALTHY
+
+
+def test_required_critical_ingest_down_makes_node_health_critical() -> None:
+    (
+        node,
+        instance,
+        health_service,
+        service,
+    ) = make_network_policy_context(
+        interface="enp9s0",
+        role=NetworkInterfaceRole.INGEST,
+        expected_up=True,
+        critical=True,
+        is_up=False,
+        carrier=False,
+    )
+
+    service.refresh_once(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    health = health_service.current(
+        node.node_id,
+        instance.instance_id,
+    )
+
+    assert health is not None
+    assert health.state is NodeHealthState.CRITICAL
