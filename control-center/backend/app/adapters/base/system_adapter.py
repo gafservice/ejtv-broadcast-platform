@@ -42,6 +42,10 @@ class SystemAdapter(ABC):
     @abstractmethod
     def network_info(self, interface: str) -> NetworkInfo:
         """Retorna los contadores de una interfaz de red."""
+
+    @abstractmethod
+    def network_interfaces(self) -> tuple[NetworkInfo, ...]:
+        """Retorna dinámicamente las interfaces de red disponibles."""
     
     @abstractmethod
     def uptime_info(self) -> UptimeInfo:

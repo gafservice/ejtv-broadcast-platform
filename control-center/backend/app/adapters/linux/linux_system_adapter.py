@@ -173,6 +173,29 @@ class LinuxSystemAdapter(SystemAdapter):
             dropped_in=int(counters.dropin),
             dropped_out=int(counters.dropout),
         )
+    def network_interfaces(self) -> tuple[NetworkInfo, ...]:
+        """Descubre los contadores de todas las interfaces de red."""
+
+        counters_by_interface = psutil.net_io_counters(
+            pernic=True,
+        )
+
+        return tuple(
+            NetworkInfo(
+                interface=interface,
+                bytes_sent=int(counters.bytes_sent),
+                bytes_received=int(counters.bytes_recv),
+                packets_sent=int(counters.packets_sent),
+                packets_received=int(counters.packets_recv),
+                errors_in=int(counters.errin),
+                errors_out=int(counters.errout),
+                dropped_in=int(counters.dropin),
+                dropped_out=int(counters.dropout),
+            )
+            for interface, counters
+            in sorted(counters_by_interface.items())
+        )
+
     def uptime_info(self) -> UptimeInfo:
         """Retorna el tiempo de funcionamiento del sistema."""
 

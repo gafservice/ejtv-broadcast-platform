@@ -424,3 +424,72 @@ def test_network_info_rejects_unknown_interface() -> None:
     ):
         with pytest.raises(ValueError):
             adapter.network_info("ens2f0")
+
+def test_network_interfaces_discovers_all_interfaces() -> None:
+    """Debe descubrir todas las interfaces con orden determinista."""
+
+    adapter = LinuxSystemAdapter()
+
+    def make_counters(
+        *,
+        sent: int,
+        received: int,
+    ):
+        return type(
+            "NetworkCounters",
+            (),
+            {
+                "bytes_sent": sent,
+                "bytes_recv": received,
+                "packets_sent": 10,
+                "packets_recv": 20,
+                "errin": 1,
+                "errout": 2,
+                "dropin": 3,
+                "dropout": 4,
+            },
+        )()
+
+    counters_by_interface = {
+        "z-nic": make_counters(
+            sent=300,
+            received=3_000,
+        ),
+        "eth0": make_counters(
+            sent=100,
+            received=1_000,
+        ),
+        "lo": make_counters(
+            sent=200,
+            received=2_000,
+        ),
+    }
+
+    with patch(
+        "app.adapters.linux.linux_system_adapter."
+        "psutil.net_io_counters",
+        return_value=counters_by_interface,
+    ) as net_io_counters:
+        result = adapter.network_interfaces()
+
+    net_io_counters.assert_called_once_with(
+        pernic=True,
+    )
+
+    assert isinstance(result, tuple)
+
+    assert tuple(
+        item.interface
+        for item in result
+    ) == (
+        "eth0",
+        "lo",
+        "z-nic",
+    )
+
+    assert result[0].bytes_sent == 100
+    assert result[0].bytes_received == 1_000
+    assert result[0].errors_in == 1
+    assert result[0].errors_out == 2
+    assert result[0].dropped_in == 3
+    assert result[0].dropped_out == 4

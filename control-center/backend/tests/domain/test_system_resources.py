@@ -439,3 +439,111 @@ def test_network_info_rejects_empty_interface(
             dropped_in=0,
             dropped_out=0,
         )
+
+def test_system_resources_legacy_network_populates_networks() -> None:
+    resources = build_system_resources()
+
+    assert resources.networks == (
+        resources.network,
+    )
+
+
+def test_system_resources_accepts_multiple_network_interfaces() -> None:
+    resources = build_system_resources()
+
+    backup = NetworkInfo(
+        interface="ens2f1",
+        bytes_sent=500,
+        bytes_received=1_000,
+        packets_sent=5,
+        packets_received=10,
+        errors_in=0,
+        errors_out=0,
+        dropped_in=0,
+        dropped_out=0,
+    )
+
+    multi = SystemResources(
+        cpu=resources.cpu,
+        memory=resources.memory,
+        disk=resources.disk,
+        network=resources.network,
+        uptime=resources.uptime,
+        captured_at=resources.captured_at,
+        networks=(
+            resources.network,
+            backup,
+        ),
+    )
+
+    assert len(multi.networks) == 2
+
+    assert tuple(
+        item.interface
+        for item in multi.networks
+    ) == (
+        "ens2f0",
+        "ens2f1",
+    )
+
+
+def test_system_resources_rejects_duplicate_network_interfaces() -> None:
+    resources = build_system_resources()
+
+    with pytest.raises(ValueError):
+        SystemResources(
+            cpu=resources.cpu,
+            memory=resources.memory,
+            disk=resources.disk,
+            network=resources.network,
+            uptime=resources.uptime,
+            captured_at=resources.captured_at,
+            networks=(
+                resources.network,
+                resources.network,
+            ),
+        )
+
+
+def test_system_resources_requires_primary_network_in_networks() -> None:
+    resources = build_system_resources()
+
+    other = NetworkInfo(
+        interface="ens2f1",
+        bytes_sent=500,
+        bytes_received=1_000,
+        packets_sent=5,
+        packets_received=10,
+        errors_in=0,
+        errors_out=0,
+        dropped_in=0,
+        dropped_out=0,
+    )
+
+    with pytest.raises(ValueError):
+        SystemResources(
+            cpu=resources.cpu,
+            memory=resources.memory,
+            disk=resources.disk,
+            network=resources.network,
+            uptime=resources.uptime,
+            captured_at=resources.captured_at,
+            networks=(other,),
+        )
+
+
+def test_system_resources_rejects_non_tuple_networks() -> None:
+    resources = build_system_resources()
+
+    with pytest.raises(ValueError):
+        SystemResources(
+            cpu=resources.cpu,
+            memory=resources.memory,
+            disk=resources.disk,
+            network=resources.network,
+            uptime=resources.uptime,
+            captured_at=resources.captured_at,
+            networks=[  # type: ignore[arg-type]
+                resources.network,
+            ],
+        )

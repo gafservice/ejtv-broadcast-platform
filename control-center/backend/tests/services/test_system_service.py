@@ -52,6 +52,15 @@ class FakeSystemAdapter(SystemAdapter):
             usage_percent=40.0,
         )
 
+    def network_interfaces(self) -> tuple[NetworkInfo, ...]:
+        """Retorna múltiples interfaces del adapter falso."""
+
+        return (
+            self.network_info("enp9s0"),
+            self.network_info("ens2f0"),
+            self.network_info("ens2f1"),
+        )
+
     def uptime_info(self) -> UptimeInfo:
         return UptimeInfo(
             uptime_seconds=86_400,
@@ -134,6 +143,20 @@ def test_system_service_returns_system_resources() -> None:
     assert result.network.interface == "ens2f0"
     assert result.network.bytes_sent == 1_000_000
     assert result.network.bytes_received == 2_000_000
+
+    assert len(result.networks) == 3
+
+    assert tuple(
+        item.interface
+        for item in result.networks
+    ) == (
+        "enp9s0",
+        "ens2f0",
+        "ens2f1",
+    )
+
+
+
 
 def test_system_service_returns_service_monitoring() -> None:
     service = SystemService(FakeSystemAdapter())

@@ -30,14 +30,32 @@ class SystemService:
     def get_system_resources(self) -> SystemResources:
         """Obtiene y consolida los recursos actuales del sistema."""
 
+        networks = self._adapter.network_interfaces()
+
+        primary_network = next(
+            (
+                network
+                for network in networks
+                if network.interface == "ens2f0"
+            ),
+            None,
+        )
+
+        if primary_network is None:
+            raise RuntimeError(
+                "No se encontró la interfaz primaria temporal 'ens2f0'."
+            )
+
         return SystemResources(
             cpu=self._adapter.cpu_info(),
             memory=self._adapter.memory_info(),
             disk=self._adapter.disk_info(),
-            network=self._adapter.network_info("ens2f0"),
+            network=primary_network,
+            networks=networks,
             uptime=self._adapter.uptime_info(),
             captured_at=datetime.now(UTC),
-        )  
+        )
+
     def get_service_monitoring(
         self,
         ) -> ServiceMonitoringSnapshot:

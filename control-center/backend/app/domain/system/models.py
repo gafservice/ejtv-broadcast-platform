@@ -416,6 +416,8 @@ class SystemResources:
     uptime: UptimeInfo
     captured_at: datetime
 
+    networks: tuple[NetworkInfo, ...] = ()
+
     def __post_init__(self) -> None:
         """Valida los componentes y el instante de medición."""
 
@@ -435,6 +437,47 @@ class SystemResources:
                     f"El campo '{field_name}' debe ser una instancia de "
                     f"{expected_type.__name__}."
                 )
+
+        if not isinstance(self.networks, tuple):
+            raise ValueError(
+                "El campo 'networks' debe ser una tupla."
+            )
+
+        normalized_networks = (
+            self.networks
+            if self.networks
+            else (self.network,)
+        )
+
+        for item in normalized_networks:
+            if not isinstance(item, NetworkInfo):
+                raise ValueError(
+                    "Todos los elementos de 'networks' deben ser "
+                    "instancias de NetworkInfo."
+                )
+
+        interface_names = tuple(
+            item.interface
+            for item in normalized_networks
+        )
+
+        if len(set(interface_names)) != len(interface_names):
+            raise ValueError(
+                "El campo 'networks' no puede contener interfaces "
+                "duplicadas."
+            )
+
+        if self.network.interface not in interface_names:
+            raise ValueError(
+                "La interfaz primaria 'network' debe estar incluida "
+                "en 'networks'."
+            )
+
+        object.__setattr__(
+            self,
+            "networks",
+            normalized_networks,
+        )
 
         if not isinstance(self.captured_at, datetime):
             raise ValueError(

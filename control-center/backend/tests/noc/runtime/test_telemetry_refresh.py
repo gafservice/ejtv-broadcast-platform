@@ -104,6 +104,13 @@ class FakeSystemAdapter(SystemAdapter):
             dropped_out=0,
         )
 
+    def network_interfaces(self) -> tuple[NetworkInfo, ...]:
+        """Retorna las interfaces disponibles del adapter falso."""
+
+        return (
+            self.network_info("ens2f0"),
+        )
+
     def uptime_info(self) -> UptimeInfo:
         return UptimeInfo(
             uptime_seconds=3600
