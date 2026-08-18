@@ -16,6 +16,7 @@ from app.domain.system.network_interfaces import (
 )
 
 from app.domain.system.network_rates import (
+    MultiNetworkRateCalculator,
     NetworkRate,
     NetworkRateCalculator,
 )
@@ -39,6 +40,7 @@ __all__ = [
     "NetworkInfo",
     "NetworkInterfaceInfo",
     "NetworkInterfaceType",
+    "MultiNetworkRateCalculator",
     "NetworkRate",
     "NetworkRateCalculator",
     "NetworkInterfaceTelemetry",
