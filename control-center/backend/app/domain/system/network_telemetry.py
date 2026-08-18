@@ -9,6 +9,7 @@ sin depender de Linux ni de mecanismos concretos de adquisición.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from app.domain.system.models import NetworkInfo
 from app.domain.system.network_interfaces import (
@@ -23,6 +24,7 @@ class NetworkInterfaceTelemetry:
 
     info: NetworkInterfaceInfo
     counters: NetworkInfo
+    captured_at: datetime
     rates: NetworkRate | None = None
 
     def __post_init__(self) -> None:
@@ -44,6 +46,19 @@ class NetworkInterfaceTelemetry:
                 "counters must be a NetworkInfo"
             )
 
+        if not isinstance(
+            self.captured_at,
+            datetime,
+        ):
+            raise TypeError(
+                "captured_at must be a datetime"
+            )
+
+        if self.captured_at.tzinfo is None:
+            raise ValueError(
+                "captured_at must include timezone information"
+            )
+
         if (
             self.rates is not None
             and not isinstance(
@@ -61,6 +76,15 @@ class NetworkInterfaceTelemetry:
             raise ValueError(
                 "info and counters must refer to "
                 "the same interface"
+            )
+
+        if (
+            self.rates is not None
+            and self.rates.captured_at != self.captured_at
+        ):
+            raise ValueError(
+                "rates and telemetry must refer "
+                "to the same capture time"
             )
 
         if (

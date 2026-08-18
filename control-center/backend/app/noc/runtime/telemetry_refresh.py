@@ -37,6 +37,24 @@ from app.noc.services.health_evaluator import (
 from app.noc.services.health_service import (
     HealthService,
 )
+from app.noc.domain.network_interface_policy import (
+    NetworkInterfacePolicy,
+)
+from app.noc.services.network_health_aggregator import (
+    NetworkHealthAggregator,
+)
+from app.noc.services.network_interface_effective_health_evaluator import (
+    NetworkInterfaceEffectiveHealthEvaluator,
+)
+from app.noc.services.network_interface_health_evaluator import (
+    NetworkInterfaceHealthEvaluator,
+)
+from app.noc.services.node_subsystem_health_aggregator import (
+    NodeSubsystemHealthAggregator,
+)
+from app.services.network_telemetry_service import (
+    NetworkTelemetryService,
+)
 from app.noc.services.metric_service import (
     MetricReceipt,
     MetricService,
@@ -68,6 +86,10 @@ class TelemetryRefreshService:
         health_service: HealthService,
         provider: SystemMetricsProvider | None = None,
         health_evaluator: HealthEvaluator | None = None,
+        network_policies: tuple[
+            NetworkInterfacePolicy,
+            ...,
+        ] = (),
     ) -> None:
         if not isinstance(system_service, SystemService):
             raise TypeError(
@@ -109,6 +131,34 @@ class TelemetryRefreshService:
                 "provider must be a SystemMetricsProvider or None"
             )
 
+        if not isinstance(network_policies, tuple):
+            raise TypeError(
+                "network_policies must be a tuple"
+            )
+
+        for policy in network_policies:
+            if not isinstance(
+                policy,
+                NetworkInterfacePolicy,
+            ):
+                raise TypeError(
+                    "network_policies must contain "
+                    "NetworkInterfacePolicy objects"
+                )
+
+        policy_interfaces = tuple(
+            policy.interface
+            for policy in network_policies
+        )
+
+        if len(set(policy_interfaces)) != len(
+            policy_interfaces
+        ):
+            raise ValueError(
+                "network_policies must not contain "
+                "duplicate interfaces"
+            )
+
         self._system_service = system_service
         self._metric_service = metric_service
         self._health_service = health_service
@@ -126,6 +176,25 @@ class TelemetryRefreshService:
         self._network_rate_provider = (
             NetworkRateMetricsProvider()
         )
+        self._network_telemetry_service = (
+            NetworkTelemetryService()
+        )
+        self._network_health_evaluator = (
+            NetworkInterfaceHealthEvaluator()
+        )
+        self._network_effective_health_evaluator = (
+            NetworkInterfaceEffectiveHealthEvaluator()
+        )
+        self._network_health_aggregator = (
+            NetworkHealthAggregator()
+        )
+        self._node_health_aggregator = (
+            NodeSubsystemHealthAggregator()
+        )
+        self._network_policies = {
+            policy.interface: policy
+            for policy in network_policies
+        }
         self._previous_resources: SystemResources | None = None
 
     @property
@@ -212,9 +281,65 @@ class TelemetryRefreshService:
             )
         )
 
-        health = (
+        system_health = (
             self._health_evaluator.evaluate(
                 current_metrics
+            )
+        )
+
+        interface_infos = (
+            self._system_service
+            .get_network_interface_infos()
+        )
+
+        network_telemetry = (
+            self._network_telemetry_service.build(
+                previous=self._previous_resources,
+                current=resources,
+                interface_infos=interface_infos,
+            )
+        )
+
+        effective_interface_health = []
+
+        for telemetry in network_telemetry:
+            observed = (
+                self._network_health_evaluator.evaluate(
+                    telemetry
+                )
+            )
+
+            policy = self._network_policies.get(
+                telemetry.interface
+            )
+
+            if policy is None:
+                effective = observed
+            else:
+                effective = (
+                    self._network_effective_health_evaluator
+                    .evaluate(
+                        observed,
+                        policy,
+                    )
+                )
+
+            effective_interface_health.append(
+                effective
+            )
+
+        network_health = (
+            self._network_health_aggregator.aggregate(
+                tuple(effective_interface_health)
+            )
+        )
+
+        health = (
+            self._node_health_aggregator.aggregate(
+                (
+                    system_health,
+                    network_health,
+                )
             )
         )
 

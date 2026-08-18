@@ -93,6 +93,7 @@ class NetworkTelemetryService:
                 NetworkInterfaceTelemetry(
                     info=info,
                     counters=counters_by_interface[interface],
+                    captured_at=current.captured_at,
                     rates=rates_by_interface.get(interface),
                 )
             )

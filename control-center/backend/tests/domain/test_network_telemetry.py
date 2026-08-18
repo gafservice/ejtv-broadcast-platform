@@ -13,6 +13,16 @@ from app.domain.system import (
 )
 
 
+CAPTURED_AT = datetime(
+    2026,
+    8,
+    18,
+    20,
+    0,
+    tzinfo=UTC,
+)
+
+
 def make_info(
     interface: str = "ens2f0",
 ) -> NetworkInterfaceInfo:
@@ -44,6 +54,8 @@ def make_counters(
 
 def make_rate(
     interface: str = "ens2f0",
+    *,
+    captured_at: datetime | None = None,
 ) -> NetworkRate:
     return NetworkRate(
         interface=interface,
@@ -54,7 +66,11 @@ def make_rate(
         errors_out=0,
         dropped_in=0,
         dropped_out=0,
-        captured_at=datetime.now(UTC),
+        captured_at=(
+            captured_at
+            if captured_at is not None
+            else CAPTURED_AT
+        ),
         errors_in_per_second=0.0,
         errors_out_per_second=0.0,
         dropped_in_per_second=0.0,
@@ -66,6 +82,7 @@ def test_network_interface_telemetry_creation() -> None:
     telemetry = NetworkInterfaceTelemetry(
         info=make_info(),
         counters=make_counters(),
+        captured_at=CAPTURED_AT,
         rates=make_rate(),
     )
 
@@ -80,6 +97,7 @@ def test_network_interface_telemetry_accepts_missing_rates() -> None:
     telemetry = NetworkInterfaceTelemetry(
         info=make_info(),
         counters=make_counters(),
+        captured_at=CAPTURED_AT,
     )
 
     assert telemetry.interface == "ens2f0"
@@ -91,6 +109,7 @@ def test_network_interface_telemetry_rejects_counter_mismatch() -> None:
         NetworkInterfaceTelemetry(
             info=make_info("ens2f0"),
             counters=make_counters("enp9s0"),
+            captured_at=CAPTURED_AT,
         )
 
 
@@ -99,7 +118,11 @@ def test_network_interface_telemetry_rejects_rate_mismatch() -> None:
         NetworkInterfaceTelemetry(
             info=make_info("ens2f0"),
             counters=make_counters("ens2f0"),
-            rates=make_rate("ens2f1"),
+            captured_at=CAPTURED_AT,
+            rates=make_rate(
+                "ens2f1",
+                captured_at=CAPTURED_AT,
+            ),
         )
 
 
@@ -118,6 +141,7 @@ def test_network_interface_telemetry_rejects_invalid_types(
     values = {
         "info": make_info(),
         "counters": make_counters(),
+        "captured_at": CAPTURED_AT,
         "rates": make_rate(),
     }
 
@@ -126,4 +150,62 @@ def test_network_interface_telemetry_rejects_invalid_types(
     with pytest.raises(TypeError):
         NetworkInterfaceTelemetry(
             **values,  # type: ignore[arg-type]
+        )
+
+
+def test_network_interface_telemetry_rejects_naive_captured_at() -> None:
+    with pytest.raises(ValueError):
+        NetworkInterfaceTelemetry(
+            info=make_info(),
+            counters=make_counters(),
+            captured_at=datetime(
+                2026,
+                8,
+                18,
+                20,
+                0,
+            ),
+        )
+
+
+def test_network_interface_telemetry_rejects_rate_capture_mismatch() -> None:
+    with pytest.raises(ValueError):
+        NetworkInterfaceTelemetry(
+            info=make_info(),
+            counters=make_counters(),
+            captured_at=CAPTURED_AT,
+            rates=make_rate(
+                captured_at=CAPTURED_AT.replace(
+                    minute=1,
+                ),
+            ),
+        )
+
+
+def test_network_interface_telemetry_rejects_naive_captured_at() -> None:
+    with pytest.raises(ValueError):
+        NetworkInterfaceTelemetry(
+            info=make_info(),
+            counters=make_counters(),
+            captured_at=datetime(
+                2026,
+                8,
+                18,
+                20,
+                0,
+            ),
+        )
+
+
+def test_network_interface_telemetry_rejects_rate_capture_mismatch() -> None:
+    with pytest.raises(ValueError):
+        NetworkInterfaceTelemetry(
+            info=make_info(),
+            counters=make_counters(),
+            captured_at=CAPTURED_AT,
+            rates=make_rate(
+                captured_at=CAPTURED_AT.replace(
+                    minute=1,
+                ),
+            ),
         )
