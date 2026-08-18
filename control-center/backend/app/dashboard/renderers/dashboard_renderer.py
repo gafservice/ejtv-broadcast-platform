@@ -9,6 +9,9 @@ from app.dashboard.renderers.active_connections_panel_renderer import (
 from app.dashboard.renderers.network_interfaces_panel_renderer import (
     NetworkInterfacesPanelRenderer,
 )
+from app.dashboard.renderers.node_health_panel_renderer import (
+    NodeHealthPanelRenderer,
+)
 from app.dashboard.renderers.path_table_renderer import PathTableRenderer
 from app.dashboard.renderers.server_panel_renderer import (
     ServerPanelRenderer,
@@ -41,6 +44,9 @@ class DashboardRenderer:
         self._system_renderer = SystemPanelRenderer()
         self._network_interfaces_renderer = (
             NetworkInterfacesPanelRenderer()
+        )
+        self._node_health_renderer = (
+            NodeHealthPanelRenderer()
         )
         self._path_table_renderer = PathTableRenderer()
 
@@ -89,6 +95,7 @@ class DashboardRenderer:
             Layout(name="server"),
             Layout(name="streaming"),
             Layout(name="health"),
+            Layout(name="node_health"),
         )
 
         if data.sessions is not None:
@@ -111,6 +118,12 @@ class DashboardRenderer:
 
         layout["health"].update(
             self._health_renderer.render(data.health)
+        )
+
+        layout["node_health"].update(
+            self._node_health_renderer.render(
+                data.node_health
+            )
         )
 
         if data.system is not None:

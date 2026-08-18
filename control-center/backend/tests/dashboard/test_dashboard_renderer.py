@@ -287,3 +287,58 @@ def test_render_preserves_legacy_layout_without_network_interfaces() -> None:
     output = console.export_text()
 
     assert "NETWORK INTERFACES" not in output
+
+
+def test_render_contains_node_health_panel() -> None:
+    from datetime import UTC, datetime
+
+    from app.dashboard.models import (
+        NodeHealthPanelData,
+    )
+
+    renderer = DashboardRenderer()
+    base_data = build_dashboard_data()
+
+    node_health = NodeHealthPanelData(
+        state="HEALTHY",
+        system_state="HEALTHY",
+        network_state="HEALTHY",
+        interfaces=(),
+        captured_at=datetime(
+            2026,
+            8,
+            18,
+            23,
+            59,
+            tzinfo=UTC,
+        ),
+    )
+
+    data = DashboardData(
+        server=base_data.server,
+        streaming=base_data.streaming,
+        paths=base_data.paths,
+        health=base_data.health,
+        system=base_data.system,
+        sessions=base_data.sessions,
+        active_connections=base_data.active_connections,
+        network_interfaces=base_data.network_interfaces,
+        node_health=node_health,
+    )
+
+    layout = renderer.render(data)
+
+    console = Console(
+        record=True,
+        width=180,
+        color_system=None,
+    )
+
+    console.print(layout)
+
+    output = console.export_text()
+
+    assert "NODE HEALTH" in output
+    assert "Status: HEALTHY" in output
+    assert "System: HEALTHY" in output
+    assert "Network: HEALTHY" in output
