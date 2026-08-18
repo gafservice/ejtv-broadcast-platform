@@ -18,6 +18,10 @@ from app.domain.system import (
     DiskInfo,
     MemoryInfo,
     NetworkInfo,
+    NetworkInterfaceInfo,
+    NetworkInterfaceTelemetry,
+    NetworkInterfaceType,
+    NetworkRate,
     SystemResources,
     UptimeInfo,
 )
@@ -949,3 +953,183 @@ def test_build_active_connections_panel_handles_missing_values() -> None:
     assert connection.bitrate_bps is None
     assert connection.uptime_seconds == 0
     assert connection.username is None
+
+def make_network_interface_telemetry(
+    interface: str,
+    *,
+    interface_type: NetworkInterfaceType = (
+        NetworkInterfaceType.ETHERNET
+    ),
+    is_up: bool = True,
+    carrier: bool | None = True,
+    link_speed_mbps: int | None = 1000,
+    rx_bps: float | None = 1_000_000.0,
+    tx_bps: float | None = 2_000_000.0,
+    dropped_in_per_second: float | None = 0.5,
+) -> NetworkInterfaceTelemetry:
+    captured_at = datetime(
+        2026,
+        8,
+        18,
+        19,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    info = NetworkInterfaceInfo(
+        interface=interface,
+        interface_type=interface_type,
+        is_up=is_up,
+        carrier=carrier,
+        mtu=1500,
+        mac_address="00:11:22:33:44:55",
+        link_speed_mbps=link_speed_mbps,
+        duplex="full" if link_speed_mbps is not None else None,
+        ipv4_addresses=("10.0.0.1",),
+        ipv6_addresses=(),
+    )
+
+    counters = NetworkInfo(
+        interface=interface,
+        bytes_sent=2_000_000,
+        bytes_received=1_000_000,
+        packets_sent=20_000,
+        packets_received=10_000,
+        errors_in=1,
+        errors_out=2,
+        dropped_in=3,
+        dropped_out=4,
+    )
+
+    rates = NetworkRate(
+        interface=interface,
+        rx_bps=rx_bps,
+        tx_bps=tx_bps,
+        interval_seconds=1.0,
+        errors_in=1,
+        errors_out=2,
+        dropped_in=3,
+        dropped_out=4,
+        captured_at=captured_at,
+        errors_in_per_second=0.0,
+        errors_out_per_second=0.0,
+        dropped_in_per_second=dropped_in_per_second,
+        dropped_out_per_second=0.0,
+    )
+
+    return NetworkInterfaceTelemetry(
+        info=info,
+        counters=counters,
+        rates=rates,
+    )
+
+
+def test_build_network_interfaces_panel() -> None:
+    service = DashboardService()
+
+    telemetry = (
+        make_network_interface_telemetry(
+            "enp9s0",
+            link_speed_mbps=1000,
+            rx_bps=9_000_000.0,
+            tx_bps=100_000.0,
+        ),
+        make_network_interface_telemetry(
+            "ens2f0",
+            link_speed_mbps=100,
+            rx_bps=60_000.0,
+            tx_bps=4_900_000.0,
+            dropped_in_per_second=0.8,
+        ),
+    )
+
+    panel = service.build_network_interfaces_panel(
+        telemetry=telemetry,
+    )
+
+    assert len(panel.interfaces) == 2
+
+    assert tuple(
+        row.interface
+        for row in panel.interfaces
+    ) == (
+        "enp9s0",
+        "ens2f0",
+    )
+
+    first = panel.interfaces[0]
+
+    assert first.interface_type == "ETHERNET"
+    assert first.is_up is True
+    assert first.carrier is True
+    assert first.link_speed_mbps == 1000
+    assert first.rx_bps == 9_000_000.0
+    assert first.tx_bps == 100_000.0
+
+    second = panel.interfaces[1]
+
+    assert second.link_speed_mbps == 100
+    assert second.rx_bps == 60_000.0
+    assert second.tx_bps == 4_900_000.0
+    assert second.dropped_in_per_second == 0.8
+
+    assert panel.captured_at == telemetry[0].rates.captured_at
+
+
+def test_build_network_interfaces_panel_rejects_non_tuple() -> None:
+    service = DashboardService()
+
+    with pytest.raises(TypeError):
+        service.build_network_interfaces_panel(
+            telemetry=[  # type: ignore[arg-type]
+                make_network_interface_telemetry(
+                    "ens2f0"
+                ),
+            ],
+        )
+
+
+def test_build_dashboard_transports_network_interfaces() -> None:
+    service = DashboardService()
+
+    telemetry = (
+        make_network_interface_telemetry(
+            "ens2f0"
+        ),
+    )
+
+    network_interfaces = service.build_network_interfaces_panel(
+        telemetry=telemetry,
+    )
+
+    captured_at = telemetry[0].rates.captured_at
+
+    server = service.build_server_panel(
+        hostname="ejtv-01",
+        mediamtx_online=True,
+        api_online=True,
+        snapshot=MediaMTXSnapshot(
+            captured_at=captured_at,
+            paths=(),
+            reported_item_count=0,
+            reported_page_count=0,
+        ),
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    streaming = service.build_streaming_panel(
+        active_paths=0,
+        readers=0,
+        inbound_bitrate_bps=None,
+        outbound_bitrate_bps=None,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    dashboard = service.build_dashboard(
+        server=server,
+        streaming=streaming,
+        paths=(),
+        network_interfaces=network_interfaces,
+    )
+
+    assert dashboard.network_interfaces is network_interfaces

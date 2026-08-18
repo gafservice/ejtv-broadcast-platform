@@ -21,6 +21,8 @@ from app.domain.system import (
     DiskInfo,
     MemoryInfo,
     NetworkInfo,
+    NetworkInterfaceInfo,
+    NetworkInterfaceType,
     UptimeInfo,
     MonitoredService,
     ServiceMonitoringSnapshot,
@@ -82,6 +84,22 @@ class FakeSystemAdapter(SystemAdapter):
 
         return (
             self.network_info("ens2f0"),
+        )
+
+    def network_interface_infos(
+        self,
+    ) -> tuple[NetworkInterfaceInfo, ...]:
+        """Retorna identidad y estado de las interfaces."""
+
+        return (
+            NetworkInterfaceInfo(
+                interface="ens2f0",
+                interface_type=NetworkInterfaceType.ETHERNET,
+                is_up=True,
+                carrier=True,
+                mtu=1500,
+                link_speed_mbps=100,
+            ),
         )
 
     def uptime_info(self) -> UptimeInfo:

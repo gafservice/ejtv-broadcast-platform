@@ -17,6 +17,9 @@ from app.dashboard.services.dashboard_service import DashboardService
 from app.dashboard.services.dashboard_snapshot_service import (
     DashboardSnapshotService,
 )
+from app.services.network_telemetry_service import (
+    NetworkTelemetryService,
+)
 from app.services.session_service import SessionService
 from app.services.streaming_health_service import StreamingHealthService
 from app.services.streaming_service import StreamingService
@@ -77,6 +80,7 @@ def build_dashboard_application() -> DashboardApplication:
     #
     system_adapter = LinuxSystemAdapter()
     system_service = SystemService(system_adapter)
+    network_telemetry_service = NetworkTelemetryService()
 
     #
     # Dashboard

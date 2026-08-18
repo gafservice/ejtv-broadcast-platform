@@ -8,6 +8,7 @@ from app.domain.system import (
     DiskInfo,
     MemoryInfo,
     NetworkInfo,
+    NetworkInterfaceInfo,
     UptimeInfo,
 )
 
@@ -47,6 +48,12 @@ class SystemAdapter(ABC):
     def network_interfaces(self) -> tuple[NetworkInfo, ...]:
         """Retorna dinámicamente las interfaces de red disponibles."""
     
+    @abstractmethod
+    def network_interface_infos(
+        self,
+    ) -> tuple[NetworkInterfaceInfo, ...]:
+        """Retorna identidad y estado de las interfaces de red."""
+
     @abstractmethod
     def uptime_info(self) -> UptimeInfo:
         """Retorna el tiempo de funcionamiento del sistema."""

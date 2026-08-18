@@ -10,6 +10,8 @@ from app.domain.system import (
     MemoryInfo,
     UptimeInfo,
     NetworkInfo,
+    NetworkInterfaceInfo,
+    NetworkInterfaceType,
     MonitoredService,
     ServiceMonitoringSnapshot,
     ServiceStatus,
@@ -59,6 +61,36 @@ class FakeSystemAdapter(SystemAdapter):
             self.network_info("enp9s0"),
             self.network_info("ens2f0"),
             self.network_info("ens2f1"),
+        )
+
+    def network_interface_infos(
+        self,
+    ) -> tuple[NetworkInterfaceInfo, ...]:
+        return (
+            NetworkInterfaceInfo(
+                interface="enp9s0",
+                interface_type=NetworkInterfaceType.ETHERNET,
+                is_up=True,
+                carrier=True,
+                mtu=1500,
+                link_speed_mbps=1000,
+            ),
+            NetworkInterfaceInfo(
+                interface="ens2f0",
+                interface_type=NetworkInterfaceType.ETHERNET,
+                is_up=True,
+                carrier=True,
+                mtu=1500,
+                link_speed_mbps=100,
+            ),
+            NetworkInterfaceInfo(
+                interface="ens2f1",
+                interface_type=NetworkInterfaceType.ETHERNET,
+                is_up=False,
+                carrier=False,
+                mtu=1500,
+                link_speed_mbps=None,
+            ),
         )
 
     def uptime_info(self) -> UptimeInfo:
@@ -170,3 +202,30 @@ def test_system_service_returns_service_monitoring() -> None:
     assert result.services[1].name == "FFmpeg"
     assert result.services[1].status is ServiceStatus.STOPPED
     assert result.captured_at.tzinfo is not None
+
+def test_system_service_returns_network_interface_infos() -> None:
+    service = SystemService(FakeSystemAdapter())
+
+    result = service.get_network_interface_infos()
+
+    assert isinstance(result, tuple)
+    assert len(result) == 3
+
+    assert tuple(
+        item.interface
+        for item in result
+    ) == (
+        "enp9s0",
+        "ens2f0",
+        "ens2f1",
+    )
+
+    assert result[0].interface_type is (
+        NetworkInterfaceType.ETHERNET
+    )
+
+    assert result[1].is_up is True
+    assert result[1].carrier is True
+
+    assert result[2].is_up is False
+    assert result[2].carrier is False

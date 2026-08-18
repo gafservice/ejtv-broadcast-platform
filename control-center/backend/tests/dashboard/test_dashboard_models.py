@@ -175,3 +175,67 @@ def test_dashboard_data_accepts_streaming_health() -> None:
     )
 
     assert dashboard.health is health
+
+def test_dashboard_data_accepts_network_interfaces_panel() -> None:
+    from app.dashboard.models import (
+        NetworkInterfaceRowData,
+        NetworkInterfacesPanelData,
+    )
+
+    captured_at = datetime(
+        2026,
+        8,
+        18,
+        19,
+        30,
+        tzinfo=timezone.utc,
+    )
+
+    network_interfaces = NetworkInterfacesPanelData(
+        interfaces=(
+            NetworkInterfaceRowData(
+                interface="ens2f0",
+                interface_type="ETHERNET",
+                is_up=True,
+                carrier=True,
+                link_speed_mbps=100,
+                mtu=1500,
+                mac_address="00:e0:ed:2c:6d:c0",
+                ipv4_addresses=("172.16.30.35",),
+                ipv6_addresses=(),
+                rx_bps=60_000.0,
+                tx_bps=4_900_000.0,
+                errors_in=0,
+                errors_out=0,
+                dropped_in=10,
+                dropped_out=0,
+                dropped_in_per_second=0.8,
+            ),
+        ),
+        captured_at=captured_at,
+    )
+
+    dashboard = DashboardData(
+        server=ServerPanelData(
+            hostname="ejtv-01",
+            mediamtx_online=True,
+            api_online=True,
+            snapshot_at=captured_at,
+            quality="AVAILABLE",
+        ),
+        streaming=StreamingPanelData(
+            active_paths=1,
+            readers=1,
+            inbound_bitrate_bps=4_000_000,
+            outbound_bitrate_bps=4_000_000,
+            quality="AVAILABLE",
+        ),
+        paths=(),
+        network_interfaces=network_interfaces,
+    )
+
+    assert dashboard.network_interfaces is network_interfaces
+    assert (
+        dashboard.network_interfaces.interfaces[0].interface
+        == "ens2f0"
+    )

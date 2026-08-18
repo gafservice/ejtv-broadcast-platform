@@ -10,7 +10,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.dashboard.models import DashboardData
+from app.dashboard.models import (
+    DashboardData,
+    NetworkInterfacesPanelData,
+)
 from app.dashboard.services.dashboard_service import DashboardService
 from app.domain.sessions.measurement import SessionMeasurement
 from app.domain.streaming import (
@@ -41,6 +44,7 @@ class DashboardSnapshotInput:
     system_resources: SystemResources | None = None
     previous_system_resources: SystemResources | None = None
     health: StreamingHealth | None = None
+    network_interfaces: NetworkInterfacesPanelData | None = None
 
 
 class DashboardSnapshotService:
@@ -106,4 +110,7 @@ class DashboardSnapshotService:
                 snapshot_input.previous_system_resources
             ),
             health=snapshot_input.health,
+            network_interfaces=(
+                snapshot_input.network_interfaces
+            ),
         )

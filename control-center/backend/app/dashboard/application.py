@@ -23,6 +23,9 @@ from app.dashboard.services.dashboard_snapshot_service import (
 from app.domain.sessions import SessionSnapshot
 from app.domain.streaming import MediaMTXSnapshot, StreamingHealth
 from app.domain.system import SystemResources
+from app.services.network_telemetry_service import (
+    NetworkTelemetryService,
+)
 from app.services.session_service import SessionService
 from app.services.streaming_health_service import StreamingHealthService
 from app.services.streaming_service import StreamingService
@@ -46,6 +49,7 @@ class DashboardApplication:
         metrics_parser: MediaMTXMetricsParser | None = None,
         streaming_health_service: StreamingHealthService | None = None,
         dashboard_snapshot_service: DashboardSnapshotService | None = None,
+        network_telemetry_service: NetworkTelemetryService | None = None,
     ) -> None:
         self._mediamtx_adapter = mediamtx_adapter
         self._session_adapter = session_adapter
@@ -61,6 +65,11 @@ class DashboardApplication:
         )
         self._dashboard_renderer = dashboard_renderer
         self._system_service = system_service
+        self._network_telemetry_service = (
+            network_telemetry_service
+            if network_telemetry_service is not None
+            else NetworkTelemetryService()
+        )
 
         self._metrics_client = metrics_client
         self._metrics_parser = metrics_parser
@@ -104,6 +113,24 @@ class DashboardApplication:
         system_info = self._system_service.get_system_info()
         system_resources = self._system_service.get_system_resources()
 
+        interface_infos = (
+            self._system_service.get_network_interface_infos()
+        )
+
+        network_telemetry = (
+            self._network_telemetry_service.build(
+                previous=self._previous_system_resources,
+                current=system_resources,
+                interface_infos=interface_infos,
+            )
+        )
+
+        network_interfaces = (
+            self._dashboard_service.build_network_interfaces_panel(
+                telemetry=network_telemetry,
+            )
+        )
+
         snapshot_kwargs = {
             "hostname": system_info.hostname,
             "mediamtx_online": api_online,
@@ -113,6 +140,7 @@ class DashboardApplication:
             "session_measurement": session_measurement,
             "system_resources": system_resources,
             "previous_system_resources": self._previous_system_resources,
+            "network_interfaces": network_interfaces,
         }
 
         if streaming_health is not None:

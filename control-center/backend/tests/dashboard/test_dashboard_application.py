@@ -82,6 +82,23 @@ def test_run_once_builds_and_renders_dashboard() -> None:
         system_resources
     )
 
+    interface_infos = Mock()
+    system_service.get_network_interface_infos.return_value = (
+        interface_infos
+    )
+
+    network_telemetry = Mock()
+    network_interfaces = Mock()
+
+    network_telemetry_service = Mock()
+    network_telemetry_service.build.return_value = (
+        network_telemetry
+    )
+
+    dashboard_service.build_network_interfaces_panel.return_value = (
+        network_interfaces
+    )
+
     application = DashboardApplication(
         mediamtx_adapter=mediamtx_adapter,
         session_adapter=session_adapter,
@@ -90,6 +107,7 @@ def test_run_once_builds_and_renders_dashboard() -> None:
         dashboard_service=dashboard_service,
         dashboard_renderer=dashboard_renderer,
         system_service=system_service,
+        network_telemetry_service=network_telemetry_service,
     )
 
     result = application.run_once()
@@ -123,6 +141,7 @@ def test_run_once_builds_and_renders_dashboard() -> None:
         system_resources=system_resources,
         previous_system_resources=None,
         health=None,
+        network_interfaces=network_interfaces,
     )
 
     dashboard_renderer.render.assert_called_once_with(
@@ -246,6 +265,28 @@ def test_run_once_uses_previous_snapshot_on_second_execution() -> None:
         system_resources
     )
 
+    interface_infos = Mock()
+    system_service.get_network_interface_infos.return_value = (
+        interface_infos
+    )
+
+    first_network_telemetry = Mock()
+    second_network_telemetry = Mock()
+
+    first_network_interfaces = Mock()
+    second_network_interfaces = Mock()
+
+    network_telemetry_service = Mock()
+    network_telemetry_service.build.side_effect = (
+        first_network_telemetry,
+        second_network_telemetry,
+    )
+
+    dashboard_service.build_network_interfaces_panel.side_effect = (
+        first_network_interfaces,
+        second_network_interfaces,
+    )
+
     application = DashboardApplication(
         mediamtx_adapter=mediamtx_adapter,
         session_adapter=session_adapter,
@@ -254,6 +295,7 @@ def test_run_once_uses_previous_snapshot_on_second_execution() -> None:
         dashboard_service=dashboard_service,
         dashboard_renderer=dashboard_renderer,
         system_service=system_service,
+        network_telemetry_service=network_telemetry_service,
     )
 
     first_result = application.run_once()
@@ -481,6 +523,23 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         system_resources
     )
 
+    interface_infos = Mock()
+    system_service.get_network_interface_infos.return_value = (
+        interface_infos
+    )
+
+    network_telemetry = Mock()
+    network_interfaces = Mock()
+
+    network_telemetry_service = Mock()
+    network_telemetry_service.build.return_value = (
+        network_telemetry
+    )
+
+    dashboard_service.build_network_interfaces_panel.return_value = (
+        network_interfaces
+    )
+
     application = DashboardApplication(
         mediamtx_adapter=mediamtx_adapter,
         session_adapter=session_adapter,
@@ -492,6 +551,7 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         metrics_client=metrics_client,
         metrics_parser=metrics_parser,
         streaming_health_service=streaming_health_service,
+        network_telemetry_service=network_telemetry_service,
     )
 
     result = application.run_once()
@@ -534,6 +594,7 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         system_resources=system_resources,
         previous_system_resources=None,
         health=streaming_health,
+        network_interfaces=network_interfaces,
     )
 
     dashboard_renderer.render.assert_called_once_with(

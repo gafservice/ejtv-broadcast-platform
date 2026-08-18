@@ -7,6 +7,8 @@ from app.dashboard.models import (
     DashboardData,
     DiskPanelData,
     MemoryPanelData,
+    NetworkInterfaceRowData,
+    NetworkInterfacesPanelData,
     NetworkPanelData,
     PathRowData,
     ServerPanelData,
@@ -23,6 +25,7 @@ from app.domain.streaming import (
     StreamingMeasurement,
 )
 from app.domain.system import (
+    NetworkInterfaceTelemetry,
     NetworkRateCalculator,
     SystemResources,
 )
@@ -157,6 +160,107 @@ class DashboardService:
             connections=connections,
         )
 
+    def build_network_interfaces_panel(
+        self,
+        *,
+        telemetry: tuple[
+            NetworkInterfaceTelemetry,
+            ...,
+        ],
+    ) -> NetworkInterfacesPanelData:
+        """Prepara la telemetría Multi-Interface para presentación."""
+
+        if not isinstance(telemetry, tuple):
+            raise TypeError(
+                "telemetry must be a tuple"
+            )
+
+        rows: list[NetworkInterfaceRowData] = []
+
+        captured_at = None
+
+        for item in telemetry:
+            if not isinstance(
+                item,
+                NetworkInterfaceTelemetry,
+            ):
+                raise TypeError(
+                    "telemetry must contain "
+                    "NetworkInterfaceTelemetry objects"
+                )
+
+            rates = item.rates
+
+            if captured_at is None and rates is not None:
+                captured_at = rates.captured_at
+
+            rows.append(
+                NetworkInterfaceRowData(
+                    interface=item.info.interface,
+                    interface_type=(
+                        item.info.interface_type.value
+                    ),
+                    is_up=item.info.is_up,
+                    carrier=item.info.carrier,
+                    link_speed_mbps=(
+                        item.info.link_speed_mbps
+                    ),
+                    mtu=item.info.mtu,
+                    mac_address=item.info.mac_address,
+                    ipv4_addresses=(
+                        item.info.ipv4_addresses
+                    ),
+                    ipv6_addresses=(
+                        item.info.ipv6_addresses
+                    ),
+                    rx_bps=(
+                        rates.rx_bps
+                        if rates is not None
+                        else None
+                    ),
+                    tx_bps=(
+                        rates.tx_bps
+                        if rates is not None
+                        else None
+                    ),
+                    errors_in=item.counters.errors_in,
+                    errors_out=item.counters.errors_out,
+                    dropped_in=item.counters.dropped_in,
+                    dropped_out=item.counters.dropped_out,
+                    errors_in_per_second=(
+                        rates.errors_in_per_second
+                        if rates is not None
+                        else None
+                    ),
+                    errors_out_per_second=(
+                        rates.errors_out_per_second
+                        if rates is not None
+                        else None
+                    ),
+                    dropped_in_per_second=(
+                        rates.dropped_in_per_second
+                        if rates is not None
+                        else None
+                    ),
+                    dropped_out_per_second=(
+                        rates.dropped_out_per_second
+                        if rates is not None
+                        else None
+                    ),
+                )
+            )
+
+        if captured_at is None:
+            raise ValueError(
+                "No se pudo determinar captured_at "
+                "de la telemetría."
+            )
+
+        return NetworkInterfacesPanelData(
+            interfaces=tuple(rows),
+            captured_at=captured_at,
+        )
+
     def build_system_panel(
         self,
         *,
@@ -250,6 +354,7 @@ class DashboardService:
         paths: tuple[PathRowData, ...],
         system: SystemPanelData | None = None,
         health: StreamingHealth | None = None,
+        network_interfaces: NetworkInterfacesPanelData | None = None,
     ) -> DashboardData:
         """Agrupa todas las secciones del dashboard."""
 
@@ -261,6 +366,7 @@ class DashboardService:
             system=system,
             paths=paths,
             health=health,
+            network_interfaces=network_interfaces,
         )
 
     def build_dashboard_from_measurement(
@@ -275,6 +381,7 @@ class DashboardService:
         system_resources: SystemResources | None = None,
         previous_system_resources: SystemResources | None = None,
         health: StreamingHealth | None = None,
+        network_interfaces: NetworkInterfacesPanelData | None = None,
     ) -> DashboardData:
         """Construye el dashboard completo desde snapshot y medición."""
 
@@ -370,6 +477,7 @@ class DashboardService:
             system=system,
             paths=paths,
             health=health,
+            network_interfaces=network_interfaces,
         )
 
     @staticmethod
