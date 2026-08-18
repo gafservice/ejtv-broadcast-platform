@@ -20,6 +20,11 @@ from app.domain.system.network_rates import (
     NetworkRateCalculator,
 )
 
+from app.domain.system.network_telemetry import (
+    NetworkInterfaceTelemetry,
+)
+
+
 from app.domain.system.services import (
     MonitoredService,
     ServiceInstance,
@@ -36,6 +41,7 @@ __all__ = [
     "NetworkInterfaceType",
     "NetworkRate",
     "NetworkRateCalculator",
+    "NetworkInterfaceTelemetry",
     "SystemInfo",
     "SystemResources",
     "UptimeInfo",
