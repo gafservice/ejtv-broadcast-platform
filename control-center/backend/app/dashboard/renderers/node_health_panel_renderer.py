@@ -86,6 +86,12 @@ class NodeHealthPanelRenderer:
                 ),
             )
 
+            content.append("\n")
+            content.append("Reason: ")
+            content.append(
+                interface.reason
+            )
+
         return Panel(
             content,
             title="NODE HEALTH",

@@ -80,6 +80,10 @@ def test_render_critical_node_health() -> None:
     assert "Network: CRITICAL" in text
     assert "Issues: 1" in text
     assert "ens2f0: CRITICAL" in text
+    assert (
+        "Reason: Required critical interface "
+        "is not operational"
+    ) in text
 
 
 def test_render_unavailable_node_health() -> None:
@@ -166,4 +170,7 @@ def test_only_unhealthy_interfaces_are_counted_as_issues() -> None:
 
     assert "Issues: 1" in text
     assert "ens2f0: WARNING" in text
+    assert (
+        "Reason: Elevated network error or drop rate"
+    ) in text
     assert "enp9s0:" not in text
