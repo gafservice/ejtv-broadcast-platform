@@ -1,6 +1,6 @@
 """Tests for TelemetryRefreshService."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -17,6 +17,10 @@ from app.domain.system import (
 )
 from app.noc.domain.node import Node
 from app.noc.domain.node_id import NodeId
+from app.noc.domain.node_health import (
+    NodeHealth,
+    NodeHealthState,
+)
 from app.noc.domain.node_instance import NodeInstanceId
 from app.noc.domain.node_type import NodeType
 from app.noc.infrastructure.memory_repository import (
@@ -26,6 +30,10 @@ from app.noc.registry.registry import NodeRegistry
 from app.noc.runtime.telemetry_refresh import (
     TelemetryRefreshResult,
     TelemetryRefreshService,
+)
+from app.noc.services.event_service import EventService
+from app.noc.services.health_transition_event_service import (
+    HealthTransitionEventService,
 )
 from app.noc.services.health_service import (
     HealthService,
@@ -1313,3 +1321,225 @@ def test_refresh_once_delegates_captured_state() -> None:
     )
 
     assert result.captured_at == CAPTURED_AT
+
+# ---------------------------------------------------------------------------
+# NodeHealth transition -> operational event integration
+# ---------------------------------------------------------------------------
+
+
+def make_health_event_context():
+    repository = InMemoryNodeRepository()
+    registry = NodeRegistry(repository)
+
+    node = Node(
+        node_id=NodeId.create(
+            id="streaming-core",
+            name="streaming",
+            display_name="Streaming Core",
+        ),
+        node_type=NodeType.STREAMING,
+    )
+
+    instance = node.create_instance(
+        instance_id="streaming-primary"
+    )
+
+    registry.register(node)
+
+    metric_service = MetricService(
+        registry
+    )
+
+    health_service = HealthService(
+        registry
+    )
+
+    event_service = EventService(
+        registry
+    )
+
+    health_transition_event_service = (
+        HealthTransitionEventService(
+            event_service=event_service,
+        )
+    )
+
+    system_service = FixedSystemService(
+        FakeSystemAdapter()
+    )
+
+    refresh_service = TelemetryRefreshService(
+        system_service=system_service,
+        metric_service=metric_service,
+        health_service=health_service,
+        health_transition_event_service=(
+            health_transition_event_service
+        ),
+    )
+
+    return (
+        node,
+        instance,
+        health_service,
+        event_service,
+        refresh_service,
+    )
+
+
+def test_first_refresh_does_not_generate_health_event() -> None:
+    (
+        node,
+        instance,
+        _,
+        event_service,
+        refresh_service,
+    ) = make_health_event_context()
+
+    refresh_service.refresh_once(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    events = event_service.list_all(
+        node.node_id,
+        instance.instance_id,
+    )
+
+    assert events == ()
+
+
+def test_repeated_same_health_does_not_generate_event() -> None:
+    (
+        node,
+        instance,
+        _,
+        event_service,
+        refresh_service,
+    ) = make_health_event_context()
+
+    first_resources = (
+        refresh_service.system_service
+        .get_system_resources()
+    )
+
+    interface_infos = (
+        refresh_service.system_service
+        .get_network_interface_infos()
+    )
+
+    refresh_service.refresh_from_capture(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        resources=first_resources,
+        interface_infos=interface_infos,
+    )
+
+    second_resources = SystemResources(
+        cpu=first_resources.cpu,
+        memory=first_resources.memory,
+        disk=first_resources.disk,
+        network=first_resources.network,
+        uptime=first_resources.uptime,
+        captured_at=(
+            first_resources.captured_at
+            + timedelta(seconds=1)
+        ),
+    )
+
+    refresh_service.refresh_from_capture(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        resources=second_resources,
+        interface_infos=interface_infos,
+    )
+
+    events = event_service.list_all(
+        node.node_id,
+        instance.instance_id,
+    )
+
+    assert events == ()
+
+
+def test_refresh_generates_event_when_health_changes() -> None:
+    (
+        node,
+        instance,
+        health_service,
+        event_service,
+        refresh_service,
+    ) = make_health_event_context()
+
+    health_service.publish(
+        node.node_id,
+        instance.instance_id,
+        NodeHealth(
+            NodeHealthState.CRITICAL
+        ),
+    )
+
+    refresh_service.refresh_once(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    events = event_service.list_all(
+        node.node_id,
+        instance.instance_id,
+    )
+
+    assert len(events) == 1
+
+    event = events[0]
+
+    assert event.event_type == (
+        "NODE_HEALTH_RECOVERED"
+    )
+
+    assert event.attributes is not None
+    assert event.attributes["previous"] == (
+        "CRITICAL"
+    )
+    assert event.attributes["current"] == (
+        "HEALTHY"
+    )
+
+
+def test_refresh_publishes_current_health_after_transition() -> None:
+    (
+        node,
+        instance,
+        health_service,
+        event_service,
+        refresh_service,
+    ) = make_health_event_context()
+
+    health_service.publish(
+        node.node_id,
+        instance.instance_id,
+        NodeHealth(
+            NodeHealthState.CRITICAL
+        ),
+    )
+
+    refresh_service.refresh_once(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    current = health_service.current(
+        node.node_id,
+        instance.instance_id,
+    )
+
+    assert current is not None
+    assert current.state is (
+        NodeHealthState.HEALTHY
+    )
+
+    events = event_service.list_all(
+        node.node_id,
+        instance.instance_id,
+    )
+
+    assert len(events) == 1

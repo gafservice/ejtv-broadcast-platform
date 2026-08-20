@@ -41,6 +41,9 @@ from app.noc.services.health_evaluator import (
 from app.noc.services.health_service import (
     HealthService,
 )
+from app.noc.services.health_transition_event_service import (
+    HealthTransitionEventService,
+)
 from app.noc.domain.network_interface_policy import (
     NetworkInterfacePolicy,
 )
@@ -89,6 +92,9 @@ class TelemetryRefreshService:
         system_service: SystemService,
         metric_service: MetricService,
         health_service: HealthService,
+        health_transition_event_service: (
+            HealthTransitionEventService | None
+        ) = None,
         provider: SystemMetricsProvider | None = None,
         health_evaluator: HealthEvaluator | None = None,
         network_policies: tuple[
@@ -112,6 +118,18 @@ class TelemetryRefreshService:
         ):
             raise TypeError(
                 "health_service must be a HealthService"
+            )
+
+        if (
+            health_transition_event_service is not None
+            and not isinstance(
+                health_transition_event_service,
+                HealthTransitionEventService,
+            )
+        ):
+            raise TypeError(
+                "health_transition_event_service must be a "
+                "HealthTransitionEventService or None"
             )
 
         if (
@@ -167,6 +185,9 @@ class TelemetryRefreshService:
         self._system_service = system_service
         self._metric_service = metric_service
         self._health_service = health_service
+        self._health_transition_event_service = (
+            health_transition_event_service
+        )
         self._health_evaluator = (
             health_evaluator
             or HealthEvaluator()
@@ -217,6 +238,12 @@ class TelemetryRefreshService:
     @property
     def health_service(self) -> HealthService:
         return self._health_service
+
+    @property
+    def health_transition_event_service(
+        self,
+    ) -> HealthTransitionEventService | None:
+        return self._health_transition_event_service
 
     @property
     def health_evaluator(self) -> HealthEvaluator:
@@ -400,6 +427,11 @@ class TelemetryRefreshService:
             )
         )
 
+        previous_health = self._health_service.current(
+            node_id,
+            instance_id,
+        )
+
         health = (
             self._node_health_aggregator.aggregate(
                 (
@@ -418,6 +450,15 @@ class TelemetryRefreshService:
                 effective_interface_health
             ),
         )
+
+        if self._health_transition_event_service is not None:
+            self._health_transition_event_service.process(
+                node_id=node_id,
+                instance_id=instance_id,
+                previous=previous_health,
+                current=health,
+                timestamp=resources.captured_at,
+            )
 
         self._health_service.publish(
             node_id,
