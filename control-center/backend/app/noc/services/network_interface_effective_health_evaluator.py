@@ -65,8 +65,16 @@ class NetworkInterfaceEffectiveHealthEvaluator:
                 ),
             )
 
-        # Required + critical interface:
-        # Unknown/down state is operationally critical.
+        # UNKNOWN is not automatically a failure.
+        #
+        # A required interface may be UNKNOWN simply because temporal
+        # quality rates are not available yet. Only explicit physical
+        # evidence of missing carrier is sufficient to promote UNKNOWN
+        # into an operational failure.
+        if observed.carrier_ok is not False:
+            return observed
+
+        # Required + critical interface with explicit carrier failure.
         if policy.critical:
             return self._copy_with(
                 observed,
@@ -77,7 +85,8 @@ class NetworkInterfaceEffectiveHealthEvaluator:
                 ),
             )
 
-        # Required but non-critical interface.
+        # Required but non-critical interface with explicit carrier
+        # failure.
         return self._copy_with(
             observed,
             state=NodeHealthState.DEGRADED,

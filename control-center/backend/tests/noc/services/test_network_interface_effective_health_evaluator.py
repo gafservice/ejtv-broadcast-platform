@@ -31,13 +31,14 @@ def make_health(
     state: NodeHealthState,
     *,
     interface: str = "ens2f1",
+    carrier_ok: bool | None = False,
 ) -> NetworkInterfaceHealth:
     return NetworkInterfaceHealth(
         interface=interface,
         state=state,
         observed_at=OBSERVED_AT,
         reason="Observed state",
-        carrier_ok=False,
+        carrier_ok=carrier_ok,
         traffic_ok=None,
         error_rate=None,
         drop_rate=None,
@@ -72,7 +73,7 @@ def test_optional_unknown_interface_becomes_healthy() -> None:
     assert result.observed_at == OBSERVED_AT
 
 
-def test_required_critical_unknown_interface_becomes_critical() -> None:
+def test_required_critical_unknown_without_carrier_becomes_critical() -> None:
     result = NetworkInterfaceEffectiveHealthEvaluator().evaluate(
         make_health(
             NodeHealthState.UNKNOWN,
@@ -89,7 +90,7 @@ def test_required_critical_unknown_interface_becomes_critical() -> None:
     assert result.state is NodeHealthState.CRITICAL
 
 
-def test_required_noncritical_unknown_interface_becomes_degraded() -> None:
+def test_required_noncritical_unknown_without_carrier_becomes_degraded() -> None:
     result = NetworkInterfaceEffectiveHealthEvaluator().evaluate(
         make_health(NodeHealthState.UNKNOWN),
         make_policy(
@@ -99,6 +100,68 @@ def test_required_noncritical_unknown_interface_becomes_degraded() -> None:
     )
 
     assert result.state is NodeHealthState.DEGRADED
+
+
+
+
+def test_required_critical_unknown_with_carrier_remains_unknown() -> None:
+    observed = make_health(
+        NodeHealthState.UNKNOWN,
+        interface="enp9s0",
+        carrier_ok=True,
+    )
+
+    result = NetworkInterfaceEffectiveHealthEvaluator().evaluate(
+        observed,
+        make_policy(
+            interface="enp9s0",
+            expected_up=True,
+            critical=True,
+            role=NetworkInterfaceRole.INGEST,
+        ),
+    )
+
+    assert result is observed
+    assert result.state is NodeHealthState.UNKNOWN
+
+
+def test_required_noncritical_unknown_with_carrier_remains_unknown() -> None:
+    observed = make_health(
+        NodeHealthState.UNKNOWN,
+        carrier_ok=True,
+    )
+
+    result = NetworkInterfaceEffectiveHealthEvaluator().evaluate(
+        observed,
+        make_policy(
+            expected_up=True,
+            critical=False,
+        ),
+    )
+
+    assert result is observed
+    assert result.state is NodeHealthState.UNKNOWN
+
+
+def test_required_unknown_with_unknown_carrier_remains_unknown() -> None:
+    observed = make_health(
+        NodeHealthState.UNKNOWN,
+        interface="enp9s0",
+        carrier_ok=None,
+    )
+
+    result = NetworkInterfaceEffectiveHealthEvaluator().evaluate(
+        observed,
+        make_policy(
+            interface="enp9s0",
+            expected_up=True,
+            critical=True,
+            role=NetworkInterfaceRole.INGEST,
+        ),
+    )
+
+    assert result is observed
+    assert result.state is NodeHealthState.UNKNOWN
 
 
 @pytest.mark.parametrize(
