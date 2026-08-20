@@ -14,6 +14,7 @@ from app.dashboard.models import (
     DashboardData,
     NetworkInterfacesPanelData,
     NodeHealthPanelData,
+    RecentEventsPanelData,
 )
 from app.dashboard.services.dashboard_service import DashboardService
 from app.domain.sessions.measurement import SessionMeasurement
@@ -47,6 +48,7 @@ class DashboardSnapshotInput:
     health: StreamingHealth | None = None
     network_interfaces: NetworkInterfacesPanelData | None = None
     node_health: NodeHealthPanelData | None = None
+    recent_events: RecentEventsPanelData | None = None
 
 
 class DashboardSnapshotService:
@@ -116,4 +118,5 @@ class DashboardSnapshotService:
                 snapshot_input.network_interfaces
             ),
             node_health=snapshot_input.node_health,
+            recent_events=snapshot_input.recent_events,
         )

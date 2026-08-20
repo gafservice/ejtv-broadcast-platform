@@ -13,6 +13,8 @@ from app.dashboard.models import (
     NodeHealthInterfaceRowData,
     NodeHealthPanelData,
     PathRowData,
+    RecentEventRowData,
+    RecentEventsPanelData,
     ServerPanelData,
     SessionPanelData,
     StreamingPanelData,
@@ -26,6 +28,7 @@ from app.domain.streaming import (
     StreamingHealth,
     StreamingMeasurement,
 )
+from app.noc.domain.node_event import EventRecord
 from app.noc.domain.node_health_diagnostic import (
     NodeHealthDiagnostic,
 )
@@ -164,6 +167,65 @@ class DashboardService:
         return ActiveConnectionsPanelData(
             captured_at=measurement.captured_at,
             connections=connections,
+        )
+
+    def build_recent_events_panel(
+        self,
+        *,
+        events: tuple[EventRecord, ...],
+        limit: int = 5,
+    ) -> RecentEventsPanelData:
+        """Prepara eventos operacionales recientes para presentación."""
+
+        if not isinstance(events, tuple):
+            raise TypeError(
+                "events must be a tuple"
+            )
+
+        for event in events:
+            if not isinstance(
+                event,
+                EventRecord,
+            ):
+                raise TypeError(
+                    "events must contain "
+                    "EventRecord objects"
+                )
+
+        if isinstance(limit, bool) or not isinstance(
+            limit,
+            int,
+        ):
+            raise TypeError(
+                "limit must be an integer"
+            )
+
+        if limit <= 0:
+            raise ValueError(
+                "limit must be greater than zero"
+            )
+
+        ordered = sorted(
+            events,
+            key=lambda event: event.timestamp,
+            reverse=True,
+        )
+
+        selected = ordered[:limit]
+
+        rows = tuple(
+            RecentEventRowData(
+                event_id=event.event_id,
+                event_type=event.event_type,
+                severity=event.severity.value,
+                title=event.title,
+                occurred_at=event.timestamp,
+            )
+            for event in selected
+        )
+
+        return RecentEventsPanelData(
+            events=rows,
         )
 
     def build_node_health_panel(
@@ -394,6 +456,7 @@ class DashboardService:
         health: StreamingHealth | None = None,
         network_interfaces: NetworkInterfacesPanelData | None = None,
         node_health: NodeHealthPanelData | None = None,
+        recent_events: RecentEventsPanelData | None = None,
     ) -> DashboardData:
         """Agrupa todas las secciones del dashboard."""
 
@@ -407,6 +470,7 @@ class DashboardService:
             health=health,
             network_interfaces=network_interfaces,
             node_health=node_health,
+            recent_events=recent_events,
         )
 
     def build_dashboard_from_measurement(
@@ -423,6 +487,7 @@ class DashboardService:
         health: StreamingHealth | None = None,
         network_interfaces: NetworkInterfacesPanelData | None = None,
         node_health: NodeHealthPanelData | None = None,
+        recent_events: RecentEventsPanelData | None = None,
     ) -> DashboardData:
         """Construye el dashboard completo desde snapshot y medición."""
 
@@ -520,6 +585,7 @@ class DashboardService:
             health=health,
             network_interfaces=network_interfaces,
             node_health=node_health,
+            recent_events=recent_events,
         )
 
     @staticmethod

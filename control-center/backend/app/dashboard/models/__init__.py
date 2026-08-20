@@ -24,6 +24,10 @@ from app.dashboard.models.node_health_panel import (
     NodeHealthPanelData,
 )
 from app.dashboard.models.network_panel import NetworkPanelData
+from app.dashboard.models.recent_events_panel import (
+    RecentEventRowData,
+    RecentEventsPanelData,
+)
 from app.dashboard.models.session_panel import SessionPanelData
 from app.dashboard.models.system_panel import SystemPanelData
 from app.dashboard.models.uptime_panel import UptimePanelData
@@ -41,6 +45,8 @@ __all__ = [
     "NodeHealthPanelData",
     "NetworkPanelData",
     "PathRowData",
+    "RecentEventRowData",
+    "RecentEventsPanelData",
     "ServerPanelData",
     "SessionPanelData",
     "StreamingHealth",

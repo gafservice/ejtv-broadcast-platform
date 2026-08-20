@@ -136,3 +136,66 @@ def test_snapshot_service_transports_node_health() -> None:
     )
 
     assert result.node_health is node_health
+
+
+def test_snapshot_service_transports_recent_events() -> None:
+    from app.dashboard.models import (
+        RecentEventRowData,
+        RecentEventsPanelData,
+    )
+
+    captured_at = datetime(
+        2026,
+        8,
+        20,
+        19,
+        0,
+        tzinfo=UTC,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=0,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=None,
+        interval_seconds=None,
+        paths=(),
+        total_inbound_bitrate_bps=None,
+        total_outbound_bitrate_bps=None,
+        quality=MeasurementQuality.NOT_AVAILABLE,
+    )
+
+    recent_events = RecentEventsPanelData(
+        events=(
+            RecentEventRowData(
+                event_id="event-001",
+                event_type="NODE_HEALTH_DEGRADED",
+                severity="WARNING",
+                title="Node health degraded",
+                occurred_at=captured_at,
+            ),
+        ),
+    )
+
+    result = DashboardSnapshotService().build_snapshot(
+        DashboardSnapshotInput(
+            hostname="ejtv-01",
+            mediamtx_online=True,
+            api_online=True,
+            snapshot=snapshot,
+            measurement=measurement,
+            recent_events=recent_events,
+        )
+    )
+
+    assert result.recent_events is recent_events
+    assert result.recent_events.event_count == 1
+    assert (
+        result.recent_events.events[0].event_id
+        == "event-001"
+    )

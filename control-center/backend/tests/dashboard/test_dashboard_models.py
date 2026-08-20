@@ -283,3 +283,57 @@ def test_dashboard_data_accepts_node_health_panel() -> None:
     )
 
     assert base.node_health is node_health
+
+
+def test_dashboard_data_accepts_recent_events_panel() -> None:
+    from datetime import UTC, datetime
+
+    from app.dashboard.models import (
+        RecentEventRowData,
+        RecentEventsPanelData,
+    )
+
+    recent_events = RecentEventsPanelData(
+        events=(
+            RecentEventRowData(
+                event_id="event-001",
+                event_type="NODE_HEALTH_DEGRADED",
+                severity="WARNING",
+                title="Node health degraded",
+                occurred_at=datetime(
+                    2026,
+                    8,
+                    20,
+                    18,
+                    0,
+                    tzinfo=UTC,
+                ),
+            ),
+        ),
+    )
+
+    dashboard = DashboardData(
+        server=ServerPanelData(
+            hostname="ejtv-01",
+            mediamtx_online=True,
+            api_online=True,
+            snapshot_at=None,
+            quality="AVAILABLE",
+        ),
+        streaming=StreamingPanelData(
+            active_paths=0,
+            readers=0,
+            inbound_bitrate_bps=None,
+            outbound_bitrate_bps=None,
+            quality="NOT_AVAILABLE",
+        ),
+        paths=(),
+        recent_events=recent_events,
+    )
+
+    assert dashboard.recent_events is recent_events
+    assert dashboard.recent_events.event_count == 1
+    assert (
+        dashboard.recent_events.events[0].event_id
+        == "event-001"
+    )

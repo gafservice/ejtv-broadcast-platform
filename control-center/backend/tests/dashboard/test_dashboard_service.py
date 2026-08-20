@@ -1253,3 +1253,218 @@ def test_build_node_health_panel_rejects_invalid_type() -> None:
         DashboardService().build_node_health_panel(
             diagnostic=object(),  # type: ignore[arg-type]
         )
+
+
+# ---------------------------------------------------------------------------
+# RECENT EVENTS
+# ---------------------------------------------------------------------------
+
+def test_build_recent_events_panel() -> None:
+    from datetime import datetime, timezone
+
+    from app.noc.domain.node_event import (
+        EventRecord,
+        EventSeverity,
+    )
+    from app.noc.domain.node_instance import NodeInstanceId
+
+    service = DashboardService()
+
+    source = NodeInstanceId(
+        "streaming-primary"
+    )
+
+    older = EventRecord(
+        event_id="event-001",
+        event_type="NODE_HEALTH_DEGRADED",
+        severity=EventSeverity.WARNING,
+        timestamp=datetime(
+            2026,
+            8,
+            20,
+            18,
+            0,
+            tzinfo=timezone.utc,
+        ),
+        source=source,
+        title="Node health degraded",
+        description="Health degraded",
+    )
+
+    newer = EventRecord(
+        event_id="event-002",
+        event_type="NODE_HEALTH_RECOVERED",
+        severity=EventSeverity.INFO,
+        timestamp=datetime(
+            2026,
+            8,
+            20,
+            19,
+            0,
+            tzinfo=timezone.utc,
+        ),
+        source=source,
+        title="Node health recovered",
+        description="Health recovered",
+    )
+
+    panel = service.build_recent_events_panel(
+        events=(
+            older,
+            newer,
+        ),
+    )
+
+    assert panel.event_count == 2
+
+    assert (
+        panel.events[0].event_id
+        == "event-002"
+    )
+
+    assert (
+        panel.events[1].event_id
+        == "event-001"
+    )
+
+    assert (
+        panel.events[0].severity
+        == "INFO"
+    )
+
+    assert (
+        panel.events[0].occurred_at
+        == newer.timestamp
+    )
+
+
+def test_build_recent_events_panel_limits_results() -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from app.noc.domain.node_event import (
+        EventRecord,
+        EventSeverity,
+    )
+    from app.noc.domain.node_instance import NodeInstanceId
+
+    service = DashboardService()
+
+    source = NodeInstanceId(
+        "streaming-primary"
+    )
+
+    base = datetime(
+        2026,
+        8,
+        20,
+        18,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    events = tuple(
+        EventRecord(
+            event_id=f"event-{index}",
+            event_type="NODE_HEALTH_DEGRADED",
+            severity=EventSeverity.WARNING,
+            timestamp=(
+                base
+                + timedelta(
+                    minutes=index
+                )
+            ),
+            source=source,
+            title=f"Event {index}",
+            description=f"Event {index}",
+        )
+        for index in range(10)
+    )
+
+    panel = service.build_recent_events_panel(
+        events=events,
+        limit=5,
+    )
+
+    assert panel.event_count == 5
+
+    assert tuple(
+        event.event_id
+        for event in panel.events
+    ) == (
+        "event-9",
+        "event-8",
+        "event-7",
+        "event-6",
+        "event-5",
+    )
+
+
+def test_build_recent_events_panel_accepts_empty_events() -> None:
+    service = DashboardService()
+
+    panel = service.build_recent_events_panel(
+        events=(),
+    )
+
+    assert panel.events == ()
+    assert panel.event_count == 0
+    assert panel.is_empty is True
+
+
+def test_build_recent_events_panel_requires_tuple() -> None:
+    service = DashboardService()
+
+    with pytest.raises(TypeError):
+        service.build_recent_events_panel(
+            events=[],  # type: ignore[arg-type]
+        )
+
+
+def test_build_recent_events_panel_rejects_invalid_event() -> None:
+    service = DashboardService()
+
+    with pytest.raises(TypeError):
+        service.build_recent_events_panel(
+            events=(
+                object(),  # type: ignore[arg-type]
+            ),
+        )
+
+
+@pytest.mark.parametrize(
+    "limit",
+    (
+        0,
+        -1,
+    ),
+)
+def test_build_recent_events_panel_requires_positive_limit(
+    limit: int,
+) -> None:
+    service = DashboardService()
+
+    with pytest.raises(ValueError):
+        service.build_recent_events_panel(
+            events=(),
+            limit=limit,
+        )
+
+
+@pytest.mark.parametrize(
+    "limit",
+    (
+        True,
+        1.5,
+        "5",
+    ),
+)
+def test_build_recent_events_panel_requires_integer_limit(
+    limit,
+) -> None:
+    service = DashboardService()
+
+    with pytest.raises(TypeError):
+        service.build_recent_events_panel(
+            events=(),
+            limit=limit,
+        )
