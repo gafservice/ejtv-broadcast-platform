@@ -202,6 +202,22 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
                     )
         )
 
+        event_service = object()
+        event_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.EventService",
+                return_value=event_service,
+            )
+        )
+
+        health_transition_event_service = object()
+        health_transition_event_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.HealthTransitionEventService",
+                return_value=health_transition_event_service,
+            )
+        )
+
         policy_loader_class = stack.enter_context(
             patch(
                         "app.dashboard.live_monitor.NodeNetworkPolicyLoader",
@@ -320,6 +336,14 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
         node_registry
     )
 
+    event_service_class.assert_called_once_with(
+        node_registry
+    )
+
+    health_transition_event_service_class.assert_called_once_with(
+        event_service=event_service,
+    )
+
     policy_loader_class.assert_called_once_with()
 
     policy_loader.load.assert_called_once_with(
@@ -330,6 +354,9 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
         system_service=system_service,
         metric_service=metric_service,
         health_service=node_health_service,
+        health_transition_event_service=(
+            health_transition_event_service
+        ),
         network_policies=network_policy.interfaces,
     )
 

@@ -41,7 +41,11 @@ from app.noc.registry.registry import NodeRegistry
 from app.noc.runtime.telemetry_refresh import (
     TelemetryRefreshService,
 )
+from app.noc.services.event_service import EventService
 from app.noc.services.health_service import HealthService
+from app.noc.services.health_transition_event_service import (
+    HealthTransitionEventService,
+)
 from app.noc.services.metric_service import MetricService
 
 
@@ -123,6 +127,16 @@ def build_dashboard_application() -> DashboardApplication:
         node_registry
     )
 
+    event_service = EventService(
+        node_registry
+    )
+
+    health_transition_event_service = (
+        HealthTransitionEventService(
+            event_service=event_service,
+        )
+    )
+
     network_policy = (
         NodeNetworkPolicyLoader().load(
             settings.node_network_policy_path
@@ -134,6 +148,9 @@ def build_dashboard_application() -> DashboardApplication:
             system_service=system_service,
             metric_service=metric_service,
             health_service=node_health_service,
+            health_transition_event_service=(
+                health_transition_event_service
+            ),
             network_policies=network_policy.interfaces,
         )
     )
