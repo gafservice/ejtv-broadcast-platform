@@ -56,6 +56,9 @@ from app.noc.services.network_interface_effective_health_evaluator import (
 from app.noc.services.network_interface_health_evaluator import (
     NetworkInterfaceHealthEvaluator,
 )
+from app.noc.services.network_interface_health_stabilizer import (
+    NetworkInterfaceHealthStabilizer,
+)
 from app.noc.services.node_subsystem_health_aggregator import (
     NodeSubsystemHealthAggregator,
 )
@@ -97,6 +100,9 @@ class TelemetryRefreshService:
         ) = None,
         provider: SystemMetricsProvider | None = None,
         health_evaluator: HealthEvaluator | None = None,
+        network_health_stabilizer: (
+            NetworkInterfaceHealthStabilizer | None
+        ) = None,
         network_policies: tuple[
             NetworkInterfacePolicy,
             ...,
@@ -141,6 +147,18 @@ class TelemetryRefreshService:
         ):
             raise TypeError(
                 "health_evaluator must be a HealthEvaluator or None"
+            )
+
+        if (
+            network_health_stabilizer is not None
+            and not isinstance(
+                network_health_stabilizer,
+                NetworkInterfaceHealthStabilizer,
+            )
+        ):
+            raise TypeError(
+                "network_health_stabilizer must be a "
+                "NetworkInterfaceHealthStabilizer or None"
             )
 
         if (
@@ -207,6 +225,11 @@ class TelemetryRefreshService:
         )
         self._network_health_evaluator = (
             NetworkInterfaceHealthEvaluator()
+        )
+        self._network_health_stabilizer = (
+            network_health_stabilizer
+            if network_health_stabilizer is not None
+            else NetworkInterfaceHealthStabilizer()
         )
         self._network_effective_health_evaluator = (
             NetworkInterfaceEffectiveHealthEvaluator()
@@ -417,8 +440,14 @@ class TelemetryRefreshService:
                     )
                 )
 
+            stabilized = (
+                self._network_health_stabilizer.stabilize(
+                    effective
+                )
+            )
+
             effective_interface_health.append(
-                effective
+                stabilized
             )
 
         network_health = (

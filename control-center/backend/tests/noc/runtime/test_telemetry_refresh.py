@@ -1543,3 +1543,413 @@ def test_refresh_publishes_current_health_after_transition() -> None:
     )
 
     assert len(events) == 1
+
+
+def test_service_accepts_network_health_stabilizer() -> None:
+    from app.noc.services.network_interface_health_stabilizer import (
+        NetworkInterfaceHealthStabilizer,
+    )
+
+    repository = InMemoryNodeRepository()
+    registry = NodeRegistry(repository)
+
+    stabilizer = NetworkInterfaceHealthStabilizer(
+        degradation_seconds=2.0,
+        recovery_seconds=4.0,
+    )
+
+    service = TelemetryRefreshService(
+        system_service=FixedSystemService(
+            FakeSystemAdapter()
+        ),
+        metric_service=MetricService(
+            registry
+        ),
+        health_service=HealthService(
+            registry
+        ),
+        network_health_stabilizer=stabilizer,
+    )
+
+    assert (
+        service._network_health_stabilizer
+        is stabilizer
+    )
+
+
+def test_service_rejects_invalid_network_health_stabilizer() -> None:
+    repository = InMemoryNodeRepository()
+    registry = NodeRegistry(repository)
+
+    with pytest.raises(
+        TypeError,
+        match="network_health_stabilizer",
+    ):
+        TelemetryRefreshService(
+            system_service=FixedSystemService(
+                FakeSystemAdapter()
+            ),
+            metric_service=MetricService(
+                registry
+            ),
+            health_service=HealthService(
+                registry
+            ),
+            network_health_stabilizer=object(),  # type: ignore[arg-type]
+        )
+
+
+def test_network_health_stabilization_across_refresh_cycles() -> None:
+    """Validate temporal hysteresis through the real refresh pipeline."""
+
+    from datetime import timedelta
+
+    from app.noc.services.network_interface_health_stabilizer import (
+        NetworkInterfaceHealthStabilizer,
+    )
+
+    (
+        _,
+        node,
+        instance,
+        _,
+        service,
+    ) = make_context()
+
+    service._network_health_stabilizer = (
+        NetworkInterfaceHealthStabilizer(
+            degradation_seconds=3.0,
+            recovery_seconds=5.0,
+        )
+    )
+
+    base = (
+        service.system_service
+        .get_system_resources()
+    )
+
+    interface_infos = (
+        service.system_service
+        .get_network_interface_infos()
+    )
+
+    def resources_at(
+        seconds: int,
+        *,
+        dropped_in_delta: int,
+    ) -> SystemResources:
+        """Create one deterministic monotonic network capture."""
+
+        return SystemResources(
+            cpu=base.cpu,
+            memory=base.memory,
+            disk=base.disk,
+            network=NetworkInfo(
+                interface=base.network.interface,
+                bytes_sent=(
+                    base.network.bytes_sent
+                    + seconds * 1_000
+                ),
+                bytes_received=(
+                    base.network.bytes_received
+                    + seconds * 2_000
+                ),
+                packets_sent=(
+                    base.network.packets_sent
+                    + seconds * 10
+                ),
+                packets_received=(
+                    base.network.packets_received
+                    + seconds * 20
+                ),
+                errors_in=base.network.errors_in,
+                errors_out=base.network.errors_out,
+                dropped_in=(
+                    base.network.dropped_in
+                    + dropped_in_delta
+                ),
+                dropped_out=base.network.dropped_out,
+            ),
+            uptime=UptimeInfo(
+                uptime_seconds=(
+                    base.uptime.uptime_seconds
+                    + seconds
+                )
+            ),
+            captured_at=(
+                base.captured_at
+                + timedelta(seconds=seconds)
+            ),
+        )
+
+    # ---------------------------------------------------------
+    # t=0
+    #
+    # Primera captura: todavía no existen tasas temporales.
+    # ---------------------------------------------------------
+
+    initial = service.refresh_from_capture(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        resources=resources_at(
+            0,
+            dropped_in_delta=0,
+        ),
+        interface_infos=interface_infos,
+    )
+
+    assert (
+        initial.health_diagnostic.network_interfaces[0].state
+        is NodeHealthState.UNKNOWN
+    )
+
+    # ---------------------------------------------------------
+    # t=5
+    #
+    # Primera observación HEALTHY.
+    # Como venimos de UNKNOWN, inicia confirmación temporal.
+    # ---------------------------------------------------------
+
+    healthy_candidate = service.refresh_from_capture(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        resources=resources_at(
+            5,
+            dropped_in_delta=0,
+        ),
+        interface_infos=interface_infos,
+    )
+
+    assert (
+        healthy_candidate
+        .health_diagnostic
+        .network_interfaces[0]
+        .state
+        is NodeHealthState.UNKNOWN
+    )
+
+    # ---------------------------------------------------------
+    # t=9
+    #
+    # HEALTHY lleva 4 s estable (> 3 s).
+    # ---------------------------------------------------------
+
+    healthy = service.refresh_from_capture(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        resources=resources_at(
+            9,
+            dropped_in_delta=0,
+        ),
+        interface_infos=interface_infos,
+    )
+
+    assert (
+        healthy.health_diagnostic.network_health.state
+        is NodeHealthState.HEALTHY
+    )
+
+    assert (
+        healthy.health_diagnostic.network_interfaces[0].state
+        is NodeHealthState.HEALTHY
+    )
+
+    # ---------------------------------------------------------
+    # t=10
+    #
+    # +2 drops en 1 s => 2 drops/s.
+    # Supera WARNING_RATE=1.0, pero solo durante 1 s.
+    #
+    # Debe conservar HEALTHY.
+    # ---------------------------------------------------------
+
+    warning_spike = service.refresh_from_capture(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        resources=resources_at(
+            10,
+            dropped_in_delta=2,
+        ),
+        interface_infos=interface_infos,
+    )
+
+    held_interface = (
+        warning_spike
+        .health_diagnostic
+        .network_interfaces[0]
+    )
+
+    assert (
+        held_interface.state
+        is NodeHealthState.HEALTHY
+    )
+
+    assert held_interface.drop_rate == pytest.approx(
+        2.0
+    )
+
+    assert (
+        "Temporally stabilized at HEALTHY"
+        in held_interface.reason
+    )
+
+    assert (
+        warning_spike.health_diagnostic.network_health.state
+        is NodeHealthState.HEALTHY
+    )
+
+    # ---------------------------------------------------------
+    # t=14
+    #
+    # El contador pasa de +2 a +10:
+    #
+    #   8 drops / 4 s = 2 drops/s
+    #
+    # WARNING lleva 4 s, por lo que debe confirmarse.
+    # ---------------------------------------------------------
+
+    warning_confirmed = service.refresh_from_capture(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        resources=resources_at(
+            14,
+            dropped_in_delta=10,
+        ),
+        interface_infos=interface_infos,
+    )
+
+    assert (
+        warning_confirmed
+        .health_diagnostic
+        .network_interfaces[0]
+        .state
+        is NodeHealthState.WARNING
+    )
+
+    assert (
+        warning_confirmed
+        .health_diagnostic
+        .network_health
+        .state
+        is NodeHealthState.WARNING
+    )
+
+    assert (
+        warning_confirmed
+        .health_diagnostic
+        .health
+        .state
+        is NodeHealthState.WARNING
+    )
+
+    # ---------------------------------------------------------
+    # t=15
+    #
+    # No aparecen nuevos drops.
+    # La observación vuelve a HEALTHY,
+    # pero recuperación requiere 5 s.
+    # ---------------------------------------------------------
+
+    recovery_candidate = service.refresh_from_capture(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        resources=resources_at(
+            15,
+            dropped_in_delta=10,
+        ),
+        interface_infos=interface_infos,
+    )
+
+    recovery_interface = (
+        recovery_candidate
+        .health_diagnostic
+        .network_interfaces[0]
+    )
+
+    assert (
+        recovery_interface.state
+        is NodeHealthState.WARNING
+    )
+
+    assert recovery_interface.drop_rate == pytest.approx(
+        0.0
+    )
+
+    assert (
+        "Temporally stabilized at WARNING"
+        in recovery_interface.reason
+    )
+
+    # ---------------------------------------------------------
+    # t=20
+    #
+    # HEALTHY lleva exactamente 5 s:
+    # recuperación confirmada.
+    # ---------------------------------------------------------
+
+    recovered = service.refresh_from_capture(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        resources=resources_at(
+            20,
+            dropped_in_delta=10,
+        ),
+        interface_infos=interface_infos,
+    )
+
+    assert (
+        recovered.health_diagnostic.network_health.state
+        is NodeHealthState.HEALTHY
+    )
+
+    assert (
+        recovered.health_diagnostic.health.state
+        is NodeHealthState.HEALTHY
+    )
+
+    # ---------------------------------------------------------
+    # t=21
+    #
+    # Pérdida física de carrier:
+    # CRITICAL nunca espera confirmación temporal.
+    # ---------------------------------------------------------
+
+    original_info = interface_infos[0]
+
+    critical_infos = (
+        NetworkInterfaceInfo(
+            interface=original_info.interface,
+            interface_type=original_info.interface_type,
+            is_up=True,
+            carrier=False,
+            mtu=original_info.mtu,
+            link_speed_mbps=(
+                original_info.link_speed_mbps
+            ),
+        ),
+    )
+
+    critical = service.refresh_from_capture(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        resources=resources_at(
+            21,
+            dropped_in_delta=10,
+        ),
+        interface_infos=critical_infos,
+    )
+
+    assert (
+        critical.health_diagnostic.network_interfaces[0].state
+        is NodeHealthState.CRITICAL
+    )
+
+    assert (
+        critical.health_diagnostic.network_health.state
+        is NodeHealthState.CRITICAL
+    )
+
+    assert (
+        critical.health_diagnostic.health.state
+        is NodeHealthState.CRITICAL
+    )
