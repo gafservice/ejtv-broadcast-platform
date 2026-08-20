@@ -174,3 +174,58 @@ def test_only_unhealthy_interfaces_are_counted_as_issues() -> None:
         "Reason: Elevated network error or drop rate"
     ) in text
     assert "enp9s0:" not in text
+
+
+def test_render_unhealthy_interface_shows_quality_rates() -> None:
+    renderer = NodeHealthPanelRenderer()
+
+    data = NodeHealthPanelData(
+        state="WARNING",
+        system_state="HEALTHY",
+        network_state="WARNING",
+        interfaces=(
+            NodeHealthInterfaceRowData(
+                interface="enp9s0",
+                state="WARNING",
+                reason="Elevated network error or drop rate",
+                error_rate=0.25,
+                drop_rate=1.50,
+            ),
+        ),
+        captured_at=CAPTURED_AT,
+    )
+
+    panel = renderer.render(data)
+    text = panel.renderable.plain
+
+    assert "enp9s0: WARNING" in text
+    assert "Reason: Elevated network error or drop rate" in text
+    assert "Errors: 0.25/s" in text
+    assert "Drops: 1.50/s" in text
+
+
+def test_render_unhealthy_interface_omits_unavailable_rates() -> None:
+    renderer = NodeHealthPanelRenderer()
+
+    data = NodeHealthPanelData(
+        state="CRITICAL",
+        system_state="HEALTHY",
+        network_state="CRITICAL",
+        interfaces=(
+            NodeHealthInterfaceRowData(
+                interface="enp9s0",
+                state="CRITICAL",
+                reason="Required critical interface is not operational",
+                error_rate=None,
+                drop_rate=None,
+            ),
+        ),
+        captured_at=CAPTURED_AT,
+    )
+
+    panel = renderer.render(data)
+    text = panel.renderable.plain
+
+    assert "enp9s0: CRITICAL" in text
+    assert "Errors:" not in text
+    assert "Drops:" not in text

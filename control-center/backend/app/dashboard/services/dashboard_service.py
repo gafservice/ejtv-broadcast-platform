@@ -248,6 +248,8 @@ class DashboardService:
                 interface=item.interface,
                 state=item.state.value,
                 reason=item.reason,
+                error_rate=item.error_rate,
+                drop_rate=item.drop_rate,
             )
             for item in diagnostic.network_interfaces
         )

@@ -92,6 +92,18 @@ class NodeHealthPanelRenderer:
                 interface.reason
             )
 
+            if interface.error_rate is not None:
+                content.append("\n")
+                content.append(
+                    f"Errors: {interface.error_rate:.2f}/s"
+                )
+
+            if interface.drop_rate is not None:
+                content.append("\n")
+                content.append(
+                    f"Drops: {interface.drop_rate:.2f}/s"
+                )
+
         return Panel(
             content,
             title="NODE HEALTH",

@@ -168,3 +168,64 @@ def test_panel_rejects_naive_timestamp() -> None:
                 30,
             )
         )
+
+
+def test_interface_row_accepts_quality_rates() -> None:
+    row = NodeHealthInterfaceRowData(
+        interface="enp9s0",
+        state="WARNING",
+        reason="Elevated network error or drop rate",
+        error_rate=0.25,
+        drop_rate=1.50,
+    )
+
+    assert row.error_rate == 0.25
+    assert row.drop_rate == 1.50
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    (
+        "error_rate",
+        "drop_rate",
+    ),
+)
+def test_interface_row_rejects_negative_quality_rate(
+    field_name: str,
+) -> None:
+    kwargs = {
+        "interface": "enp9s0",
+        "state": "WARNING",
+        "reason": "Elevated network error or drop rate",
+        "error_rate": 0.0,
+        "drop_rate": 0.0,
+    }
+
+    kwargs[field_name] = -1.0
+
+    with pytest.raises(ValueError):
+        NodeHealthInterfaceRowData(**kwargs)
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    (
+        "error_rate",
+        "drop_rate",
+    ),
+)
+def test_interface_row_rejects_non_numeric_quality_rate(
+    field_name: str,
+) -> None:
+    kwargs = {
+        "interface": "enp9s0",
+        "state": "WARNING",
+        "reason": "Elevated network error or drop rate",
+        "error_rate": 0.0,
+        "drop_rate": 0.0,
+    }
+
+    kwargs[field_name] = "invalid"
+
+    with pytest.raises(ValueError):
+        NodeHealthInterfaceRowData(**kwargs)

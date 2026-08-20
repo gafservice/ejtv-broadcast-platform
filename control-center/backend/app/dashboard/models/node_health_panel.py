@@ -13,6 +13,8 @@ class NodeHealthInterfaceRowData:
     interface: str
     state: str
     reason: str
+    error_rate: float | None = None
+    drop_rate: float | None = None
 
     def __post_init__(self) -> None:
         for field_name in (
@@ -41,6 +43,39 @@ class NodeHealthInterfaceRowData:
                 self,
                 field_name,
                 normalized,
+            )
+
+        for field_name in (
+            "error_rate",
+            "drop_rate",
+        ):
+            value = getattr(
+                self,
+                field_name,
+            )
+
+            if value is None:
+                continue
+
+            if isinstance(value, bool) or not isinstance(
+                value,
+                (int, float),
+            ):
+                raise ValueError(
+                    f"El campo '{field_name}' debe ser "
+                    "numérico o None."
+                )
+
+            if value < 0:
+                raise ValueError(
+                    f"El campo '{field_name}' no puede "
+                    "ser negativo."
+                )
+
+            object.__setattr__(
+                self,
+                field_name,
+                float(value),
             )
 
 

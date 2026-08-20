@@ -1182,6 +1182,8 @@ def test_build_node_health_panel_from_diagnostic() -> None:
                 reason=(
                     "Elevated network error or drop rate"
                 ),
+                error_rate=0.25,
+                drop_rate=1.50,
             ),
         ),
     )
@@ -1206,6 +1208,8 @@ def test_build_node_health_panel_from_diagnostic() -> None:
         panel.interfaces[1].reason
         == "Elevated network error or drop rate"
     )
+    assert panel.interfaces[1].error_rate == 0.25
+    assert panel.interfaces[1].drop_rate == 1.50
 
 
 def test_build_node_health_panel_accepts_no_interfaces() -> None:
