@@ -12,6 +12,9 @@ from app.dashboard.renderers.network_interfaces_panel_renderer import (
 from app.dashboard.renderers.node_health_panel_renderer import (
     NodeHealthPanelRenderer,
 )
+from app.dashboard.renderers.recent_events_panel_renderer import (
+    RecentEventsPanelRenderer,
+)
 from app.dashboard.renderers.path_table_renderer import PathTableRenderer
 from app.dashboard.renderers.server_panel_renderer import (
     ServerPanelRenderer,
@@ -47,6 +50,9 @@ class DashboardRenderer:
         )
         self._node_health_renderer = (
             NodeHealthPanelRenderer()
+        )
+        self._recent_events_renderer = (
+            RecentEventsPanelRenderer()
         )
         self._path_table_renderer = PathTableRenderer()
 
@@ -85,6 +91,39 @@ class DashboardRenderer:
                 Layout(name="summary", size=22),
                 Layout(name="paths"),
             )
+
+        if data.recent_events is not None:
+            if (
+                data.network_interfaces is not None
+                and data.active_connections is not None
+            ):
+                layout.split_column(
+                    Layout(name="summary", size=22),
+                    Layout(name="network_interfaces", size=11),
+                    Layout(name="active_connections", size=12),
+                    Layout(name="recent_events", size=9),
+                    Layout(name="paths"),
+                )
+            elif data.network_interfaces is not None:
+                layout.split_column(
+                    Layout(name="summary", size=22),
+                    Layout(name="network_interfaces", size=11),
+                    Layout(name="recent_events", size=9),
+                    Layout(name="paths"),
+                )
+            elif data.active_connections is not None:
+                layout.split_column(
+                    Layout(name="summary", size=22),
+                    Layout(name="active_connections", size=12),
+                    Layout(name="recent_events", size=9),
+                    Layout(name="paths"),
+                )
+            else:
+                layout.split_column(
+                    Layout(name="summary", size=22),
+                    Layout(name="recent_events", size=9),
+                    Layout(name="paths"),
+                )
 
         layout["summary"].split_column(
             Layout(name="summary_top", size=8),
@@ -147,6 +186,13 @@ class DashboardRenderer:
             layout["active_connections"].update(
                 self._active_connections_renderer.render(
                     data.active_connections
+                )
+            )
+
+        if data.recent_events is not None:
+            layout["recent_events"].update(
+                self._recent_events_renderer.render(
+                    data.recent_events
                 )
             )
 

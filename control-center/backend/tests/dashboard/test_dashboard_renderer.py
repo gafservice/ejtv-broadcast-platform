@@ -342,3 +342,104 @@ def test_render_contains_node_health_panel() -> None:
     assert "Status: HEALTHY" in output
     assert "System: HEALTHY" in output
     assert "Network: HEALTHY" in output
+
+
+def test_render_contains_recent_events_panel() -> None:
+    from datetime import UTC, datetime
+
+    from app.dashboard.models import (
+        RecentEventRowData,
+        RecentEventsPanelData,
+    )
+
+    renderer = DashboardRenderer()
+    base_data = build_dashboard_data()
+
+    recent_events = RecentEventsPanelData(
+        events=(
+            RecentEventRowData(
+                event_id="event-001",
+                event_type="NODE_HEALTH_DEGRADED",
+                severity="WARNING",
+                title="Node health degraded",
+                occurred_at=datetime(
+                    2026,
+                    8,
+                    20,
+                    18,
+                    30,
+                    15,
+                    tzinfo=UTC,
+                ),
+            ),
+            RecentEventRowData(
+                event_id="event-002",
+                event_type="NODE_HEALTH_RECOVERED",
+                severity="INFO",
+                title="Node health recovered",
+                occurred_at=datetime(
+                    2026,
+                    8,
+                    20,
+                    18,
+                    32,
+                    10,
+                    tzinfo=UTC,
+                ),
+            ),
+        ),
+    )
+
+    data = DashboardData(
+        server=base_data.server,
+        streaming=base_data.streaming,
+        paths=base_data.paths,
+        health=base_data.health,
+        system=base_data.system,
+        sessions=base_data.sessions,
+        active_connections=base_data.active_connections,
+        network_interfaces=base_data.network_interfaces,
+        node_health=base_data.node_health,
+        recent_events=recent_events,
+    )
+
+    layout = renderer.render(data)
+
+    console = Console(
+        record=True,
+        width=180,
+        height=70,
+        color_system=None,
+    )
+
+    console.print(layout)
+
+    output = console.export_text()
+
+    assert "RECENT EVENTS" in output
+    assert "NODE_HEALTH_DEGRADED" in output
+    assert "NODE_HEALTH_RECOVERED" in output
+    assert "Node health degraded" in output
+    assert "Node health recovered" in output
+
+
+def test_render_preserves_layout_without_recent_events() -> None:
+    renderer = DashboardRenderer()
+    data = build_dashboard_data()
+
+    assert data.recent_events is None
+
+    layout = renderer.render(data)
+
+    console = Console(
+        record=True,
+        width=180,
+        height=60,
+        color_system=None,
+    )
+
+    console.print(layout)
+
+    output = console.export_text()
+
+    assert "RECENT EVENTS" not in output
