@@ -377,6 +377,7 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
         streaming_health_service=streaming_health_service,
         dashboard_snapshot_service=ANY,
         telemetry_refresh_service=telemetry_refresh_service,
+        event_service=event_service,
         node_id=bootstrap_result.node.node_id,
         instance_id=node_instance_id,
     )

@@ -143,6 +143,7 @@ def test_run_once_builds_and_renders_dashboard() -> None:
         health=None,
         network_interfaces=network_interfaces,
         node_health=None,
+        recent_events=None,
     )
 
     dashboard_renderer.render.assert_called_once_with(
@@ -597,6 +598,7 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         health=streaming_health,
         network_interfaces=network_interfaces,
         node_health=None,
+        recent_events=None,
     )
 
     dashboard_renderer.render.assert_called_once_with(
@@ -727,6 +729,18 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
         telemetry_result
     )
 
+    event_service = Mock()
+    event_records = (
+        Mock(),
+        Mock(),
+    )
+    event_service.list_all.return_value = event_records
+
+    recent_events_panel = Mock()
+    dashboard_service.build_recent_events_panel.return_value = (
+        recent_events_panel
+    )
+
     dashboard_data = Mock(spec=DashboardData)
 
     dashboard_snapshot_service = Mock()
@@ -757,6 +771,7 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
         dashboard_snapshot_service=dashboard_snapshot_service,
         network_telemetry_service=network_telemetry_service,
         telemetry_refresh_service=telemetry_refresh_service,
+        event_service=event_service,
         node_id=node_id,
         instance_id=instance_id,
     )
@@ -776,6 +791,15 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
         diagnostic=health_diagnostic,
     )
 
+    event_service.list_all.assert_called_once_with(
+        node_id,
+        instance_id,
+    )
+
+    dashboard_service.build_recent_events_panel.assert_called_once_with(
+        events=event_records,
+    )
+
     snapshot_input = (
         dashboard_snapshot_service
         .build_snapshot
@@ -784,11 +808,13 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
     )
 
     assert snapshot_input.node_health is node_health_panel
+    assert snapshot_input.recent_events is recent_events_panel
 
 
 @pytest.mark.parametrize(
     (
         "telemetry_refresh_service",
+        "event_service",
         "node_id",
         "instance_id",
     ),
@@ -797,13 +823,22 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
             Mock(),
             None,
             None,
+            None,
         ),
         (
             None,
             Mock(),
             None,
+            None,
         ),
         (
+            None,
+            None,
+            Mock(),
+            None,
+        ),
+        (
+            None,
             None,
             None,
             Mock(),
@@ -812,6 +847,7 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
 )
 def test_application_rejects_partial_noc_configuration(
     telemetry_refresh_service,
+    event_service,
     node_id,
     instance_id,
 ) -> None:
@@ -825,6 +861,7 @@ def test_application_rejects_partial_noc_configuration(
             dashboard_renderer=Mock(),
             system_service=Mock(),
             telemetry_refresh_service=telemetry_refresh_service,
+            event_service=event_service,
             node_id=node_id,
             instance_id=instance_id,
         )

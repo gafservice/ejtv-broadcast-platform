@@ -178,6 +178,7 @@ def build_dashboard_application() -> DashboardApplication:
         streaming_health_service=streaming_health_service,
         dashboard_snapshot_service=dashboard_snapshot_service,
         telemetry_refresh_service=telemetry_refresh_service,
+        event_service=event_service,
         node_id=bootstrap_result.node.node_id,
         instance_id=node_instance_id,
     )
