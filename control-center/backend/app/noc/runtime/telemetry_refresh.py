@@ -44,6 +44,9 @@ from app.noc.services.health_service import (
 from app.noc.services.health_transition_event_service import (
     HealthTransitionEventService,
 )
+from app.noc.services.health_transition_alarm_service import (
+    HealthTransitionAlarmService,
+)
 from app.noc.domain.network_interface_policy import (
     NetworkInterfacePolicy,
 )
@@ -98,6 +101,9 @@ class TelemetryRefreshService:
         health_transition_event_service: (
             HealthTransitionEventService | None
         ) = None,
+        health_transition_alarm_service: (
+            HealthTransitionAlarmService | None
+        ) = None,
         provider: SystemMetricsProvider | None = None,
         health_evaluator: HealthEvaluator | None = None,
         network_health_stabilizer: (
@@ -136,6 +142,18 @@ class TelemetryRefreshService:
             raise TypeError(
                 "health_transition_event_service must be a "
                 "HealthTransitionEventService or None"
+            )
+
+        if (
+            health_transition_alarm_service is not None
+            and not isinstance(
+                health_transition_alarm_service,
+                HealthTransitionAlarmService,
+            )
+        ):
+            raise TypeError(
+                "health_transition_alarm_service must be a "
+                "HealthTransitionAlarmService or None"
             )
 
         if (
@@ -206,6 +224,9 @@ class TelemetryRefreshService:
         self._health_transition_event_service = (
             health_transition_event_service
         )
+        self._health_transition_alarm_service = (
+            health_transition_alarm_service
+        )
         self._health_evaluator = (
             health_evaluator
             or HealthEvaluator()
@@ -267,6 +288,12 @@ class TelemetryRefreshService:
         self,
     ) -> HealthTransitionEventService | None:
         return self._health_transition_event_service
+
+    @property
+    def health_transition_alarm_service(
+        self,
+    ) -> HealthTransitionAlarmService | None:
+        return self._health_transition_alarm_service
 
     @property
     def health_evaluator(self) -> HealthEvaluator:
@@ -482,6 +509,15 @@ class TelemetryRefreshService:
 
         if self._health_transition_event_service is not None:
             self._health_transition_event_service.process(
+                node_id=node_id,
+                instance_id=instance_id,
+                previous=previous_health,
+                current=health,
+                timestamp=resources.captured_at,
+            )
+
+        if self._health_transition_alarm_service is not None:
+            self._health_transition_alarm_service.process(
                 node_id=node_id,
                 instance_id=instance_id,
                 previous=previous_health,

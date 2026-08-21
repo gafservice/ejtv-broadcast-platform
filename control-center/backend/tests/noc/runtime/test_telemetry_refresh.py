@@ -1953,3 +1953,428 @@ def test_network_health_stabilization_across_refresh_cycles() -> None:
         critical.health_diagnostic.health.state
         is NodeHealthState.CRITICAL
     )
+
+
+# ---------------------------------------------------------------------------
+# NodeHealth transition -> operational alarm integration
+# ---------------------------------------------------------------------------
+
+
+def make_health_alarm_context():
+    """Build a real Event + Alarm transition integration context."""
+
+    from app.noc.services.alarm_service import AlarmService
+    from app.noc.services.health_transition_alarm_service import (
+        HealthTransitionAlarmService,
+    )
+
+    repository = InMemoryNodeRepository()
+    registry = NodeRegistry(repository)
+
+    node = Node(
+        node_id=NodeId.create(
+            id="streaming-alarm-core",
+            name="streaming-alarm",
+            display_name="Streaming Alarm Core",
+        ),
+        node_type=NodeType.STREAMING,
+    )
+
+    instance = node.create_instance(
+        instance_id="streaming-alarm-primary"
+    )
+
+    registry.register(node)
+
+    metric_service = MetricService(
+        registry
+    )
+
+    health_service = HealthService(
+        registry
+    )
+
+    event_service = EventService(
+        registry
+    )
+
+    alarm_service = AlarmService(
+        registry
+    )
+
+    health_transition_event_service = (
+        HealthTransitionEventService(
+            event_service=event_service,
+        )
+    )
+
+    health_transition_alarm_service = (
+        HealthTransitionAlarmService(
+            alarm_service=alarm_service,
+        )
+    )
+
+    system_service = FixedSystemService(
+        FakeSystemAdapter()
+    )
+
+    refresh_service = TelemetryRefreshService(
+        system_service=system_service,
+        metric_service=metric_service,
+        health_service=health_service,
+        health_transition_event_service=(
+            health_transition_event_service
+        ),
+        health_transition_alarm_service=(
+            health_transition_alarm_service
+        ),
+    )
+
+    return (
+        node,
+        instance,
+        health_service,
+        event_service,
+        alarm_service,
+        refresh_service,
+    )
+
+
+def make_critical_health_alarm_context():
+    """Build runtime context whose required ingest NIC is down."""
+
+    from app.noc.domain.network_interface_policy import (
+        NetworkInterfacePolicy,
+        NetworkInterfaceRole,
+    )
+    from app.noc.services.alarm_service import AlarmService
+    from app.noc.services.health_transition_alarm_service import (
+        HealthTransitionAlarmService,
+    )
+
+    repository = InMemoryNodeRepository()
+    registry = NodeRegistry(repository)
+
+    node = Node(
+        node_id=NodeId.create(
+            id="streaming-critical-core",
+            name="streaming-critical",
+            display_name="Streaming Critical Core",
+        ),
+        node_type=NodeType.STREAMING,
+    )
+
+    instance = node.create_instance(
+        instance_id="streaming-critical-primary"
+    )
+
+    registry.register(node)
+
+    metric_service = MetricService(
+        registry
+    )
+
+    health_service = HealthService(
+        registry
+    )
+
+    event_service = EventService(
+        registry
+    )
+
+    alarm_service = AlarmService(
+        registry
+    )
+
+    health_transition_event_service = (
+        HealthTransitionEventService(
+            event_service=event_service,
+        )
+    )
+
+    health_transition_alarm_service = (
+        HealthTransitionAlarmService(
+            alarm_service=alarm_service,
+        )
+    )
+
+    system_service = NetworkPolicySystemService(
+        NetworkPolicySystemAdapter(
+            interface="enp9s0",
+            is_up=False,
+            carrier=False,
+        )
+    )
+
+    policy = NetworkInterfacePolicy(
+        interface="enp9s0",
+        role=NetworkInterfaceRole.INGEST,
+        expected_up=True,
+        critical=True,
+    )
+
+    refresh_service = TelemetryRefreshService(
+        system_service=system_service,
+        metric_service=metric_service,
+        health_service=health_service,
+        health_transition_event_service=(
+            health_transition_event_service
+        ),
+        health_transition_alarm_service=(
+            health_transition_alarm_service
+        ),
+        network_policies=(policy,),
+    )
+
+    return (
+        node,
+        instance,
+        health_service,
+        event_service,
+        alarm_service,
+        refresh_service,
+    )
+
+
+def test_first_refresh_does_not_generate_operational_alarm() -> None:
+    (
+        node,
+        instance,
+        _,
+        _,
+        alarm_service,
+        refresh_service,
+    ) = make_health_alarm_context()
+
+    refresh_service.refresh_once(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    assert alarm_service.list_all(
+        node.node_id,
+        instance.instance_id,
+    ) == ()
+
+
+def test_repeated_same_health_does_not_generate_operational_alarm() -> None:
+    (
+        node,
+        instance,
+        _,
+        _,
+        alarm_service,
+        refresh_service,
+    ) = make_health_alarm_context()
+
+    first_resources = (
+        refresh_service.system_service
+        .get_system_resources()
+    )
+
+    interface_infos = (
+        refresh_service.system_service
+        .get_network_interface_infos()
+    )
+
+    refresh_service.refresh_from_capture(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        resources=first_resources,
+        interface_infos=interface_infos,
+    )
+
+    second_resources = SystemResources(
+        cpu=first_resources.cpu,
+        memory=first_resources.memory,
+        disk=first_resources.disk,
+        network=first_resources.network,
+        uptime=first_resources.uptime,
+        captured_at=(
+            first_resources.captured_at
+            + timedelta(seconds=1)
+        ),
+    )
+
+    refresh_service.refresh_from_capture(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        resources=second_resources,
+        interface_infos=interface_infos,
+    )
+
+    assert alarm_service.list_all(
+        node.node_id,
+        instance.instance_id,
+    ) == ()
+
+
+def test_health_degradation_generates_event_and_alarm() -> None:
+    from app.noc.domain.node_alarm import (
+        AlarmSeverity,
+        AlarmState,
+    )
+
+    (
+        node,
+        instance,
+        health_service,
+        event_service,
+        alarm_service,
+        refresh_service,
+    ) = make_critical_health_alarm_context()
+
+    # Establish a previous healthy operational state.
+    health_service.publish(
+        node.node_id,
+        instance.instance_id,
+        NodeHealth(
+            NodeHealthState.HEALTHY
+        ),
+    )
+
+    refresh_service.refresh_once(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    events = event_service.list_all(
+        node.node_id,
+        instance.instance_id,
+    )
+
+    alarms = alarm_service.list_all(
+        node.node_id,
+        instance.instance_id,
+    )
+
+    assert len(events) == 1
+    assert len(alarms) == 1
+
+    event = events[0]
+    alarm = alarms[0]
+
+    assert event.event_type == (
+        "NODE_HEALTH_DEGRADED"
+    )
+    assert event.attributes is not None
+    assert event.attributes["previous"] == (
+        "HEALTHY"
+    )
+    assert event.attributes["current"] == (
+        "CRITICAL"
+    )
+
+    assert alarm.alarm_type == (
+        "NODE_HEALTH_DEGRADED"
+    )
+    assert alarm.severity is (
+        AlarmSeverity.CRITICAL
+    )
+    assert alarm.state is AlarmState.ACTIVE
+
+    assert alarm.attributes is not None
+    assert alarm.attributes["previous"] == (
+        "HEALTHY"
+    )
+    assert alarm.attributes["current"] == (
+        "CRITICAL"
+    )
+
+
+def test_health_recovery_resolves_existing_operational_alarm() -> None:
+    from app.noc.domain.node_alarm import AlarmState
+    from app.noc.services.health_transition_alarm_factory import (
+        HealthTransitionAlarmFactory,
+    )
+    from app.noc.services.health_transition_detector import (
+        HealthTransitionDetector,
+    )
+
+    (
+        node,
+        instance,
+        health_service,
+        event_service,
+        alarm_service,
+        refresh_service,
+    ) = make_health_alarm_context()
+
+    detector = HealthTransitionDetector()
+    factory = HealthTransitionAlarmFactory()
+
+    degradation = detector.detect(
+        previous=NodeHealth(
+            NodeHealthState.HEALTHY
+        ),
+        current=NodeHealth(
+            NodeHealthState.CRITICAL
+        ),
+    )
+
+    assert degradation is not None
+
+    active_alarm = factory.create(
+        transition=degradation,
+        source=instance.instance_id,
+        timestamp=CAPTURED_AT,
+    )
+
+    assert active_alarm is not None
+
+    alarm_service.raise_alarm(
+        node.node_id,
+        instance.instance_id,
+        active_alarm,
+    )
+
+    health_service.publish(
+        node.node_id,
+        instance.instance_id,
+        NodeHealth(
+            NodeHealthState.CRITICAL
+        ),
+    )
+
+    refresh_service.refresh_once(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    events = event_service.list_all(
+        node.node_id,
+        instance.instance_id,
+    )
+
+    alarms = alarm_service.list_all(
+        node.node_id,
+        instance.instance_id,
+    )
+
+    assert len(events) == 1
+    assert len(alarms) == 1
+
+    event = events[0]
+    resolved = alarms[0]
+
+    assert event.event_type == (
+        "NODE_HEALTH_RECOVERED"
+    )
+    assert event.attributes is not None
+    assert event.attributes["previous"] == (
+        "CRITICAL"
+    )
+    assert event.attributes["current"] == (
+        "HEALTHY"
+    )
+
+    assert resolved.alarm_id == (
+        active_alarm.alarm_id
+    )
+    assert resolved.state is AlarmState.RESOLVED
+    assert resolved.resolved_at == CAPTURED_AT
+
+    assert alarm_service.active(
+        node.node_id,
+        instance.instance_id,
+    ) == ()

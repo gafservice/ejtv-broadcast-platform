@@ -41,8 +41,12 @@ from app.noc.registry.registry import NodeRegistry
 from app.noc.runtime.telemetry_refresh import (
     TelemetryRefreshService,
 )
+from app.noc.services.alarm_service import AlarmService
 from app.noc.services.event_service import EventService
 from app.noc.services.health_service import HealthService
+from app.noc.services.health_transition_alarm_service import (
+    HealthTransitionAlarmService,
+)
 from app.noc.services.health_transition_event_service import (
     HealthTransitionEventService,
 )
@@ -131,9 +135,19 @@ def build_dashboard_application() -> DashboardApplication:
         node_registry
     )
 
+    alarm_service = AlarmService(
+        node_registry
+    )
+
     health_transition_event_service = (
         HealthTransitionEventService(
             event_service=event_service,
+        )
+    )
+
+    health_transition_alarm_service = (
+        HealthTransitionAlarmService(
+            alarm_service=alarm_service,
         )
     )
 
@@ -150,6 +164,9 @@ def build_dashboard_application() -> DashboardApplication:
             health_service=node_health_service,
             health_transition_event_service=(
                 health_transition_event_service
+            ),
+            health_transition_alarm_service=(
+                health_transition_alarm_service
             ),
             network_policies=network_policy.interfaces,
         )
