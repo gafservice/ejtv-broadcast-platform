@@ -3,6 +3,9 @@
 from rich.layout import Layout
 
 from app.dashboard.models import DashboardData
+from app.dashboard.renderers.active_alarms_panel_renderer import (
+    ActiveAlarmsPanelRenderer,
+)
 from app.dashboard.renderers.active_connections_panel_renderer import (
     ActiveConnectionsPanelRenderer,
 )
@@ -43,6 +46,9 @@ class DashboardRenderer:
         self._active_connections_renderer = (
             ActiveConnectionsPanelRenderer()
         )
+        self._active_alarms_renderer = (
+            ActiveAlarmsPanelRenderer()
+        )
         self._health_renderer = StreamingHealthRenderer()
         self._system_renderer = SystemPanelRenderer()
         self._network_interfaces_renderer = (
@@ -61,69 +67,49 @@ class DashboardRenderer:
 
         layout = Layout(name="dashboard")
 
-        if (
-            data.network_interfaces is not None
-            and data.active_connections is not None
-        ):
-            layout.split_column(
-                Layout(name="summary", size=22),
-                Layout(name="network_interfaces", size=11),
-                Layout(name="active_connections", size=12),
-                Layout(name="paths"),
+        sections = [
+            Layout(name="summary", size=22),
+        ]
+
+        if data.network_interfaces is not None:
+            sections.append(
+                Layout(
+                    name="network_interfaces",
+                    size=11,
+                )
             )
 
-        elif data.network_interfaces is not None:
-            layout.split_column(
-                Layout(name="summary", size=22),
-                Layout(name="network_interfaces", size=11),
-                Layout(name="paths"),
+        if data.active_connections is not None:
+            sections.append(
+                Layout(
+                    name="active_connections",
+                    size=12,
+                )
             )
 
-        elif data.active_connections is not None:
-            layout.split_column(
-                Layout(name="summary", size=22),
-                Layout(name="active_connections", size=12),
-                Layout(name="paths"),
-            )
-
-        else:
-            layout.split_column(
-                Layout(name="summary", size=22),
-                Layout(name="paths"),
+        if data.active_alarms is not None:
+            sections.append(
+                Layout(
+                    name="active_alarms",
+                    size=9,
+                )
             )
 
         if data.recent_events is not None:
-            if (
-                data.network_interfaces is not None
-                and data.active_connections is not None
-            ):
-                layout.split_column(
-                    Layout(name="summary", size=22),
-                    Layout(name="network_interfaces", size=11),
-                    Layout(name="active_connections", size=12),
-                    Layout(name="recent_events", size=9),
-                    Layout(name="paths"),
+            sections.append(
+                Layout(
+                    name="recent_events",
+                    size=9,
                 )
-            elif data.network_interfaces is not None:
-                layout.split_column(
-                    Layout(name="summary", size=22),
-                    Layout(name="network_interfaces", size=11),
-                    Layout(name="recent_events", size=9),
-                    Layout(name="paths"),
-                )
-            elif data.active_connections is not None:
-                layout.split_column(
-                    Layout(name="summary", size=22),
-                    Layout(name="active_connections", size=12),
-                    Layout(name="recent_events", size=9),
-                    Layout(name="paths"),
-                )
-            else:
-                layout.split_column(
-                    Layout(name="summary", size=22),
-                    Layout(name="recent_events", size=9),
-                    Layout(name="paths"),
-                )
+            )
+
+        sections.append(
+            Layout(name="paths")
+        )
+
+        layout.split_column(
+            *sections
+        )
 
         layout["summary"].split_column(
             Layout(name="summary_top", size=8),
@@ -186,6 +172,13 @@ class DashboardRenderer:
             layout["active_connections"].update(
                 self._active_connections_renderer.render(
                     data.active_connections
+                )
+            )
+
+        if data.active_alarms is not None:
+            layout["active_alarms"].update(
+                self._active_alarms_renderer.render(
+                    data.active_alarms
                 )
             )
 

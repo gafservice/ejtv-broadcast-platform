@@ -144,6 +144,7 @@ def test_run_once_builds_and_renders_dashboard() -> None:
         network_interfaces=network_interfaces,
         node_health=None,
         recent_events=None,
+        active_alarms=None,
     )
 
     dashboard_renderer.render.assert_called_once_with(
@@ -599,6 +600,7 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         network_interfaces=network_interfaces,
         node_health=None,
         recent_events=None,
+        active_alarms=None,
     )
 
     dashboard_renderer.render.assert_called_once_with(
@@ -729,6 +731,8 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
         telemetry_result
     )
 
+    session_transition_event_service = Mock()
+
     event_service = Mock()
     event_records = (
         Mock(),
@@ -736,9 +740,21 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
     )
     event_service.list_all.return_value = event_records
 
+    alarm_service = Mock()
+    alarm_records = (
+        Mock(),
+        Mock(),
+    )
+    alarm_service.active.return_value = alarm_records
+
     recent_events_panel = Mock()
     dashboard_service.build_recent_events_panel.return_value = (
         recent_events_panel
+    )
+
+    active_alarms_panel = Mock()
+    dashboard_service.build_active_alarms_panel.return_value = (
+        active_alarms_panel
     )
 
     dashboard_data = Mock(spec=DashboardData)
@@ -771,7 +787,11 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
         dashboard_snapshot_service=dashboard_snapshot_service,
         network_telemetry_service=network_telemetry_service,
         telemetry_refresh_service=telemetry_refresh_service,
+        session_transition_event_service=(
+            session_transition_event_service
+        ),
         event_service=event_service,
+        alarm_service=alarm_service,
         node_id=node_id,
         instance_id=instance_id,
     )
@@ -779,6 +799,14 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
     result = application.build_dashboard()
 
     assert result is dashboard_data
+
+    session_transition_event_service.process.assert_called_once_with(
+        node_id=node_id,
+        instance_id=instance_id,
+        previous=None,
+        current=session_snapshot,
+        timestamp=session_snapshot.captured_at,
+    )
 
     telemetry_refresh_service.refresh_from_capture.assert_called_once_with(
         node_id=node_id,
@@ -800,6 +828,15 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
         events=event_records,
     )
 
+    alarm_service.active.assert_called_once_with(
+        node_id,
+        instance_id,
+    )
+
+    dashboard_service.build_active_alarms_panel.assert_called_once_with(
+        alarms=alarm_records,
+    )
+
     snapshot_input = (
         dashboard_snapshot_service
         .build_snapshot
@@ -809,49 +846,39 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
 
     assert snapshot_input.node_health is node_health_panel
     assert snapshot_input.recent_events is recent_events_panel
+    assert snapshot_input.active_alarms is active_alarms_panel
 
 
 @pytest.mark.parametrize(
     (
         "telemetry_refresh_service",
+        "session_transition_event_service",
         "event_service",
+        "alarm_service",
         "node_id",
         "instance_id",
     ),
     (
-        (
-            Mock(),
-            None,
-            None,
-            None,
-        ),
-        (
-            None,
-            Mock(),
-            None,
-            None,
-        ),
-        (
-            None,
-            None,
-            Mock(),
-            None,
-        ),
-        (
-            None,
-            None,
-            None,
-            Mock(),
-        ),
+        (Mock(), None, None, None, None, None),
+        (None, Mock(), None, None, None, None),
+        (None, None, Mock(), None, None, None),
+        (None, None, None, Mock(), None, None),
+        (None, None, None, None, Mock(), None),
+        (None, None, None, None, None, Mock()),
     ),
 )
 def test_application_rejects_partial_noc_configuration(
     telemetry_refresh_service,
+    session_transition_event_service,
     event_service,
+    alarm_service,
     node_id,
     instance_id,
 ) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError,
+        match="deben configurarse juntos",
+    ):
         DashboardApplication(
             mediamtx_adapter=Mock(),
             session_adapter=Mock(),
@@ -861,7 +888,11 @@ def test_application_rejects_partial_noc_configuration(
             dashboard_renderer=Mock(),
             system_service=Mock(),
             telemetry_refresh_service=telemetry_refresh_service,
+            session_transition_event_service=(
+                session_transition_event_service
+            ),
             event_service=event_service,
+            alarm_service=alarm_service,
             node_id=node_id,
             instance_id=instance_id,
         )

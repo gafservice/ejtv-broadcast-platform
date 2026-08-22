@@ -28,6 +28,7 @@ from app.noc.domain.node_instance import NodeInstanceId
 from app.noc.runtime.telemetry_refresh import (
     TelemetryRefreshService,
 )
+from app.noc.services.alarm_service import AlarmService
 from app.noc.services.event_service import EventService
 from app.services.network_telemetry_service import (
     NetworkTelemetryService,
@@ -36,6 +37,9 @@ from app.services.session_service import SessionService
 from app.services.streaming_health_service import StreamingHealthService
 from app.services.streaming_service import StreamingService
 from app.services.system_service import SystemService
+from app.noc.services.session_transition_event_service import (
+    SessionTransitionEventService,
+)
 
 
 class DashboardApplication:
@@ -57,7 +61,11 @@ class DashboardApplication:
         dashboard_snapshot_service: DashboardSnapshotService | None = None,
         network_telemetry_service: NetworkTelemetryService | None = None,
         telemetry_refresh_service: TelemetryRefreshService | None = None,
+        session_transition_event_service: (
+            SessionTransitionEventService | None
+        ) = None,
         event_service: EventService | None = None,
+        alarm_service: AlarmService | None = None,
         node_id: NodeId | None = None,
         instance_id: NodeInstanceId | None = None,
     ) -> None:
@@ -86,7 +94,11 @@ class DashboardApplication:
         self._streaming_health_service = streaming_health_service
 
         self._telemetry_refresh_service = telemetry_refresh_service
+        self._session_transition_event_service = (
+            session_transition_event_service
+        )
         self._event_service = event_service
+        self._alarm_service = alarm_service
         self._node_id = node_id
         self._instance_id = instance_id
 
@@ -149,8 +161,18 @@ class DashboardApplication:
 
         node_health = None
         recent_events = None
+        active_alarms = None
 
         if self._telemetry_refresh_service is not None:
+            if self._session_transition_event_service is not None:
+                self._session_transition_event_service.process(
+                    node_id=self._node_id,
+                    instance_id=self._instance_id,
+                    previous=self._previous_session_snapshot,
+                    current=session_snapshot,
+                    timestamp=session_snapshot.captured_at,
+                )
+
             telemetry_result = (
                 self._telemetry_refresh_service.refresh_from_capture(
                     node_id=self._node_id,
@@ -177,6 +199,17 @@ class DashboardApplication:
                 )
             )
 
+            alarm_records = self._alarm_service.active(
+                self._node_id,
+                self._instance_id,
+            )
+
+            active_alarms = (
+                self._dashboard_service.build_active_alarms_panel(
+                    alarms=alarm_records,
+                )
+            )
+
         snapshot_kwargs = {
             "hostname": system_info.hostname,
             "mediamtx_online": api_online,
@@ -197,6 +230,9 @@ class DashboardApplication:
 
         if recent_events is not None:
             snapshot_kwargs["recent_events"] = recent_events
+
+        if active_alarms is not None:
+            snapshot_kwargs["active_alarms"] = active_alarms
 
         snapshot_input = DashboardSnapshotInput(**snapshot_kwargs)
 
@@ -289,7 +325,9 @@ class DashboardApplication:
 
         dependencies = (
             self._telemetry_refresh_service,
+            self._session_transition_event_service,
             self._event_service,
+            self._alarm_service,
             self._node_id,
             self._instance_id,
         )
@@ -304,8 +342,10 @@ class DashboardApplication:
             len(dependencies),
         ):
             raise ValueError(
-                "telemetry_refresh_service, event_service, "
-                "node_id e instance_id deben configurarse juntos."
+                "telemetry_refresh_service, "
+                "session_transition_event_service, event_service, "
+                "alarm_service, node_id e instance_id deben "
+                "configurarse juntos."
             )
 
     def _validate_health_dependencies(self) -> None:

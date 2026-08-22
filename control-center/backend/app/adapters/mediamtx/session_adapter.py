@@ -32,12 +32,24 @@ class MediaMTXSessionAdapter:
     def get_snapshot(self) -> SessionSnapshot:
         """Obtiene el snapshot agregado de sesiones activas.
 
-        Inicialmente utiliza únicamente las conexiones SRT. Este punto
-        único permitirá agregar otros protocolos sin modificar la capa
-        de aplicación.
+        Integra las sesiones normalizadas de los protocolos soportados
+        por el adaptador en una única fotografía operacional.
         """
 
-        return self.get_srt_snapshot()
+        srt_snapshot = self.get_srt_snapshot()
+        rtsp_snapshot = self.get_rtsp_snapshot()
+        rtmp_snapshot = self.get_rtmp_snapshot()
+        hls_snapshot = self.get_hls_snapshot()
+
+        return SessionSnapshot(
+            captured_at=datetime.now(UTC),
+            sessions=(
+                *srt_snapshot.sessions,
+                *rtsp_snapshot.sessions,
+                *rtmp_snapshot.sessions,
+                *hls_snapshot.sessions,
+            ),
+        )
 
     def get_srt_snapshot(self) -> SessionSnapshot:
         """Obtiene y normaliza las conexiones SRT activas."""
@@ -47,6 +59,66 @@ class MediaMTXSessionAdapter:
         return self._parse_collection(
             payload=payload,
             protocol=SessionProtocol.SRT,
+        )
+
+    def get_rtsp_snapshot(self) -> SessionSnapshot:
+        """Obtiene y normaliza las sesiones RTSP activas."""
+
+        payload = self._client.get_rtsp_sessions()
+
+        return self._parse_collection(
+            payload=payload,
+            protocol=SessionProtocol.RTSP,
+        )
+
+    def get_rtmp_snapshot(self) -> SessionSnapshot:
+        """Obtiene y normaliza las conexiones RTMP activas."""
+
+        payload = self._client.get_rtmp_connections()
+
+        return self._parse_collection(
+            payload=payload,
+            protocol=SessionProtocol.RTMP,
+        )
+
+    def get_hls_snapshot(self) -> SessionSnapshot:
+        """Obtiene y normaliza las sesiones HLS activas."""
+
+        payload = self._client.get_hls_sessions()
+
+        raw_items = payload.get("items", [])
+
+        if not isinstance(raw_items, list):
+            raise MediaMTXInvalidResponseError(
+                "El campo 'items' de sesiones debe ser una lista."
+            )
+
+        normalized_items = []
+
+        for item in raw_items:
+            if not isinstance(item, Mapping):
+                normalized_items.append(item)
+                continue
+
+            normalized = dict(item)
+
+            # MediaMTX HLS sessions represent readers but do not expose
+            # the generic connection state used by SRT/RTSP/RTMP.
+            normalized.setdefault(
+                "state",
+                "read",
+            )
+
+            normalized_items.append(
+                normalized
+            )
+
+        normalized_payload = dict(payload)
+        normalized_payload["items"] = normalized_items
+
+        return self._parse_collection(
+            payload=normalized_payload,
+            protocol=SessionProtocol.HLS,
         )
 
     def _parse_collection(

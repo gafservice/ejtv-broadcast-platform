@@ -1472,3 +1472,323 @@ def test_build_recent_events_panel_requires_integer_limit(
             events=(),
             limit=limit,
         )
+
+
+# ---------------------------------------------------------------------------
+# ACTIVE ALARMS
+# ---------------------------------------------------------------------------
+
+
+def test_build_active_alarms_panel() -> None:
+    from datetime import datetime, timezone
+
+    from app.noc.domain.node_alarm import (
+        AlarmRecord,
+        AlarmSeverity,
+        AlarmState,
+    )
+    from app.noc.domain.node_instance import NodeInstanceId
+
+    service = DashboardService()
+
+    older = AlarmRecord(
+        alarm_id="alarm-001",
+        alarm_type="NODE_HEALTH_DEGRADED",
+        severity=AlarmSeverity.WARNING,
+        state=AlarmState.ACTIVE,
+        timestamp=datetime(
+            2026,
+            8,
+            21,
+            22,
+            0,
+            tzinfo=timezone.utc,
+        ),
+        source=NodeInstanceId(
+            "streaming-primary"
+        ),
+        title="Node health degraded to WARNING",
+        description="Health degraded",
+    )
+
+    newer = AlarmRecord(
+        alarm_id="alarm-002",
+        alarm_type="NODE_HEALTH_DEGRADED",
+        severity=AlarmSeverity.CRITICAL,
+        state=AlarmState.ACTIVE,
+        timestamp=datetime(
+            2026,
+            8,
+            21,
+            22,
+            30,
+            tzinfo=timezone.utc,
+        ),
+        source=NodeInstanceId(
+            "streaming-primary"
+        ),
+        title="Node health degraded to CRITICAL",
+        description="Health degraded",
+    )
+
+    panel = service.build_active_alarms_panel(
+        alarms=(
+            older,
+            newer,
+        )
+    )
+
+    assert panel.alarm_count == 2
+
+    assert panel.alarms[0].alarm_id == (
+        "alarm-002"
+    )
+    assert panel.alarms[0].severity == (
+        "CRITICAL"
+    )
+    assert panel.alarms[0].state == (
+        "ACTIVE"
+    )
+    assert panel.alarms[0].message == (
+        "Node health degraded to CRITICAL"
+    )
+
+    assert panel.alarms[1].alarm_id == (
+        "alarm-001"
+    )
+
+
+def test_build_active_alarms_panel_filters_resolved() -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from app.noc.domain.node_alarm import (
+        AlarmRecord,
+        AlarmSeverity,
+        AlarmState,
+    )
+    from app.noc.domain.node_instance import NodeInstanceId
+
+    service = DashboardService()
+
+    raised = datetime(
+        2026,
+        8,
+        21,
+        22,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    active = AlarmRecord(
+        alarm_id="alarm-001",
+        alarm_type="NODE_HEALTH_DEGRADED",
+        severity=AlarmSeverity.CRITICAL,
+        state=AlarmState.ACTIVE,
+        timestamp=raised,
+        source=NodeInstanceId(
+            "streaming-primary"
+        ),
+        title="Node health degraded",
+        description="Health degraded",
+    )
+
+    resolved = AlarmRecord(
+        alarm_id="alarm-002",
+        alarm_type="NODE_HEALTH_DEGRADED",
+        severity=AlarmSeverity.WARNING,
+        state=AlarmState.RESOLVED,
+        timestamp=raised,
+        source=NodeInstanceId(
+            "streaming-primary"
+        ),
+        title="Node health degraded",
+        description="Health degraded",
+        resolved_at=(
+            raised + timedelta(seconds=10)
+        ),
+    )
+
+    panel = service.build_active_alarms_panel(
+        alarms=(
+            active,
+            resolved,
+        )
+    )
+
+    assert panel.alarm_count == 1
+    assert panel.alarms[0].alarm_id == (
+        "alarm-001"
+    )
+
+
+def test_build_active_alarms_panel_accepts_acknowledged() -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from app.noc.domain.node_alarm import (
+        AlarmRecord,
+        AlarmSeverity,
+        AlarmState,
+    )
+    from app.noc.domain.node_instance import NodeInstanceId
+
+    service = DashboardService()
+
+    raised = datetime(
+        2026,
+        8,
+        21,
+        22,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    alarm = AlarmRecord(
+        alarm_id="alarm-001",
+        alarm_type="NODE_HEALTH_DEGRADED",
+        severity=AlarmSeverity.MAJOR,
+        state=AlarmState.ACKNOWLEDGED,
+        timestamp=raised,
+        source=NodeInstanceId(
+            "streaming-primary"
+        ),
+        title="Node health degraded",
+        description="Health degraded",
+        acknowledged=True,
+        acknowledged_by="operator",
+        acknowledged_at=(
+            raised + timedelta(seconds=5)
+        ),
+    )
+
+    panel = service.build_active_alarms_panel(
+        alarms=(alarm,)
+    )
+
+    assert panel.alarm_count == 1
+    assert panel.alarms[0].state == (
+        "ACKNOWLEDGED"
+    )
+
+
+def test_build_active_alarms_panel_limits_results() -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from app.noc.domain.node_alarm import (
+        AlarmRecord,
+        AlarmSeverity,
+        AlarmState,
+    )
+    from app.noc.domain.node_instance import NodeInstanceId
+
+    service = DashboardService()
+
+    base = datetime(
+        2026,
+        8,
+        21,
+        22,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    alarms = tuple(
+        AlarmRecord(
+            alarm_id=f"alarm-{index}",
+            alarm_type="NODE_HEALTH_DEGRADED",
+            severity=AlarmSeverity.WARNING,
+            state=AlarmState.ACTIVE,
+            timestamp=(
+                base + timedelta(seconds=index)
+            ),
+            source=NodeInstanceId(
+                "streaming-primary"
+            ),
+            title=f"Alarm {index}",
+            description="Health degraded",
+        )
+        for index in range(6)
+    )
+
+    panel = service.build_active_alarms_panel(
+        alarms=alarms,
+        limit=3,
+    )
+
+    assert panel.alarm_count == 3
+    assert tuple(
+        row.alarm_id
+        for row in panel.alarms
+    ) == (
+        "alarm-5",
+        "alarm-4",
+        "alarm-3",
+    )
+
+
+def test_build_active_alarms_panel_accepts_empty() -> None:
+    service = DashboardService()
+
+    panel = service.build_active_alarms_panel(
+        alarms=(),
+    )
+
+    assert panel.is_empty is True
+
+
+def test_build_active_alarms_panel_requires_tuple() -> None:
+    service = DashboardService()
+
+    with pytest.raises(TypeError):
+        service.build_active_alarms_panel(
+            alarms=[],  # type: ignore[arg-type]
+        )
+
+
+def test_build_active_alarms_panel_rejects_invalid_alarm() -> None:
+    service = DashboardService()
+
+    with pytest.raises(TypeError):
+        service.build_active_alarms_panel(
+            alarms=(
+                object(),  # type: ignore[arg-type]
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    "limit",
+    (
+        0,
+        -1,
+    ),
+)
+def test_build_active_alarms_panel_requires_positive_limit(
+    limit: int,
+) -> None:
+    service = DashboardService()
+
+    with pytest.raises(ValueError):
+        service.build_active_alarms_panel(
+            alarms=(),
+            limit=limit,
+        )
+
+
+@pytest.mark.parametrize(
+    "limit",
+    (
+        True,
+        1.5,
+        "5",
+    ),
+)
+def test_build_active_alarms_panel_requires_integer_limit(
+    limit,
+) -> None:
+    service = DashboardService()
+
+    with pytest.raises(TypeError):
+        service.build_active_alarms_panel(
+            alarms=(),
+            limit=limit,
+        )

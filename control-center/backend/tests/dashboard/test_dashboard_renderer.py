@@ -443,3 +443,186 @@ def test_render_preserves_layout_without_recent_events() -> None:
     output = console.export_text()
 
     assert "RECENT EVENTS" not in output
+
+
+def test_render_contains_active_alarms_panel() -> None:
+    from datetime import UTC, datetime
+
+    from app.dashboard.models import (
+        ActiveAlarmRowData,
+        ActiveAlarmsPanelData,
+    )
+
+    renderer = DashboardRenderer()
+    base_data = build_dashboard_data()
+
+    active_alarms = ActiveAlarmsPanelData(
+        alarms=(
+            ActiveAlarmRowData(
+                alarm_id="alarm-001",
+                alarm_type="NODE_HEALTH_DEGRADED",
+                severity="CRITICAL",
+                state="ACTIVE",
+                message="Node health degraded to CRITICAL",
+                opened_at=datetime(
+                    2026,
+                    8,
+                    21,
+                    23,
+                    30,
+                    15,
+                    tzinfo=UTC,
+                ),
+            ),
+            ActiveAlarmRowData(
+                alarm_id="alarm-002",
+                alarm_type="NODE_HEALTH_DEGRADED",
+                severity="WARNING",
+                state="ACKNOWLEDGED",
+                message="Node health degraded to WARNING",
+                opened_at=datetime(
+                    2026,
+                    8,
+                    21,
+                    23,
+                    31,
+                    10,
+                    tzinfo=UTC,
+                ),
+            ),
+        ),
+    )
+
+    data = DashboardData(
+        server=base_data.server,
+        streaming=base_data.streaming,
+        paths=base_data.paths,
+        health=base_data.health,
+        system=base_data.system,
+        sessions=base_data.sessions,
+        active_connections=base_data.active_connections,
+        network_interfaces=base_data.network_interfaces,
+        node_health=base_data.node_health,
+        recent_events=base_data.recent_events,
+        active_alarms=active_alarms,
+    )
+
+    layout = renderer.render(data)
+
+    console = Console(
+        record=True,
+        width=180,
+        height=80,
+        color_system=None,
+    )
+
+    console.print(layout)
+
+    output = console.export_text()
+
+    assert "ACTIVE ALARMS" in output
+    assert "NODE_HEALTH_DEGRADED" in output
+    assert "CRITICAL" in output
+    assert "WARNING" in output
+    assert "ACTIVE" in output
+    assert "ACKNOWLEDGED" in output
+    assert "Node health degraded to CRITICAL" in output
+
+
+def test_render_preserves_layout_without_active_alarms() -> None:
+    renderer = DashboardRenderer()
+    data = build_dashboard_data()
+
+    assert data.active_alarms is None
+
+    layout = renderer.render(data)
+
+    console = Console(
+        record=True,
+        width=180,
+        height=60,
+        color_system=None,
+    )
+
+    console.print(layout)
+
+    output = console.export_text()
+
+    assert "ACTIVE ALARMS" not in output
+
+
+def test_active_alarms_precede_recent_events_in_layout() -> None:
+    from datetime import UTC, datetime
+
+    from app.dashboard.models import (
+        ActiveAlarmRowData,
+        ActiveAlarmsPanelData,
+        RecentEventRowData,
+        RecentEventsPanelData,
+    )
+
+    renderer = DashboardRenderer()
+    base_data = build_dashboard_data()
+
+    active_alarms = ActiveAlarmsPanelData(
+        alarms=(
+            ActiveAlarmRowData(
+                alarm_id="alarm-001",
+                alarm_type="NODE_HEALTH_DEGRADED",
+                severity="CRITICAL",
+                state="ACTIVE",
+                message="Critical health alarm",
+                opened_at=datetime(
+                    2026,
+                    8,
+                    21,
+                    23,
+                    30,
+                    tzinfo=UTC,
+                ),
+            ),
+        ),
+    )
+
+    recent_events = RecentEventsPanelData(
+        events=(
+            RecentEventRowData(
+                event_id="event-001",
+                event_type="NODE_HEALTH_DEGRADED",
+                severity="CRITICAL",
+                title="Node health degraded",
+                occurred_at=datetime(
+                    2026,
+                    8,
+                    21,
+                    23,
+                    30,
+                    tzinfo=UTC,
+                ),
+            ),
+        ),
+    )
+
+    data = DashboardData(
+        server=base_data.server,
+        streaming=base_data.streaming,
+        paths=base_data.paths,
+        health=base_data.health,
+        active_alarms=active_alarms,
+        recent_events=recent_events,
+    )
+
+    layout = renderer.render(data)
+
+    child_names = [
+        child.name
+        for child in layout.children
+    ]
+
+    assert "active_alarms" in child_names
+    assert "recent_events" in child_names
+
+    assert (
+        child_names.index("active_alarms")
+        < child_names.index("recent_events")
+    )

@@ -1,3 +1,7 @@
+from app.dashboard.models.active_alarms_panel import (
+    ActiveAlarmRowData,
+    ActiveAlarmsPanelData,
+)
 """Modelos de presentación del dashboard."""
 
 from app.domain.streaming import StreamingHealth
@@ -33,6 +37,8 @@ from app.dashboard.models.system_panel import SystemPanelData
 from app.dashboard.models.uptime_panel import UptimePanelData
 
 __all__ = [
+    "ActiveAlarmRowData",
+    "ActiveAlarmsPanelData",
     "ActiveConnectionRow",
     "ActiveConnectionsPanelData",
     "CpuPanelData",

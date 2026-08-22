@@ -337,3 +337,53 @@ def test_dashboard_data_accepts_recent_events_panel() -> None:
         dashboard.recent_events.events[0].event_id
         == "event-001"
     )
+
+def test_dashboard_data_accepts_active_alarms() -> None:
+    from datetime import UTC, datetime
+
+    from app.dashboard.models import (
+        ActiveAlarmRowData,
+        ActiveAlarmsPanelData,
+    )
+
+    active_alarms = ActiveAlarmsPanelData(
+        alarms=(
+            ActiveAlarmRowData(
+                alarm_id="alarm-001",
+                alarm_type="NODE_HEALTH_DEGRADED",
+                severity="CRITICAL",
+                state="ACTIVE",
+                message="Node health degraded to CRITICAL",
+                opened_at=datetime(
+                    2026,
+                    8,
+                    21,
+                    23,
+                    45,
+                    tzinfo=UTC,
+                ),
+            ),
+        )
+    )
+
+    dashboard = DashboardData(
+        server=ServerPanelData(
+            hostname="ejtv-01",
+            mediamtx_online=True,
+            api_online=True,
+            snapshot_at=None,
+            quality="AVAILABLE",
+        ),
+        streaming=StreamingPanelData(
+            active_paths=0,
+            readers=0,
+            inbound_bitrate_bps=None,
+            outbound_bitrate_bps=None,
+            quality="AVAILABLE",
+        ),
+        paths=(),
+        active_alarms=active_alarms,
+    )
+
+    assert dashboard.active_alarms is active_alarms
+    assert dashboard.active_alarms.alarm_count == 1

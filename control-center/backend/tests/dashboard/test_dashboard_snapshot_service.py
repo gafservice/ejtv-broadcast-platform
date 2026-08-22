@@ -199,3 +199,66 @@ def test_snapshot_service_transports_recent_events() -> None:
         result.recent_events.events[0].event_id
         == "event-001"
     )
+
+def test_snapshot_preserves_active_alarms() -> None:
+    from app.dashboard.models import (
+        ActiveAlarmRowData,
+        ActiveAlarmsPanelData,
+    )
+
+    captured_at = datetime(
+        2026,
+        8,
+        21,
+        23,
+        45,
+        tzinfo=UTC,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=0,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=None,
+        interval_seconds=None,
+        paths=(),
+        total_inbound_bitrate_bps=None,
+        total_outbound_bitrate_bps=None,
+        quality=MeasurementQuality.NOT_AVAILABLE,
+    )
+
+    active_alarms = ActiveAlarmsPanelData(
+        alarms=(
+            ActiveAlarmRowData(
+                alarm_id="alarm-001",
+                alarm_type="NODE_HEALTH_DEGRADED",
+                severity="CRITICAL",
+                state="ACTIVE",
+                message="Node health degraded to CRITICAL",
+                opened_at=captured_at,
+            ),
+        )
+    )
+
+    result = DashboardSnapshotService().build_snapshot(
+        DashboardSnapshotInput(
+            hostname="ejtv-01",
+            mediamtx_online=True,
+            api_online=True,
+            snapshot=snapshot,
+            measurement=measurement,
+            active_alarms=active_alarms,
+        )
+    )
+
+    assert result.active_alarms is active_alarms
+    assert result.active_alarms.alarm_count == 1
+    assert (
+        result.active_alarms.alarms[0].alarm_id
+        == "alarm-001"
+    )

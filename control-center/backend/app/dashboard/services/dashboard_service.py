@@ -1,6 +1,8 @@
 """Servicio de aplicación para construir datos del dashboard."""
 
 from app.dashboard.models import (
+    ActiveAlarmRowData,
+    ActiveAlarmsPanelData,
     ActiveConnectionRow,
     ActiveConnectionsPanelData,
     CpuPanelData,
@@ -29,6 +31,7 @@ from app.domain.streaming import (
     StreamingMeasurement,
 )
 from app.noc.domain.node_event import EventRecord
+from app.noc.domain.node_alarm import AlarmRecord
 from app.noc.domain.node_health_diagnostic import (
     NodeHealthDiagnostic,
 )
@@ -143,6 +146,7 @@ class DashboardService:
 
         connections = tuple(
             ActiveConnectionRow(
+                session_id=session.session_id,
                 remote_address=session.remote_address,
                 country=session.location_label,
                 country_code=session.country_code,
@@ -167,6 +171,72 @@ class DashboardService:
         return ActiveConnectionsPanelData(
             captured_at=measurement.captured_at,
             connections=connections,
+        )
+
+    def build_active_alarms_panel(
+        self,
+        *,
+        alarms: tuple[AlarmRecord, ...],
+        limit: int = 5,
+    ) -> ActiveAlarmsPanelData:
+        """Prepara alarmas operacionales activas para presentación."""
+
+        if not isinstance(alarms, tuple):
+            raise TypeError(
+                "alarms must be a tuple"
+            )
+
+        for alarm in alarms:
+            if not isinstance(
+                alarm,
+                AlarmRecord,
+            ):
+                raise TypeError(
+                    "alarms must contain "
+                    "AlarmRecord objects"
+                )
+
+        if isinstance(limit, bool) or not isinstance(
+            limit,
+            int,
+        ):
+            raise TypeError(
+                "limit must be an integer"
+            )
+
+        if limit <= 0:
+            raise ValueError(
+                "limit must be greater than zero"
+            )
+
+        attention = tuple(
+            alarm
+            for alarm in alarms
+            if alarm.requires_attention
+        )
+
+        ordered = sorted(
+            attention,
+            key=lambda alarm: alarm.timestamp,
+            reverse=True,
+        )
+
+        selected = ordered[:limit]
+
+        rows = tuple(
+            ActiveAlarmRowData(
+                alarm_id=alarm.alarm_id,
+                alarm_type=alarm.alarm_type,
+                severity=alarm.severity.value,
+                state=alarm.state.value,
+                message=alarm.title,
+                opened_at=alarm.timestamp,
+            )
+            for alarm in selected
+        )
+
+        return ActiveAlarmsPanelData(
+            alarms=rows,
         )
 
     def build_recent_events_panel(
@@ -459,6 +529,7 @@ class DashboardService:
         network_interfaces: NetworkInterfacesPanelData | None = None,
         node_health: NodeHealthPanelData | None = None,
         recent_events: RecentEventsPanelData | None = None,
+        active_alarms: ActiveAlarmsPanelData | None = None,
     ) -> DashboardData:
         """Agrupa todas las secciones del dashboard."""
 
@@ -473,6 +544,7 @@ class DashboardService:
             network_interfaces=network_interfaces,
             node_health=node_health,
             recent_events=recent_events,
+            active_alarms=active_alarms,
         )
 
     def build_dashboard_from_measurement(
@@ -490,6 +562,7 @@ class DashboardService:
         network_interfaces: NetworkInterfacesPanelData | None = None,
         node_health: NodeHealthPanelData | None = None,
         recent_events: RecentEventsPanelData | None = None,
+        active_alarms: ActiveAlarmsPanelData | None = None,
     ) -> DashboardData:
         """Construye el dashboard completo desde snapshot y medición."""
 
@@ -588,6 +661,7 @@ class DashboardService:
             network_interfaces=network_interfaces,
             node_health=node_health,
             recent_events=recent_events,
+            active_alarms=active_alarms,
         )
 
     @staticmethod

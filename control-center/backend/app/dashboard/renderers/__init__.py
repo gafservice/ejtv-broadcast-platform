@@ -1,3 +1,6 @@
+from app.dashboard.renderers.active_alarms_panel_renderer import (
+    ActiveAlarmsPanelRenderer,
+)
 from .network_interfaces_panel_renderer import (
     NetworkInterfacesPanelRenderer,
 )

@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.dashboard.models import (
+    ActiveAlarmsPanelData,
     DashboardData,
     NetworkInterfacesPanelData,
     NodeHealthPanelData,
@@ -49,6 +50,7 @@ class DashboardSnapshotInput:
     network_interfaces: NetworkInterfacesPanelData | None = None
     node_health: NodeHealthPanelData | None = None
     recent_events: RecentEventsPanelData | None = None
+    active_alarms: ActiveAlarmsPanelData | None = None
 
 
 class DashboardSnapshotService:
@@ -119,4 +121,5 @@ class DashboardSnapshotService:
             ),
             node_health=snapshot_input.node_health,
             recent_events=snapshot_input.recent_events,
+            active_alarms=snapshot_input.active_alarms,
         )

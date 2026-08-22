@@ -10,6 +10,7 @@ from datetime import datetime
 class ActiveConnectionRow:
     """Información preparada para una conexión activa."""
 
+    session_id: str
     remote_address: str
     country: str
     country_code: str | None
@@ -29,6 +30,7 @@ class ActiveConnectionRow:
         """Valida los valores utilizados por una fila."""
 
         text_values = (
+            ("session_id", self.session_id),
             ("remote_address", self.remote_address),
             ("country", self.country),
             ("provider", self.provider),
@@ -84,14 +86,14 @@ class ActiveConnectionsPanelData:
                 "captured_at debe contener información de zona horaria."
             )
 
-        remote_addresses = [
-            connection.remote_address
+        session_ids = [
+            connection.session_id
             for connection in self.connections
         ]
 
-        if len(remote_addresses) != len(set(remote_addresses)):
+        if len(session_ids) != len(set(session_ids)):
             raise ValueError(
-                "No se permiten remote_address duplicados."
+                "No se permiten session_id duplicados."
             )
 
     @property

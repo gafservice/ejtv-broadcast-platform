@@ -218,6 +218,14 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
             )
         )
 
+        session_transition_event_service = object()
+        session_transition_event_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.SessionTransitionEventService",
+                return_value=session_transition_event_service,
+            )
+        )
+
         alarm_service = object()
         alarm_service_class = stack.enter_context(
             patch(
@@ -360,6 +368,10 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
         event_service=event_service,
     )
 
+    session_transition_event_service_class.assert_called_once_with(
+        event_service=event_service,
+    )
+
     alarm_service_class.assert_called_once_with(
         node_registry
     )
@@ -404,7 +416,11 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
         streaming_health_service=streaming_health_service,
         dashboard_snapshot_service=ANY,
         telemetry_refresh_service=telemetry_refresh_service,
+        session_transition_event_service=(
+            session_transition_event_service
+        ),
         event_service=event_service,
+        alarm_service=alarm_service,
         node_id=bootstrap_result.node.node_id,
         instance_id=node_instance_id,
     )

@@ -50,6 +50,9 @@ from app.noc.services.health_transition_alarm_service import (
 from app.noc.services.health_transition_event_service import (
     HealthTransitionEventService,
 )
+from app.noc.services.session_transition_event_service import (
+    SessionTransitionEventService,
+)
 from app.noc.services.metric_service import MetricService
 
 
@@ -145,6 +148,12 @@ def build_dashboard_application() -> DashboardApplication:
         )
     )
 
+    session_transition_event_service = (
+        SessionTransitionEventService(
+            event_service=event_service,
+        )
+    )
+
     health_transition_alarm_service = (
         HealthTransitionAlarmService(
             alarm_service=alarm_service,
@@ -195,7 +204,11 @@ def build_dashboard_application() -> DashboardApplication:
         streaming_health_service=streaming_health_service,
         dashboard_snapshot_service=dashboard_snapshot_service,
         telemetry_refresh_service=telemetry_refresh_service,
+        session_transition_event_service=(
+            session_transition_event_service
+        ),
         event_service=event_service,
+        alarm_service=alarm_service,
         node_id=bootstrap_result.node.node_id,
         instance_id=node_instance_id,
     )

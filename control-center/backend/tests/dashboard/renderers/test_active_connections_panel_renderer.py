@@ -17,6 +17,7 @@ from app.dashboard.renderers.active_connections_panel_renderer import (
 
 def build_panel() -> ActiveConnectionsPanelData:
     connection = ActiveConnectionRow(
+        session_id="renderer-session-001",
         remote_address="201.192.154.130:26676",
         country="Costa Rica",
         country_code="CR",
@@ -90,6 +91,7 @@ def test_render_contains_network_identity() -> None:
 
 def test_render_uses_path_when_username_is_missing() -> None:
     connection = ActiveConnectionRow(
+        session_id="renderer-session-002",
         remote_address="201.192.154.130:26676",
         country="Costa Rica",
         country_code="CR",
