@@ -25,3 +25,22 @@ network_interfaces:
     role: LOOPBACK
     expected_up: true
     critical: false
+
+session_policies:
+  expected_sessions:
+    - policy_id: ejtv-publication
+      protocol: SRT
+      role: PUBLISHER
+      path: ejtv
+      enabled: true
+      missing_grace_seconds: 15
+
+  critical_paths:
+    - path: ejtv
+      enabled: true
+      no_readers_grace_seconds: 15
+
+  reconnect_flapping:
+    reconnect_timeout_seconds: 10
+    window_seconds: 60
+    threshold: 3

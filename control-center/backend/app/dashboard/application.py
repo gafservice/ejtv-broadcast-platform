@@ -28,6 +28,9 @@ from app.noc.domain.node_instance import NodeInstanceId
 from app.noc.runtime.telemetry_refresh import (
     TelemetryRefreshService,
 )
+from app.noc.runtime.session_operational_runtime import (
+    SessionOperationalRuntime,
+)
 from app.noc.services.alarm_service import AlarmService
 from app.noc.services.event_service import EventService
 from app.services.network_telemetry_service import (
@@ -64,6 +67,9 @@ class DashboardApplication:
         session_transition_event_service: (
             SessionTransitionEventService | None
         ) = None,
+        session_operational_runtime: (
+            SessionOperationalRuntime | None
+        ) = None,
         event_service: EventService | None = None,
         alarm_service: AlarmService | None = None,
         node_id: NodeId | None = None,
@@ -96,6 +102,9 @@ class DashboardApplication:
         self._telemetry_refresh_service = telemetry_refresh_service
         self._session_transition_event_service = (
             session_transition_event_service
+        )
+        self._session_operational_runtime = (
+            session_operational_runtime
         )
         self._event_service = event_service
         self._alarm_service = alarm_service
@@ -164,7 +173,15 @@ class DashboardApplication:
         active_alarms = None
 
         if self._telemetry_refresh_service is not None:
-            if self._session_transition_event_service is not None:
+            if self._session_operational_runtime is not None:
+                self._session_operational_runtime.process(
+                    node_id=self._node_id,
+                    instance_id=self._instance_id,
+                    previous=self._previous_session_snapshot,
+                    current=session_snapshot,
+                    timestamp=session_snapshot.captured_at,
+                )
+            elif self._session_transition_event_service is not None:
                 self._session_transition_event_service.process(
                     node_id=self._node_id,
                     instance_id=self._instance_id,

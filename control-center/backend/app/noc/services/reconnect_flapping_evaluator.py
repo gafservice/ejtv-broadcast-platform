@@ -291,6 +291,23 @@ class ReconnectFlappingEvaluator:
             reconnect_detected=reconnect_detected,
         )
 
+    def identities(
+        self,
+    ) -> tuple[LogicalSessionIdentity, ...]:
+        """Return known logical session identities deterministically."""
+
+        return tuple(
+            sorted(
+                self._states,
+                key=lambda identity: (
+                    identity.protocol.value,
+                    identity.role.value,
+                    identity.path or "",
+                    identity.remote_ip,
+                ),
+            )
+        )
+
     def observe(
         self,
         *,

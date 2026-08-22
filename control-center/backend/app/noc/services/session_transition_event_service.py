@@ -103,6 +103,76 @@ class SessionTransitionEventService:
     def factory(self) -> SessionTransitionEventFactory:
         return self._factory
 
+    def process_transitions(
+        self,
+        *,
+        node_id: NodeId,
+        instance_id: NodeInstanceId,
+        transitions: tuple[SessionTransition, ...],
+        timestamp: datetime,
+    ) -> SessionTransitionEventResult:
+        """Persist events for already detected session transitions."""
+
+        if not isinstance(node_id, NodeId):
+            raise TypeError(
+                "node_id must be a NodeId"
+            )
+
+        if not isinstance(
+            instance_id,
+            NodeInstanceId,
+        ):
+            raise TypeError(
+                "instance_id must be a NodeInstanceId"
+            )
+
+        if not isinstance(transitions, tuple):
+            raise TypeError(
+                "transitions must be a tuple"
+            )
+
+        if not all(
+            isinstance(
+                transition,
+                SessionTransition,
+            )
+            for transition in transitions
+        ):
+            raise TypeError(
+                "transitions must contain "
+                "SessionTransition values"
+            )
+
+        if not isinstance(timestamp, datetime):
+            raise TypeError(
+                "timestamp must be a datetime"
+            )
+
+        events: list[EventRecord] = []
+        receipts: list[EventReceipt] = []
+
+        for transition in transitions:
+            event = self._factory.create(
+                transition=transition,
+                source=instance_id,
+                timestamp=timestamp,
+            )
+
+            receipt = self._event_service.record(
+                node_id,
+                instance_id,
+                event,
+            )
+
+            events.append(event)
+            receipts.append(receipt)
+
+        return SessionTransitionEventResult(
+            transitions=transitions,
+            events=tuple(events),
+            receipts=tuple(receipts),
+        )
+
     def process(
         self,
         *,
@@ -162,27 +232,9 @@ class SessionTransitionEventService:
             current,
         )
 
-        events: list[EventRecord] = []
-        receipts: list[EventReceipt] = []
-
-        for transition in transitions:
-            event = self._factory.create(
-                transition=transition,
-                source=instance_id,
-                timestamp=timestamp,
-            )
-
-            receipt = self._event_service.record(
-                node_id,
-                instance_id,
-                event,
-            )
-
-            events.append(event)
-            receipts.append(receipt)
-
-        return SessionTransitionEventResult(
+        return self.process_transitions(
+            node_id=node_id,
+            instance_id=instance_id,
             transitions=transitions,
-            events=tuple(events),
-            receipts=tuple(receipts),
+            timestamp=timestamp,
         )

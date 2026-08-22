@@ -37,11 +37,32 @@ from app.noc.infrastructure.memory_repository import (
 from app.noc.infrastructure.node_network_policy_loader import (
     NodeNetworkPolicyLoader,
 )
+from app.noc.infrastructure.node_session_policy_loader import (
+    NodeSessionPolicyLoader,
+)
 from app.noc.registry.registry import NodeRegistry
 from app.noc.runtime.telemetry_refresh import (
     TelemetryRefreshService,
 )
+from app.noc.runtime.session_alarm_runtime import (
+    SessionAlarmRuntime,
+)
+from app.noc.runtime.session_operational_runtime import (
+    SessionOperationalRuntime,
+)
 from app.noc.services.alarm_service import AlarmService
+from app.noc.services.critical_path_no_readers_alarm_service import (
+    CriticalPathNoReadersAlarmService,
+)
+from app.noc.services.expected_session_alarm_service import (
+    ExpectedSessionAlarmService,
+)
+from app.noc.services.reconnect_flapping_alarm_service import (
+    ReconnectFlappingAlarmService,
+)
+from app.noc.services.reconnect_flapping_evaluator import (
+    ReconnectFlappingEvaluator,
+)
 from app.noc.services.event_service import EventService
 from app.noc.services.health_service import HealthService
 from app.noc.services.health_transition_alarm_service import (
@@ -166,6 +187,59 @@ def build_dashboard_application() -> DashboardApplication:
         )
     )
 
+    session_policy = (
+        NodeSessionPolicyLoader().load(
+            settings.node_network_policy_path
+        )
+    )
+
+    reconnect_flapping_evaluator = (
+        ReconnectFlappingEvaluator(
+            policy=session_policy.reconnect_flapping
+        )
+        if session_policy.reconnect_flapping is not None
+        else ReconnectFlappingEvaluator()
+    )
+
+    session_alarm_runtime = SessionAlarmRuntime(
+        expected_session_alarm_service=(
+            ExpectedSessionAlarmService(
+                alarm_service=alarm_service,
+            )
+        ),
+        reconnect_flapping_alarm_service=(
+            ReconnectFlappingAlarmService(
+                alarm_service=alarm_service,
+            )
+        ),
+        critical_path_alarm_service=(
+            CriticalPathNoReadersAlarmService(
+                alarm_service=alarm_service,
+            )
+        ),
+        expected_session_policies=(
+            session_policy.expected_sessions
+        ),
+        critical_path_policies=(
+            session_policy.critical_paths
+        ),
+        reconnect_flapping_evaluator=(
+            reconnect_flapping_evaluator
+        ),
+        reconnect_flapping_enabled=(
+            session_policy.has_reconnect_flapping
+        ),
+    )
+
+    session_operational_runtime = (
+        SessionOperationalRuntime(
+            transition_event_service=(
+                session_transition_event_service
+            ),
+            alarm_runtime=session_alarm_runtime,
+        )
+    )
+
     telemetry_refresh_service = (
         TelemetryRefreshService(
             system_service=system_service,
@@ -206,6 +280,9 @@ def build_dashboard_application() -> DashboardApplication:
         telemetry_refresh_service=telemetry_refresh_service,
         session_transition_event_service=(
             session_transition_event_service
+        ),
+        session_operational_runtime=(
+            session_operational_runtime
         ),
         event_service=event_service,
         alarm_service=alarm_service,

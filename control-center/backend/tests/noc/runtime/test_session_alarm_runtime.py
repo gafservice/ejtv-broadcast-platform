@@ -1,0 +1,551 @@
+"""Integration tests for multimedia session alarm runtime."""
+
+from datetime import UTC, datetime, timedelta
+
+from app.domain.sessions import (
+    ActiveSession,
+    SessionProtocol,
+    SessionRole,
+    SessionSnapshot,
+)
+from app.noc.domain.critical_path_policy import (
+    CriticalPathPolicy,
+)
+from app.noc.domain.expected_session_policy import (
+    ExpectedSessionPolicy,
+)
+from app.noc.domain.node import Node
+from app.noc.domain.node_id import NodeId
+from app.noc.domain.node_type import NodeType
+from app.noc.domain.reconnect_flapping_policy import (
+    ReconnectFlappingPolicy,
+)
+from app.noc.registry.registry import NodeRegistry
+from app.noc.runtime.session_alarm_runtime import (
+    SessionAlarmRuntime,
+    SessionAlarmRuntimeResult,
+)
+from app.noc.services.alarm_service import AlarmService
+from app.noc.services.critical_path_no_readers_alarm_service import (
+    CriticalPathNoReadersAlarmService,
+)
+from app.noc.services.expected_session_alarm_service import (
+    ExpectedSessionAlarmService,
+)
+from app.noc.services.reconnect_flapping_alarm_service import (
+    ReconnectFlappingAlarmService,
+)
+from app.noc.services.reconnect_flapping_evaluator import (
+    ReconnectFlappingEvaluator,
+)
+from app.noc.services.session_transition_detector import (
+    SessionTransition,
+    SessionTransitionKind,
+)
+
+
+BASE_TIME = datetime(
+    2026,
+    8,
+    23,
+    4,
+    30,
+    tzinfo=UTC,
+)
+
+
+class MemoryRepository:
+    def __init__(self):
+        self.nodes = {}
+
+    def save(self, node):
+        self.nodes[node.node_id.id] = node
+
+    def get(self, node_id):
+        return self.nodes.get(node_id.id)
+
+    def exists(self, node_id):
+        return node_id.id in self.nodes
+
+    def list_all(self):
+        return tuple(self.nodes.values())
+
+    def delete(self, node_id):
+        return self.nodes.pop(
+            node_id.id,
+            None,
+        ) is not None
+
+    def count(self):
+        return len(self.nodes)
+
+
+def make_context():
+    repository = MemoryRepository()
+    registry = NodeRegistry(repository)
+
+    node = Node(
+        node_id=NodeId.create(
+            id="streaming-core",
+            name="streaming",
+            display_name="Streaming Core",
+        ),
+        node_type=NodeType.STREAMING,
+    )
+
+    instance = node.create_instance(
+        instance_id="streaming-primary"
+    )
+
+    registry.register(node)
+
+    alarm_service = AlarmService(registry)
+
+    runtime = SessionAlarmRuntime(
+        expected_session_alarm_service=(
+            ExpectedSessionAlarmService(
+                alarm_service=alarm_service,
+            )
+        ),
+        reconnect_flapping_alarm_service=(
+            ReconnectFlappingAlarmService(
+                alarm_service=alarm_service,
+            )
+        ),
+        critical_path_alarm_service=(
+            CriticalPathNoReadersAlarmService(
+                alarm_service=alarm_service,
+            )
+        ),
+        expected_session_policies=(
+            ExpectedSessionPolicy(
+                policy_id="expected-reader",
+                protocol=SessionProtocol.SRT,
+                role=SessionRole.READER,
+                path="expected",
+                missing_grace_period=timedelta(
+                    seconds=15
+                ),
+            ),
+        ),
+        critical_path_policies=(
+            CriticalPathPolicy(
+                path="critical",
+                no_readers_grace_period=timedelta(
+                    seconds=15
+                ),
+            ),
+        ),
+        reconnect_flapping_evaluator=(
+            ReconnectFlappingEvaluator(
+                policy=ReconnectFlappingPolicy(
+                    reconnect_timeout=timedelta(
+                        seconds=10
+                    ),
+                    window=timedelta(
+                        seconds=30
+                    ),
+                    threshold=2,
+                )
+            )
+        ),
+    )
+
+    return (
+        node,
+        instance,
+        alarm_service,
+        runtime,
+    )
+
+
+def build_session(
+    *,
+    session_id: str,
+    role: SessionRole,
+    path: str,
+    remote_ip: str = "201.192.154.132",
+    remote_port: int = 50000,
+) -> ActiveSession:
+    return ActiveSession(
+        session_id=session_id,
+        protocol=SessionProtocol.SRT,
+        role=role,
+        state=(
+            "publish"
+            if role is SessionRole.PUBLISHER
+            else "read"
+        ),
+        remote_ip=remote_ip,
+        remote_port=remote_port,
+        path=path,
+        connected_since=BASE_TIME,
+    )
+
+
+def build_snapshot(
+    *,
+    captured_at: datetime,
+    sessions: tuple[ActiveSession, ...],
+) -> SessionSnapshot:
+    return SessionSnapshot(
+        captured_at=captured_at,
+        sessions=sessions,
+    )
+
+
+def build_transition(
+    *,
+    kind: SessionTransitionKind,
+    session_id: str,
+    remote_port: int,
+) -> SessionTransition:
+    return SessionTransition(
+        session=build_session(
+            session_id=session_id,
+            role=SessionRole.READER,
+            path="flap",
+            remote_ip="203.0.113.10",
+            remote_port=remote_port,
+        ),
+        kind=kind,
+    )
+
+
+def active_alarm_types(
+    alarm_service,
+    node,
+    instance,
+) -> set[str]:
+    return {
+        alarm.alarm_type
+        for alarm in alarm_service.active(
+            node.node_id,
+            instance.instance_id,
+        )
+    }
+
+
+def test_all_session_alarm_policies_coexist_and_recover() -> None:
+    (
+        node,
+        instance,
+        alarm_service,
+        runtime,
+    ) = make_context()
+
+    critical_publisher = build_session(
+        session_id="critical-publisher",
+        role=SessionRole.PUBLISHER,
+        path="critical",
+    )
+
+    #
+    # t=0
+    #
+    # - expected reader is absent;
+    # - critical publisher exists with zero readers;
+    # - both temporal grace periods begin.
+    #
+    first = runtime.process(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        snapshot=build_snapshot(
+            captured_at=BASE_TIME,
+            sessions=(
+                critical_publisher,
+            ),
+        ),
+        transitions=(),
+        timestamp=BASE_TIME,
+    )
+
+    assert isinstance(
+        first,
+        SessionAlarmRuntimeResult,
+    )
+
+    assert len(
+        first.expected_session_results
+    ) == 1
+
+    assert len(
+        first.critical_path_results
+    ) == 1
+
+    assert (
+        first.reconnect_flapping_results
+        == ()
+    )
+
+    assert alarm_service.active(
+        node.node_id,
+        instance.instance_id,
+    ) == ()
+
+    #
+    # t=15
+    #
+    # Both grace periods expire.
+    #
+    runtime.process(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        snapshot=build_snapshot(
+            captured_at=(
+                BASE_TIME
+                + timedelta(seconds=15)
+            ),
+            sessions=(
+                critical_publisher,
+            ),
+        ),
+        transitions=(),
+        timestamp=(
+            BASE_TIME
+            + timedelta(seconds=15)
+        ),
+    )
+
+    assert active_alarm_types(
+        alarm_service,
+        node,
+        instance,
+    ) == {
+        "EXPECTED_SESSION_MISSING",
+        "CRITICAL_PATH_NO_READERS",
+    }
+
+    #
+    # t=20
+    #
+    # First reconnect for an independent logical session.
+    #
+    first_reconnect = runtime.process(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        snapshot=build_snapshot(
+            captured_at=(
+                BASE_TIME
+                + timedelta(seconds=20)
+            ),
+            sessions=(
+                critical_publisher,
+            ),
+        ),
+        transitions=(
+            build_transition(
+                kind=SessionTransitionKind.DISCONNECTED,
+                session_id="flap-old-1",
+                remote_port=51000,
+            ),
+            build_transition(
+                kind=SessionTransitionKind.CONNECTED,
+                session_id="flap-new-1",
+                remote_port=52000,
+            ),
+        ),
+        timestamp=(
+            BASE_TIME
+            + timedelta(seconds=20)
+        ),
+    )
+
+    assert len(
+        first_reconnect.reconnect_flapping_results
+    ) == 2
+
+    assert active_alarm_types(
+        alarm_service,
+        node,
+        instance,
+    ) == {
+        "EXPECTED_SESSION_MISSING",
+        "CRITICAL_PATH_NO_READERS",
+    }
+
+    #
+    # t=25
+    #
+    # Second reconnect reaches flapping threshold.
+    #
+    runtime.process(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        snapshot=build_snapshot(
+            captured_at=(
+                BASE_TIME
+                + timedelta(seconds=25)
+            ),
+            sessions=(
+                critical_publisher,
+            ),
+        ),
+        transitions=(
+            build_transition(
+                kind=SessionTransitionKind.DISCONNECTED,
+                session_id="flap-old-2",
+                remote_port=53000,
+            ),
+            build_transition(
+                kind=SessionTransitionKind.CONNECTED,
+                session_id="flap-new-2",
+                remote_port=54000,
+            ),
+        ),
+        timestamp=(
+            BASE_TIME
+            + timedelta(seconds=25)
+        ),
+    )
+
+    assert active_alarm_types(
+        alarm_service,
+        node,
+        instance,
+    ) == {
+        "EXPECTED_SESSION_MISSING",
+        "CRITICAL_PATH_NO_READERS",
+        "RECONNECT_FLAPPING",
+    }
+
+    #
+    # t=31
+    #
+    # Expected reader appears and the critical path gains a reader.
+    # Flapping remains active because reconnects are still inside window.
+    #
+    expected_reader = build_session(
+        session_id="expected-reader-1",
+        role=SessionRole.READER,
+        path="expected",
+    )
+
+    critical_reader = build_session(
+        session_id="critical-reader-1",
+        role=SessionRole.READER,
+        path="critical",
+    )
+
+    recovered_snapshot = build_snapshot(
+        captured_at=(
+            BASE_TIME
+            + timedelta(seconds=31)
+        ),
+        sessions=(
+            critical_publisher,
+            critical_reader,
+            expected_reader,
+        ),
+    )
+
+    runtime.process(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        snapshot=recovered_snapshot,
+        transitions=(),
+        timestamp=(
+            BASE_TIME
+            + timedelta(seconds=31)
+        ),
+    )
+
+    assert active_alarm_types(
+        alarm_service,
+        node,
+        instance,
+    ) == {
+        "RECONNECT_FLAPPING",
+    }
+
+    #
+    # t=56
+    #
+    # No new reconnect transitions occur. The reconnect history ages
+    # outside the 30-second window and the flapping alarm resolves.
+    #
+    final_result = runtime.process(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        snapshot=build_snapshot(
+            captured_at=(
+                BASE_TIME
+                + timedelta(seconds=56)
+            ),
+            sessions=(
+                critical_publisher,
+                critical_reader,
+                expected_reader,
+            ),
+        ),
+        transitions=(),
+        timestamp=(
+            BASE_TIME
+            + timedelta(seconds=56)
+        ),
+    )
+
+    assert len(
+        final_result.reconnect_flapping_results
+    ) == 1
+
+    assert alarm_service.active(
+        node.node_id,
+        instance.instance_id,
+    ) == ()
+
+
+def test_reconnect_flapping_may_be_disabled() -> None:
+    (
+        node,
+        instance,
+        alarm_service,
+        _,
+    ) = make_context()
+
+    runtime = SessionAlarmRuntime(
+        expected_session_alarm_service=(
+            ExpectedSessionAlarmService(
+                alarm_service=alarm_service,
+            )
+        ),
+        reconnect_flapping_alarm_service=(
+            ReconnectFlappingAlarmService(
+                alarm_service=alarm_service,
+            )
+        ),
+        critical_path_alarm_service=(
+            CriticalPathNoReadersAlarmService(
+                alarm_service=alarm_service,
+            )
+        ),
+        reconnect_flapping_enabled=False,
+    )
+
+    result = runtime.process(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        snapshot=build_snapshot(
+            captured_at=BASE_TIME,
+            sessions=(),
+        ),
+        transitions=(
+            build_transition(
+                kind=SessionTransitionKind.DISCONNECTED,
+                session_id="old-session",
+                remote_port=51000,
+            ),
+            build_transition(
+                kind=SessionTransitionKind.CONNECTED,
+                session_id="new-session",
+                remote_port=52000,
+            ),
+        ),
+        timestamp=BASE_TIME,
+    )
+
+    assert result.reconnect_flapping_results == ()
+    assert alarm_service.active(
+        node.node_id,
+        instance.instance_id,
+    ) == ()

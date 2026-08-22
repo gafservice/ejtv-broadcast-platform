@@ -58,6 +58,26 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
     policy_loader = Mock()
     policy_loader.load.return_value = network_policy
 
+    session_policy = Mock()
+    session_policy.expected_sessions = ()
+    session_policy.critical_paths = ()
+    session_policy.reconnect_flapping = None
+    session_policy.has_reconnect_flapping = False
+
+    session_policy_loader = Mock()
+    session_policy_loader.load.return_value = (
+        session_policy
+    )
+
+    reconnect_flapping_evaluator = Mock()
+
+    expected_session_alarm_service = Mock()
+    reconnect_flapping_alarm_service = Mock()
+    critical_path_alarm_service = Mock()
+
+    session_alarm_runtime = Mock()
+    session_operational_runtime = Mock()
+
     telemetry_refresh_service = Mock()
 
     streaming_service = Mock()
@@ -249,6 +269,55 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
                     )
         )
 
+        session_policy_loader_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.NodeSessionPolicyLoader",
+                return_value=session_policy_loader,
+            )
+        )
+
+        reconnect_flapping_evaluator_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.ReconnectFlappingEvaluator",
+                return_value=reconnect_flapping_evaluator,
+            )
+        )
+
+        expected_session_alarm_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.ExpectedSessionAlarmService",
+                return_value=expected_session_alarm_service,
+            )
+        )
+
+        reconnect_flapping_alarm_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.ReconnectFlappingAlarmService",
+                return_value=reconnect_flapping_alarm_service,
+            )
+        )
+
+        critical_path_alarm_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.CriticalPathNoReadersAlarmService",
+                return_value=critical_path_alarm_service,
+            )
+        )
+
+        session_alarm_runtime_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.SessionAlarmRuntime",
+                return_value=session_alarm_runtime,
+            )
+        )
+
+        session_operational_runtime_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.SessionOperationalRuntime",
+                return_value=session_operational_runtime,
+            )
+        )
+
         telemetry_refresh_service_class = stack.enter_context(
             patch(
                         "app.dashboard.live_monitor.TelemetryRefreshService",
@@ -386,6 +455,57 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
         "/tmp/ejtv-01.yaml"
     )
 
+    session_policy_loader_class.assert_called_once_with()
+
+    session_policy_loader.load.assert_called_once_with(
+        "/tmp/ejtv-01.yaml"
+    )
+
+    reconnect_flapping_evaluator_class.assert_called_once_with()
+
+    expected_session_alarm_service_class.assert_called_once_with(
+        alarm_service=alarm_service,
+    )
+
+    reconnect_flapping_alarm_service_class.assert_called_once_with(
+        alarm_service=alarm_service,
+    )
+
+    critical_path_alarm_service_class.assert_called_once_with(
+        alarm_service=alarm_service,
+    )
+
+    session_alarm_runtime_class.assert_called_once_with(
+        expected_session_alarm_service=(
+            expected_session_alarm_service
+        ),
+        reconnect_flapping_alarm_service=(
+            reconnect_flapping_alarm_service
+        ),
+        critical_path_alarm_service=(
+            critical_path_alarm_service
+        ),
+        expected_session_policies=(
+            session_policy.expected_sessions
+        ),
+        critical_path_policies=(
+            session_policy.critical_paths
+        ),
+        reconnect_flapping_evaluator=(
+            reconnect_flapping_evaluator
+        ),
+        reconnect_flapping_enabled=(
+            session_policy.has_reconnect_flapping
+        ),
+    )
+
+    session_operational_runtime_class.assert_called_once_with(
+        transition_event_service=(
+            session_transition_event_service
+        ),
+        alarm_runtime=session_alarm_runtime,
+    )
+
     telemetry_refresh_service_class.assert_called_once_with(
         system_service=system_service,
         metric_service=metric_service,
@@ -418,6 +538,9 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
         telemetry_refresh_service=telemetry_refresh_service,
         session_transition_event_service=(
             session_transition_event_service
+        ),
+        session_operational_runtime=(
+            session_operational_runtime
         ),
         event_service=event_service,
         alarm_service=alarm_service,

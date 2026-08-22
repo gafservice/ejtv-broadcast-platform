@@ -670,3 +670,101 @@ def test_observe_must_not_move_backwards() -> None:
             identity=result.identity,
             observed_at=BASE_TIME - timedelta(seconds=1),
         )
+
+
+def test_identities_empty_initially() -> None:
+    evaluator = ReconnectFlappingEvaluator()
+
+    assert evaluator.identities() == ()
+
+
+def test_identities_contains_observed_identity() -> None:
+    evaluator = ReconnectFlappingEvaluator()
+
+    result = evaluator.evaluate(
+        transition=transition(
+            kind=SessionTransitionKind.DISCONNECTED,
+            session_id="old-session",
+        ),
+        observed_at=BASE_TIME,
+    )
+
+    assert evaluator.identities() == (
+        result.identity,
+    )
+
+
+def test_identities_are_unique_across_reconnections() -> None:
+    evaluator = ReconnectFlappingEvaluator()
+
+    first = evaluator.evaluate(
+        transition=transition(
+            kind=SessionTransitionKind.DISCONNECTED,
+            session_id="old-session",
+            remote_port=50000,
+        ),
+        observed_at=BASE_TIME,
+    )
+
+    evaluator.evaluate(
+        transition=transition(
+            kind=SessionTransitionKind.CONNECTED,
+            session_id="new-session",
+            remote_port=60000,
+        ),
+        observed_at=BASE_TIME + timedelta(seconds=1),
+    )
+
+    assert evaluator.identities() == (
+        first.identity,
+    )
+
+
+def test_identities_are_deterministically_sorted() -> None:
+    evaluator = ReconnectFlappingEvaluator()
+
+    evaluator.evaluate(
+        transition=transition(
+            kind=SessionTransitionKind.DISCONNECTED,
+            session_id="second",
+            remote_ip="201.192.154.132",
+            path="z-path",
+        ),
+        observed_at=BASE_TIME,
+    )
+
+    evaluator.evaluate(
+        transition=transition(
+            kind=SessionTransitionKind.DISCONNECTED,
+            session_id="first",
+            remote_ip="190.10.20.30",
+            path="a-path",
+        ),
+        observed_at=BASE_TIME,
+    )
+
+    identities = evaluator.identities()
+
+    assert tuple(
+        identity.path
+        for identity in identities
+    ) == (
+        "a-path",
+        "z-path",
+    )
+
+
+def test_reset_removes_identity_from_identities() -> None:
+    evaluator = ReconnectFlappingEvaluator()
+
+    result = evaluator.evaluate(
+        transition=transition(
+            kind=SessionTransitionKind.DISCONNECTED,
+            session_id="old-session",
+        ),
+        observed_at=BASE_TIME,
+    )
+
+    evaluator.reset(result.identity)
+
+    assert evaluator.identities() == ()

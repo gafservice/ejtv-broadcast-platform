@@ -348,3 +348,64 @@ def test_process_rejects_invalid_arguments(
         service.process(
             **arguments,
         )
+
+
+def test_process_transitions_persists_precomputed_transitions() -> None:
+    node, instance, event_service, service = build_context()
+
+    session = build_session(
+        session_id="session-a",
+    )
+
+    transitions = (
+        service.detector.detect(
+            build_snapshot(),
+            build_snapshot(session),
+        )
+    )
+
+    result = service.process_transitions(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        transitions=transitions,
+        timestamp=TIMESTAMP,
+    )
+
+    assert result.transitions == transitions
+    assert len(result.events) == 1
+    assert len(result.receipts) == 1
+
+    assert (
+        result.transitions[0].kind
+        is SessionTransitionKind.CONNECTED
+    )
+
+    assert (
+        result.events[0].event_type
+        == "SESSION_CONNECTED"
+    )
+
+    assert event_service.list_all(
+        node.node_id,
+        instance.instance_id,
+    ) == result.events
+
+
+def test_process_transitions_accepts_empty_tuple() -> None:
+    node, instance, event_service, service = build_context()
+
+    result = service.process_transitions(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        transitions=(),
+        timestamp=TIMESTAMP,
+    )
+
+    assert result.transitions == ()
+    assert result.events == ()
+    assert result.receipts == ()
+
+    assert event_service.list_all(
+        node.node_id,
+        instance.instance_id,
+    ) == ()
