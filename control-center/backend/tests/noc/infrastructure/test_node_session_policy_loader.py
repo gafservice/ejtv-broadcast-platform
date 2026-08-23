@@ -360,18 +360,7 @@ def test_real_ejtv_profile_can_be_loaded() -> None:
         path
     )
 
-    assert len(config.expected_sessions) == 1
-
-    expected = config.expected_sessions[0]
-
-    assert expected.policy_id == "ejtv-publication"
-    assert expected.protocol is SessionProtocol.SRT
-    assert expected.role is SessionRole.PUBLISHER
-    assert expected.path == "ejtv"
-    assert (
-        expected.missing_grace_period
-        == timedelta(seconds=15)
-    )
+    assert config.expected_sessions == ()
 
     assert len(config.critical_paths) == 1
 

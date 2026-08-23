@@ -27,13 +27,7 @@ network_interfaces:
     critical: false
 
 session_policies:
-  expected_sessions:
-    - policy_id: ejtv-publication
-      protocol: SRT
-      role: PUBLISHER
-      path: ejtv
-      enabled: true
-      missing_grace_seconds: 15
+  expected_sessions: []
 
   critical_paths:
     - path: ejtv
