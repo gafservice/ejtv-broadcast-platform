@@ -5,8 +5,8 @@ ENG-013B — Node SDK
 CriticalPathReaderStabilizer tracks how long a critical multimedia path
 has continuously remained in NO_READERS state.
 
-Only NO_READERS accumulates temporal alarm eligibility. HAS_READERS,
-INACTIVE and INCONSISTENT clear the no-readers candidate.
+Only NO_READERS accumulates temporal alarm eligibility.
+HAS_READERS and INACTIVE clear the no-readers candidate.
 
 This component does not raise, resolve or persist alarms.
 """

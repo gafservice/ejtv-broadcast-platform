@@ -8,6 +8,13 @@ from app.domain.sessions import (
     SessionRole,
     SessionSnapshot,
 )
+from app.domain.streaming.models import (
+    MediaMTXSnapshot,
+    MediaPath,
+    MediaPathStatus,
+    MediaReader,
+    MediaSource,
+)
 from app.noc.domain.critical_path_policy import (
     CriticalPathPolicy,
 )
@@ -194,6 +201,48 @@ def build_snapshot(
     )
 
 
+def build_media_path(
+    *,
+    reader_count: int = 0,
+) -> MediaPath:
+    return MediaPath(
+        name="critical",
+        configuration_name="critical",
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type="mpegtsSource",
+            source_id="critical-source",
+        ),
+        readers=tuple(
+            MediaReader(
+                reader_type="srtConn",
+                reader_id=f"critical-reader-{index}",
+            )
+            for index in range(reader_count)
+        ),
+    )
+
+
+def build_media_snapshot(
+    *,
+    captured_at: datetime,
+    reader_count: int = 0,
+) -> MediaMTXSnapshot:
+    return MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(
+            build_media_path(
+                reader_count=reader_count,
+            ),
+        ),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+
 def build_transition(
     *,
     kind: SessionTransitionKind,
@@ -250,11 +299,15 @@ def test_all_session_alarm_policies_coexist_and_recover() -> None:
     first = runtime.process(
         node_id=node.node_id,
         instance_id=instance.instance_id,
-        snapshot=build_snapshot(
+        session_snapshot=build_snapshot(
             captured_at=BASE_TIME,
             sessions=(
                 critical_publisher,
             ),
+        ),
+        media_snapshot=build_media_snapshot(
+            captured_at=BASE_TIME,
+            reader_count=0,
         ),
         transitions=(),
         timestamp=BASE_TIME,
@@ -291,7 +344,7 @@ def test_all_session_alarm_policies_coexist_and_recover() -> None:
     runtime.process(
         node_id=node.node_id,
         instance_id=instance.instance_id,
-        snapshot=build_snapshot(
+        session_snapshot=build_snapshot(
             captured_at=(
                 BASE_TIME
                 + timedelta(seconds=15)
@@ -299,6 +352,13 @@ def test_all_session_alarm_policies_coexist_and_recover() -> None:
             sessions=(
                 critical_publisher,
             ),
+        ),
+        media_snapshot=build_media_snapshot(
+            captured_at=(
+                BASE_TIME
+                + timedelta(seconds=15)
+            ),
+            reader_count=0,
         ),
         transitions=(),
         timestamp=(
@@ -324,7 +384,7 @@ def test_all_session_alarm_policies_coexist_and_recover() -> None:
     first_reconnect = runtime.process(
         node_id=node.node_id,
         instance_id=instance.instance_id,
-        snapshot=build_snapshot(
+        session_snapshot=build_snapshot(
             captured_at=(
                 BASE_TIME
                 + timedelta(seconds=20)
@@ -332,6 +392,13 @@ def test_all_session_alarm_policies_coexist_and_recover() -> None:
             sessions=(
                 critical_publisher,
             ),
+        ),
+        media_snapshot=build_media_snapshot(
+            captured_at=(
+                BASE_TIME
+                + timedelta(seconds=20)
+            ),
+            reader_count=0,
         ),
         transitions=(
             build_transition(
@@ -372,7 +439,7 @@ def test_all_session_alarm_policies_coexist_and_recover() -> None:
     runtime.process(
         node_id=node.node_id,
         instance_id=instance.instance_id,
-        snapshot=build_snapshot(
+        session_snapshot=build_snapshot(
             captured_at=(
                 BASE_TIME
                 + timedelta(seconds=25)
@@ -380,6 +447,13 @@ def test_all_session_alarm_policies_coexist_and_recover() -> None:
             sessions=(
                 critical_publisher,
             ),
+        ),
+        media_snapshot=build_media_snapshot(
+            captured_at=(
+                BASE_TIME
+                + timedelta(seconds=25)
+            ),
+            reader_count=0,
         ),
         transitions=(
             build_transition(
@@ -442,7 +516,14 @@ def test_all_session_alarm_policies_coexist_and_recover() -> None:
     runtime.process(
         node_id=node.node_id,
         instance_id=instance.instance_id,
-        snapshot=recovered_snapshot,
+        session_snapshot=recovered_snapshot,
+        media_snapshot=build_media_snapshot(
+            captured_at=(
+                BASE_TIME
+                + timedelta(seconds=31)
+            ),
+            reader_count=1,
+        ),
         transitions=(),
         timestamp=(
             BASE_TIME
@@ -467,7 +548,7 @@ def test_all_session_alarm_policies_coexist_and_recover() -> None:
     final_result = runtime.process(
         node_id=node.node_id,
         instance_id=instance.instance_id,
-        snapshot=build_snapshot(
+        session_snapshot=build_snapshot(
             captured_at=(
                 BASE_TIME
                 + timedelta(seconds=56)
@@ -477,6 +558,13 @@ def test_all_session_alarm_policies_coexist_and_recover() -> None:
                 critical_reader,
                 expected_reader,
             ),
+        ),
+        media_snapshot=build_media_snapshot(
+            captured_at=(
+                BASE_TIME
+                + timedelta(seconds=56)
+            ),
+            reader_count=1,
         ),
         transitions=(),
         timestamp=(
@@ -525,9 +613,15 @@ def test_reconnect_flapping_may_be_disabled() -> None:
     result = runtime.process(
         node_id=node.node_id,
         instance_id=instance.instance_id,
-        snapshot=build_snapshot(
+        session_snapshot=build_snapshot(
             captured_at=BASE_TIME,
             sessions=(),
+        ),
+        media_snapshot=MediaMTXSnapshot(
+            captured_at=BASE_TIME,
+            paths=(),
+            reported_item_count=0,
+            reported_page_count=0,
         ),
         transitions=(
             build_transition(

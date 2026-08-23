@@ -2,12 +2,16 @@
 
 ENG-013B — Node SDK
 
-CriticalPathReaderEvaluator compares current multimedia sessions against
-CriticalPathPolicy values and classifies the reader condition of each
-enabled critical path.
+CriticalPathReaderEvaluator evaluates critical multimedia paths from the
+normalized MediaMTX path snapshot.
 
-It is stateless. It does not apply grace periods, maintain history,
-raise alarms or persist state.
+MediaMTXSnapshot is the source of truth for publication state and reader
+presence. SessionSnapshot is deliberately not used here because some
+MediaMTX sources, such as mpegtsSource, are not represented as ordinary
+publisher sessions.
+
+The evaluator is stateless. It does not apply grace periods, maintain
+history, raise alarms or persist state.
 """
 
 from __future__ import annotations
@@ -15,10 +19,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
-from app.domain.sessions import (
-    ActiveSession,
-    SessionRole,
-    SessionSnapshot,
+from app.domain.streaming.models import (
+    MediaMTXSnapshot,
+    MediaPath,
 )
 from app.noc.domain.critical_path_policy import (
     CriticalPathPolicy,
@@ -31,7 +34,6 @@ class CriticalPathReaderState(str, Enum):
     INACTIVE = "INACTIVE"
     HAS_READERS = "HAS_READERS"
     NO_READERS = "NO_READERS"
-    INCONSISTENT = "INCONSISTENT"
 
     def __str__(self) -> str:
         return self.value
@@ -43,8 +45,7 @@ class CriticalPathReaderEvaluation:
 
     policy: CriticalPathPolicy
     state: CriticalPathReaderState
-    publishers: tuple[ActiveSession, ...]
-    readers: tuple[ActiveSession, ...]
+    media_path: MediaPath | None
 
     def __post_init__(self) -> None:
         if not isinstance(
@@ -63,102 +64,60 @@ class CriticalPathReaderEvaluation:
                 "state must be a CriticalPathReaderState"
             )
 
-        if not isinstance(self.publishers, tuple):
-            raise TypeError(
-                "publishers must be a tuple"
+        if (
+            self.media_path is not None
+            and not isinstance(
+                self.media_path,
+                MediaPath,
             )
-
-        if not isinstance(self.readers, tuple):
+        ):
             raise TypeError(
-                "readers must be a tuple"
+                "media_path must be a MediaPath or None"
             )
-
-        for session in self.publishers:
-            if not isinstance(session, ActiveSession):
-                raise TypeError(
-                    "publishers must contain only "
-                    "ActiveSession values"
-                )
-
-            if session.role is not SessionRole.PUBLISHER:
-                raise ValueError(
-                    "publishers must contain only "
-                    "publisher sessions"
-                )
-
-        for session in self.readers:
-            if not isinstance(session, ActiveSession):
-                raise TypeError(
-                    "readers must contain only "
-                    "ActiveSession values"
-                )
-
-            if session.role is not SessionRole.READER:
-                raise ValueError(
-                    "readers must contain only "
-                    "reader sessions"
-                )
 
         if self.state is CriticalPathReaderState.INACTIVE:
-            if self.publishers:
-                raise ValueError(
-                    "INACTIVE evaluation must not "
-                    "contain publishers"
-                )
+            return
 
-            if self.readers:
-                raise ValueError(
-                    "INACTIVE evaluation must not "
-                    "contain readers"
-                )
+        if self.media_path is None:
+            raise ValueError(
+                "active critical-path evaluation requires "
+                "a media_path"
+            )
+
+        if not self.media_path.is_active:
+            raise ValueError(
+                "active critical-path evaluation requires "
+                "an active media_path"
+            )
+
+        if not self.media_path.has_source:
+            raise ValueError(
+                "active critical-path evaluation requires "
+                "a media source"
+            )
 
         if self.state is CriticalPathReaderState.HAS_READERS:
-            if not self.publishers:
-                raise ValueError(
-                    "HAS_READERS evaluation requires "
-                    "at least one publisher"
-                )
-
-            if not self.readers:
+            if self.media_path.reader_count < 1:
                 raise ValueError(
                     "HAS_READERS evaluation requires "
                     "at least one reader"
                 )
 
         if self.state is CriticalPathReaderState.NO_READERS:
-            if not self.publishers:
+            if self.media_path.reader_count != 0:
                 raise ValueError(
                     "NO_READERS evaluation requires "
-                    "at least one publisher"
-                )
-
-            if self.readers:
-                raise ValueError(
-                    "NO_READERS evaluation must not "
-                    "contain readers"
-                )
-
-        if self.state is CriticalPathReaderState.INCONSISTENT:
-            if self.publishers:
-                raise ValueError(
-                    "INCONSISTENT evaluation must not "
-                    "contain publishers"
-                )
-
-            if not self.readers:
-                raise ValueError(
-                    "INCONSISTENT evaluation requires "
-                    "at least one reader"
+                    "zero readers"
                 )
 
 
 class CriticalPathReaderEvaluator:
-    """Evaluate critical-path reader conditions."""
+    """Evaluate critical paths from normalized MediaMTX state."""
 
     def evaluate(
         self,
         *,
-        snapshot: SessionSnapshot,
+        snapshot: MediaMTXSnapshot,
         policies: tuple[
             CriticalPathPolicy,
             ...,
@@ -171,10 +130,10 @@ class CriticalPathReaderEvaluator:
 
         if not isinstance(
             snapshot,
-            SessionSnapshot,
+            MediaMTXSnapshot,
         ):
             raise TypeError(
-                "snapshot must be a SessionSnapshot"
+                "snapshot must be a MediaMTXSnapshot"
             )
 
         if not isinstance(policies, tuple):
@@ -213,39 +172,32 @@ class CriticalPathReaderEvaluator:
             if not policy.enabled:
                 continue
 
-            path_sessions = tuple(
-                session
-                for session in snapshot.sessions
-                if session.path == policy.path
+            media_path = snapshot.get_path(
+                policy.path
             )
 
-            publishers = tuple(
-                session
-                for session in path_sessions
-                if session.role is SessionRole.PUBLISHER
-            )
-
-            readers = tuple(
-                session
-                for session in path_sessions
-                if session.role is SessionRole.READER
-            )
-
-            if not publishers and not readers:
-                state = CriticalPathReaderState.INACTIVE
-            elif publishers and readers:
-                state = CriticalPathReaderState.HAS_READERS
-            elif publishers and not readers:
-                state = CriticalPathReaderState.NO_READERS
+            if (
+                media_path is None
+                or not media_path.is_active
+                or not media_path.has_source
+            ):
+                state = (
+                    CriticalPathReaderState.INACTIVE
+                )
+            elif media_path.reader_count > 0:
+                state = (
+                    CriticalPathReaderState.HAS_READERS
+                )
             else:
-                state = CriticalPathReaderState.INCONSISTENT
+                state = (
+                    CriticalPathReaderState.NO_READERS
+                )
 
             evaluations.append(
                 CriticalPathReaderEvaluation(
                     policy=policy,
                     state=state,
-                    publishers=publishers,
-                    readers=readers,
+                    media_path=media_path,
                 )
             )
 

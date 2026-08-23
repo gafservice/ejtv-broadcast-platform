@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from app.domain.sessions import SessionSnapshot
+from app.domain.streaming.models import MediaMTXSnapshot
 from app.noc.domain.critical_path_policy import CriticalPathPolicy
 from app.noc.domain.expected_session_policy import ExpectedSessionPolicy
 from app.noc.domain.node_id import NodeId
@@ -209,7 +210,8 @@ class SessionAlarmRuntime:
         *,
         node_id: NodeId,
         instance_id: NodeInstanceId,
-        snapshot: SessionSnapshot,
+        session_snapshot: SessionSnapshot,
+        media_snapshot: MediaMTXSnapshot,
         transitions: tuple[SessionTransition, ...],
         timestamp: datetime,
     ) -> SessionAlarmRuntimeResult:
@@ -218,7 +220,8 @@ class SessionAlarmRuntime:
         self._validate_inputs(
             node_id=node_id,
             instance_id=instance_id,
-            snapshot=snapshot,
+            session_snapshot=session_snapshot,
+            media_snapshot=media_snapshot,
             transitions=transitions,
             timestamp=timestamp,
         )
@@ -229,7 +232,7 @@ class SessionAlarmRuntime:
 
         expected_evaluations = (
             self._expected_session_evaluator.evaluate(
-                snapshot=snapshot,
+                snapshot=session_snapshot,
                 policies=self._expected_session_policies,
             )
         )
@@ -316,7 +319,7 @@ class SessionAlarmRuntime:
 
         critical_evaluations = (
             self._critical_path_evaluator.evaluate(
-                snapshot=snapshot,
+                snapshot=media_snapshot,
                 policies=self._critical_path_policies,
             )
         )
@@ -357,7 +360,8 @@ class SessionAlarmRuntime:
         *,
         node_id: NodeId,
         instance_id: NodeInstanceId,
-        snapshot: SessionSnapshot,
+        session_snapshot: SessionSnapshot,
+        media_snapshot: MediaMTXSnapshot,
         transitions: tuple[SessionTransition, ...],
         timestamp: datetime,
     ) -> None:
@@ -371,9 +375,20 @@ class SessionAlarmRuntime:
                 "instance_id must be a NodeInstanceId"
             )
 
-        if not isinstance(snapshot, SessionSnapshot):
+        if not isinstance(
+            session_snapshot,
+            SessionSnapshot,
+        ):
             raise TypeError(
-                "snapshot must be a SessionSnapshot"
+                "session_snapshot must be a SessionSnapshot"
+            )
+
+        if not isinstance(
+            media_snapshot,
+            MediaMTXSnapshot,
+        ):
+            raise TypeError(
+                "media_snapshot must be a MediaMTXSnapshot"
             )
 
         if not isinstance(transitions, tuple):

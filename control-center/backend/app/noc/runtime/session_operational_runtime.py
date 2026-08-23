@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from app.domain.sessions import SessionSnapshot
+from app.domain.streaming.models import MediaMTXSnapshot
 from app.noc.domain.node_id import NodeId
 from app.noc.domain.node_instance import NodeInstanceId
 from app.noc.runtime.session_alarm_runtime import (
@@ -105,6 +106,7 @@ class SessionOperationalRuntime:
         instance_id: NodeInstanceId,
         previous: SessionSnapshot | None,
         current: SessionSnapshot,
+        media_snapshot: MediaMTXSnapshot,
         timestamp: datetime,
     ) -> SessionOperationalRuntimeResult:
         """Process one session observation cycle."""
@@ -114,6 +116,7 @@ class SessionOperationalRuntime:
             instance_id=instance_id,
             previous=previous,
             current=current,
+            media_snapshot=media_snapshot,
             timestamp=timestamp,
         )
 
@@ -134,7 +137,8 @@ class SessionOperationalRuntime:
         alarm_result = self._alarm_runtime.process(
             node_id=node_id,
             instance_id=instance_id,
-            snapshot=current,
+            session_snapshot=current,
+            media_snapshot=media_snapshot,
             transitions=transitions,
             timestamp=timestamp,
         )
@@ -152,6 +156,7 @@ class SessionOperationalRuntime:
         instance_id: NodeInstanceId,
         previous: SessionSnapshot | None,
         current: SessionSnapshot,
+        media_snapshot: MediaMTXSnapshot,
         timestamp: datetime,
     ) -> None:
         if not isinstance(node_id, NodeId):
@@ -184,6 +189,14 @@ class SessionOperationalRuntime:
         ):
             raise TypeError(
                 "current must be a SessionSnapshot"
+            )
+
+        if not isinstance(
+            media_snapshot,
+            MediaMTXSnapshot,
+        ):
+            raise TypeError(
+                "media_snapshot must be a MediaMTXSnapshot"
             )
 
         if not isinstance(timestamp, datetime):

@@ -2,10 +2,11 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from app.domain.sessions import (
-    ActiveSession,
-    SessionProtocol,
-    SessionRole,
+from app.domain.streaming.models import (
+    MediaPath,
+    MediaPathStatus,
+    MediaReader,
+    MediaSource,
 )
 from app.noc.domain.critical_path_policy import (
     CriticalPathPolicy,
@@ -43,20 +44,27 @@ def build_policy(
     )
 
 
-def build_session(
+def build_media_path(
     *,
-    session_id: str,
-    role: SessionRole,
-) -> ActiveSession:
-    return ActiveSession(
-        session_id=session_id,
-        protocol=SessionProtocol.SRT,
-        role=role,
-        state="read",
-        remote_ip="201.192.154.132",
-        remote_port=50000,
-        path="ejtv",
-        connected_since=BASE_TIME,
+    reader_count: int,
+) -> MediaPath:
+    return MediaPath(
+        name="ejtv",
+        configuration_name="ejtv",
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type="mpegtsSource",
+        ),
+        readers=tuple(
+            MediaReader(
+                reader_type="srtConn",
+                reader_id=f"reader-{index}",
+            )
+            for index in range(reader_count)
+        ),
     )
 
 
@@ -68,45 +76,21 @@ def build_evaluation(
     policy = policy or build_policy()
 
     if state is CriticalPathReaderState.NO_READERS:
-        publishers = (
-            build_session(
-                session_id="publisher-1",
-                role=SessionRole.PUBLISHER,
-            ),
+        media_path = build_media_path(
+            reader_count=0,
         )
-        readers = ()
     elif state is CriticalPathReaderState.HAS_READERS:
-        publishers = (
-            build_session(
-                session_id="publisher-1",
-                role=SessionRole.PUBLISHER,
-            ),
-        )
-        readers = (
-            build_session(
-                session_id="reader-1",
-                role=SessionRole.READER,
-            ),
-        )
-    elif state is CriticalPathReaderState.INCONSISTENT:
-        publishers = ()
-        readers = (
-            build_session(
-                session_id="reader-1",
-                role=SessionRole.READER,
-            ),
+        media_path = build_media_path(
+            reader_count=1,
         )
     else:
-        publishers = ()
-        readers = ()
+        media_path = None
 
     return CriticalPathReaderEvaluation(
         policy=policy,
         state=state,
-        publishers=publishers,
-        readers=readers,
+        media_path=media_path,
     )
-
 
 def test_first_no_readers_starts_grace_period() -> None:
     stabilizer = CriticalPathReaderStabilizer()
@@ -189,7 +173,6 @@ def test_zero_grace_period_confirms_immediately() -> None:
     (
         CriticalPathReaderState.HAS_READERS,
         CriticalPathReaderState.INACTIVE,
-        CriticalPathReaderState.INCONSISTENT,
     ),
 )
 def test_non_no_readers_clears_candidate(

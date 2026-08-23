@@ -179,6 +179,7 @@ class DashboardApplication:
                     instance_id=self._instance_id,
                     previous=self._previous_session_snapshot,
                     current=session_snapshot,
+                    media_snapshot=snapshot,
                     timestamp=session_snapshot.captured_at,
                 )
             elif self._session_transition_event_service is not None:

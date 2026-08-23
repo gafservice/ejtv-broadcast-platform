@@ -2,10 +2,10 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from app.domain.sessions import (
-    ActiveSession,
-    SessionProtocol,
-    SessionRole,
+from app.domain.streaming.models import (
+    MediaPath,
+    MediaPathStatus,
+    MediaSource,
 )
 from app.noc.domain.critical_path_policy import (
     CriticalPathPolicy,
@@ -38,16 +38,18 @@ TIMESTAMP = datetime(
 )
 
 
-def build_publisher() -> ActiveSession:
-    return ActiveSession(
-        session_id="publisher-1",
-        protocol=SessionProtocol.SRT,
-        role=SessionRole.PUBLISHER,
-        state="publish",
-        remote_ip="201.192.154.132",
-        remote_port=50000,
-        path="ejtv",
-        connected_since=TIMESTAMP,
+def build_media_path() -> MediaPath:
+    return MediaPath(
+        name="ejtv",
+        configuration_name="ejtv",
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type="mpegtsSource",
+        ),
+        readers=(),
     )
 
 
@@ -65,10 +67,7 @@ def build_stabilization(
     evaluation = CriticalPathReaderEvaluation(
         policy=policy,
         state=CriticalPathReaderState.NO_READERS,
-        publishers=(
-            build_publisher(),
-        ),
-        readers=(),
+        media_path=build_media_path(),
     )
 
     return CriticalPathReaderStabilization(
@@ -98,7 +97,7 @@ def test_create_critical_path_no_readers_alarm() -> None:
     assert alarm.timestamp == TIMESTAMP
 
 
-def test_alarm_contains_path_identity() -> None:
+def test_alarm_contains_path_identity_and_source_state() -> None:
     factory = CriticalPathNoReadersAlarmFactory()
 
     alarm = factory.create(
@@ -110,8 +109,29 @@ def test_alarm_contains_path_identity() -> None:
     )
 
     assert alarm.attributes["path"] == "ejtv"
-    assert alarm.attributes["publisher_count"] == "1"
+    assert (
+        alarm.attributes["source_type"]
+        == "mpegtsSource"
+    )
     assert alarm.attributes["reader_count"] == "0"
+    assert alarm.attributes["ready"] == "true"
+    assert alarm.attributes["available"] == "true"
+    assert alarm.attributes["online"] == "true"
+
+
+def test_alarm_description_refers_to_active_source() -> None:
+    factory = CriticalPathNoReadersAlarmFactory()
+
+    alarm = factory.create(
+        stabilization=build_stabilization(),
+        source=NodeInstanceId(
+            "streaming-primary"
+        ),
+        timestamp=TIMESTAMP,
+    )
+
+    assert "active source" in alarm.description
+    assert "publisher" not in alarm.description
 
 
 def test_alarm_title_contains_path() -> None:

@@ -8,6 +8,9 @@ from app.domain.sessions import (
     SessionRole,
     SessionSnapshot,
 )
+from app.domain.streaming.models import (
+    MediaMTXSnapshot,
+)
 from app.noc.domain.critical_path_policy import CriticalPathPolicy
 from app.noc.domain.expected_session_policy import ExpectedSessionPolicy
 from app.noc.domain.node import Node
@@ -164,6 +167,18 @@ def snapshot(
     )
 
 
+def media_snapshot(
+    *,
+    captured_at: datetime = TIMESTAMP,
+) -> MediaMTXSnapshot:
+    return MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=0,
+    )
+
+
 def test_operational_runtime_shares_one_transition_set() -> None:
     (
         node,
@@ -194,6 +209,7 @@ def test_operational_runtime_shares_one_transition_set() -> None:
         instance_id=instance.instance_id,
         previous=previous,
         current=current,
+        media_snapshot=media_snapshot(),
         timestamp=TIMESTAMP,
     )
 
@@ -249,6 +265,7 @@ def test_first_snapshot_is_baseline_for_transitions() -> None:
         instance_id=instance.instance_id,
         previous=None,
         current=current,
+        media_snapshot=media_snapshot(),
         timestamp=TIMESTAMP,
     )
 

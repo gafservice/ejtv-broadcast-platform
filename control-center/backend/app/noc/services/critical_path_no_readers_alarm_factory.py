@@ -5,6 +5,8 @@ ENG-013B — Node SDK
 CriticalPathNoReadersAlarmFactory converts a confirmed critical-path
 NO_READERS condition into an immutable active AlarmRecord.
 
+MediaPath is the source of truth for publication state and reader count.
+
 It does not persist, acknowledge, resolve or close alarms.
 """
 
@@ -63,6 +65,19 @@ class CriticalPathNoReadersAlarmFactory:
 
         evaluation = stabilization.evaluation
         path = evaluation.policy.path
+        media_path = evaluation.media_path
+
+        if media_path is None:
+            raise ValueError(
+                "confirmed no-readers evaluation requires "
+                "a media_path"
+            )
+
+        source_type = (
+            media_path.source.source_type
+            if media_path.source is not None
+            else ""
+        )
 
         return AlarmRecord(
             alarm_id=f"alm-{uuid4().hex}",
@@ -76,16 +91,23 @@ class CriticalPathNoReadersAlarmFactory:
             ),
             description=(
                 f"Critical multimedia path {path!r} "
-                f"has an active publisher but no active readers."
+                f"has an active source but no active readers."
             ),
             attributes={
                 "path": path,
-                "publisher_count": str(
-                    len(evaluation.publishers)
-                ),
+                "source_type": source_type,
                 "reader_count": str(
-                    len(evaluation.readers)
+                    media_path.reader_count
                 ),
+                "ready": str(
+                    media_path.ready
+                ).lower(),
+                "available": str(
+                    media_path.available
+                ).lower(),
+                "online": str(
+                    media_path.online
+                ).lower(),
                 "no_readers_since": (
                     stabilization.no_readers_since.isoformat()
                     if stabilization.no_readers_since is not None

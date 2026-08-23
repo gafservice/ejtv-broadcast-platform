@@ -2,11 +2,12 @@
 
 from datetime import datetime, timedelta, timezone
 
-from app.domain.sessions import (
-    ActiveSession,
-    SessionProtocol,
-    SessionRole,
-    SessionSnapshot,
+from app.domain.streaming.models import (
+    MediaMTXSnapshot,
+    MediaPath,
+    MediaPathStatus,
+    MediaReader,
+    MediaSource,
 )
 from app.noc.domain.critical_path_policy import (
     CriticalPathPolicy,
@@ -110,35 +111,44 @@ def build_policy() -> CriticalPathPolicy:
     )
 
 
-def build_session(
+def build_media_path(
     *,
-    session_id: str,
-    role: SessionRole,
-) -> ActiveSession:
-    return ActiveSession(
-        session_id=session_id,
-        protocol=SessionProtocol.SRT,
-        role=role,
-        state=(
-            "publish"
-            if role is SessionRole.PUBLISHER
-            else "read"
+    reader_count: int,
+) -> MediaPath:
+    return MediaPath(
+        name="ejtv",
+        configuration_name="ejtv",
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type="mpegtsSource",
         ),
-        remote_ip="201.192.154.132",
-        remote_port=50000,
-        path="ejtv",
-        connected_since=BASE_TIME,
+        readers=tuple(
+            MediaReader(
+                reader_type="srtConn",
+                reader_id=f"reader-{index}",
+            )
+            for index in range(reader_count)
+        ),
     )
 
 
 def build_snapshot(
     *,
     captured_at: datetime,
-    sessions: tuple[ActiveSession, ...],
-) -> SessionSnapshot:
-    return SessionSnapshot(
+    reader_count: int,
+) -> MediaMTXSnapshot:
+    media_path = build_media_path(
+        reader_count=reader_count,
+    )
+
+    return MediaMTXSnapshot(
         captured_at=captured_at,
-        sessions=sessions,
+        paths=(media_path,),
+        reported_item_count=1,
+        reported_page_count=1,
     )
 
 
@@ -151,11 +161,11 @@ def process_cycle(
     instance,
     policy,
     timestamp,
-    sessions,
+    reader_count,
 ):
     snapshot = build_snapshot(
         captured_at=timestamp,
-        sessions=sessions,
+        reader_count=reader_count,
     )
 
     evaluations = evaluator.evaluate(
@@ -196,12 +206,9 @@ def test_critical_path_no_readers_full_lifecycle() -> None:
 
     policy = build_policy()
 
-    publisher = build_session(
-        session_id="publisher-1",
-        role=SessionRole.PUBLISHER,
-    )
-
-    # t=0: publisher exists, but there are no readers.
+    # t=0:
+    # MediaMTX reports the ejtv path ACTIVE with an
+    # mpegtsSource, but there are no readers.
     evaluation_0, stabilization_0, result_0 = process_cycle(
         evaluator=evaluator,
         stabilizer=stabilizer,
@@ -210,13 +217,23 @@ def test_critical_path_no_readers_full_lifecycle() -> None:
         instance=instance,
         policy=policy,
         timestamp=BASE_TIME,
-        sessions=(publisher,),
+        reader_count=0,
     )
 
     assert (
         evaluation_0.state
         is CriticalPathReaderState.NO_READERS
     )
+    assert evaluation_0.media_path is not None
+    assert (
+        evaluation_0.media_path.source is not None
+    )
+    assert (
+        evaluation_0.media_path.source.source_type
+        == "mpegtsSource"
+    )
+    assert evaluation_0.media_path.reader_count == 0
+
     assert stabilization_0.confirmed_no_readers is False
     assert stabilization_0.no_readers_since == BASE_TIME
     assert result_0.alarm is None
@@ -231,14 +248,14 @@ def test_critical_path_no_readers_full_lifecycle() -> None:
         instance=instance,
         policy=policy,
         timestamp=BASE_TIME + timedelta(seconds=14),
-        sessions=(publisher,),
+        reader_count=0,
     )
 
     assert stabilization_14.confirmed_no_readers is False
     assert result_14.alarm is None
     assert result_14.receipt is None
 
-    # t=15: condition becomes confirmed and alarm is raised.
+    # t=15: condition becomes confirmed.
     _, stabilization_15, result_15 = process_cycle(
         evaluator=evaluator,
         stabilizer=stabilizer,
@@ -247,7 +264,7 @@ def test_critical_path_no_readers_full_lifecycle() -> None:
         instance=instance,
         policy=policy,
         timestamp=BASE_TIME + timedelta(seconds=15),
-        sessions=(publisher,),
+        reader_count=0,
     )
 
     assert stabilization_15.confirmed_no_readers is True
@@ -259,9 +276,18 @@ def test_critical_path_no_readers_full_lifecycle() -> None:
     )
     assert result_15.alarm.state is AlarmState.ACTIVE
 
+    assert (
+        result_15.alarm.attributes["source_type"]
+        == "mpegtsSource"
+    )
+    assert (
+        result_15.alarm.attributes["reader_count"]
+        == "0"
+    )
+
     raised_alarm_id = result_15.alarm.alarm_id
 
-    # t=30: still no readers, no duplicate alarm.
+    # t=30: still no readers; no duplicate alarm.
     _, stabilization_30, result_30 = process_cycle(
         evaluator=evaluator,
         stabilizer=stabilizer,
@@ -270,7 +296,7 @@ def test_critical_path_no_readers_full_lifecycle() -> None:
         instance=instance,
         policy=policy,
         timestamp=BASE_TIME + timedelta(seconds=30),
-        sessions=(publisher,),
+        reader_count=0,
     )
 
     assert stabilization_30.confirmed_no_readers is True
@@ -286,12 +312,8 @@ def test_critical_path_no_readers_full_lifecycle() -> None:
     assert len(active) == 1
     assert active[0].alarm_id == raised_alarm_id
 
-    # t=45: reader appears and the same alarm is resolved.
-    reader = build_session(
-        session_id="reader-1",
-        role=SessionRole.READER,
-    )
-
+    # t=45:
+    # The same MediaMTX path now reports one reader.
     evaluation_45, stabilization_45, result_45 = process_cycle(
         evaluator=evaluator,
         stabilizer=stabilizer,
@@ -300,16 +322,16 @@ def test_critical_path_no_readers_full_lifecycle() -> None:
         instance=instance,
         policy=policy,
         timestamp=BASE_TIME + timedelta(seconds=45),
-        sessions=(
-            publisher,
-            reader,
-        ),
+        reader_count=1,
     )
 
     assert (
         evaluation_45.state
         is CriticalPathReaderState.HAS_READERS
     )
+    assert evaluation_45.media_path is not None
+    assert evaluation_45.media_path.reader_count == 1
+
     assert stabilization_45.no_readers_since is None
     assert stabilization_45.confirmed_no_readers is False
 

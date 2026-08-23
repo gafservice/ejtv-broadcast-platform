@@ -1,12 +1,15 @@
+"""Tests for critical multimedia path reader evaluation."""
+
 from datetime import UTC, datetime
 
 import pytest
 
-from app.domain.sessions import (
-    ActiveSession,
-    SessionProtocol,
-    SessionRole,
-    SessionSnapshot,
+from app.domain.streaming.models import (
+    MediaMTXSnapshot,
+    MediaPath,
+    MediaPathStatus,
+    MediaReader,
+    MediaSource,
 )
 from app.noc.domain.critical_path_policy import (
     CriticalPathPolicy,
@@ -28,33 +31,6 @@ TIMESTAMP = datetime(
 )
 
 
-def build_session(
-    *,
-    session_id: str,
-    role: SessionRole,
-    path: str = "ejtv",
-) -> ActiveSession:
-    return ActiveSession(
-        session_id=session_id,
-        protocol=SessionProtocol.SRT,
-        role=role,
-        state="read",
-        remote_ip="201.192.154.132",
-        remote_port=50000,
-        path=path,
-        connected_since=TIMESTAMP,
-    )
-
-
-def build_snapshot(
-    *sessions: ActiveSession,
-) -> SessionSnapshot:
-    return SessionSnapshot(
-        captured_at=TIMESTAMP,
-        sessions=tuple(sessions),
-    )
-
-
 def build_policy(
     *,
     path: str = "ejtv",
@@ -63,6 +39,52 @@ def build_policy(
     return CriticalPathPolicy(
         path=path,
         enabled=enabled,
+    )
+
+
+def build_path(
+    *,
+    name: str = "ejtv",
+    status: MediaPathStatus = MediaPathStatus.ACTIVE,
+    source: MediaSource | None = None,
+    reader_count: int = 0,
+    ready: bool = True,
+    available: bool = True,
+    online: bool = True,
+) -> MediaPath:
+    if source is None and status is MediaPathStatus.ACTIVE:
+        source = MediaSource(
+            source_type="mpegtsSource",
+        )
+
+    readers = tuple(
+        MediaReader(
+            reader_type="srtConn",
+            reader_id=f"reader-{index}",
+        )
+        for index in range(reader_count)
+    )
+
+    return MediaPath(
+        name=name,
+        configuration_name=name,
+        status=status,
+        ready=ready,
+        available=available,
+        online=online,
+        source=source,
+        readers=readers,
+    )
+
+
+def build_snapshot(
+    *paths: MediaPath,
+) -> MediaMTXSnapshot:
+    return MediaMTXSnapshot(
+        captured_at=TIMESTAMP,
+        paths=tuple(paths),
+        reported_item_count=len(paths),
+        reported_page_count=1,
     )
 
 
@@ -79,12 +101,8 @@ def test_state_string_representation() -> None:
         CriticalPathReaderState.NO_READERS
     ) == "NO_READERS"
 
-    assert str(
-        CriticalPathReaderState.INCONSISTENT
-    ) == "INCONSISTENT"
 
-
-def test_inactive_path_is_detected() -> None:
+def test_missing_path_is_inactive() -> None:
     evaluator = CriticalPathReaderEvaluator()
 
     result = evaluator.evaluate(
@@ -97,28 +115,18 @@ def test_inactive_path_is_detected() -> None:
         result[0].state
         is CriticalPathReaderState.INACTIVE
     )
-    assert result[0].publishers == ()
-    assert result[0].readers == ()
+    assert result[0].media_path is None
 
 
-def test_publisher_with_reader_has_readers() -> None:
+def test_active_mpegts_path_with_readers_has_readers() -> None:
     evaluator = CriticalPathReaderEvaluator()
 
-    publisher = build_session(
-        session_id="publisher-1",
-        role=SessionRole.PUBLISHER,
-    )
-
-    reader = build_session(
-        session_id="reader-1",
-        role=SessionRole.READER,
+    path = build_path(
+        reader_count=2,
     )
 
     result = evaluator.evaluate(
-        snapshot=build_snapshot(
-            publisher,
-            reader,
-        ),
+        snapshot=build_snapshot(path),
         policies=(build_policy(),),
     )
 
@@ -126,28 +134,23 @@ def test_publisher_with_reader_has_readers() -> None:
         result[0].state
         is CriticalPathReaderState.HAS_READERS
     )
-
-    assert result[0].publishers == (
-        publisher,
+    assert result[0].media_path is path
+    assert result[0].media_path.reader_count == 2
+    assert (
+        result[0].media_path.source.source_type
+        == "mpegtsSource"
     )
 
-    assert result[0].readers == (
-        reader,
-    )
 
-
-def test_publisher_without_readers_is_no_readers() -> None:
+def test_active_mpegts_path_without_readers_is_no_readers() -> None:
     evaluator = CriticalPathReaderEvaluator()
 
-    publisher = build_session(
-        session_id="publisher-1",
-        role=SessionRole.PUBLISHER,
+    path = build_path(
+        reader_count=0,
     )
 
     result = evaluator.evaluate(
-        snapshot=build_snapshot(
-            publisher,
-        ),
+        snapshot=build_snapshot(path),
         policies=(build_policy(),),
     )
 
@@ -155,65 +158,52 @@ def test_publisher_without_readers_is_no_readers() -> None:
         result[0].state
         is CriticalPathReaderState.NO_READERS
     )
-
-    assert result[0].publishers == (
-        publisher,
-    )
-
-    assert result[0].readers == ()
+    assert result[0].media_path is path
+    assert result[0].media_path.reader_count == 0
+    assert result[0].media_path.has_source is True
 
 
-def test_reader_without_publisher_is_inconsistent() -> None:
+def test_no_source_path_is_inactive() -> None:
     evaluator = CriticalPathReaderEvaluator()
 
-    reader = build_session(
-        session_id="reader-1",
-        role=SessionRole.READER,
+    path = build_path(
+        status=MediaPathStatus.NO_SOURCE,
+        source=None,
+        reader_count=0,
+        ready=False,
+        available=False,
+        online=False,
     )
 
     result = evaluator.evaluate(
-        snapshot=build_snapshot(
-            reader,
-        ),
+        snapshot=build_snapshot(path),
         policies=(build_policy(),),
     )
 
     assert (
         result[0].state
-        is CriticalPathReaderState.INCONSISTENT
+        is CriticalPathReaderState.INACTIVE
     )
-
-    assert result[0].publishers == ()
-    assert result[0].readers == (
-        reader,
-    )
+    assert result[0].media_path is path
 
 
-def test_sessions_on_other_paths_are_ignored() -> None:
+def test_offline_path_is_inactive() -> None:
     evaluator = CriticalPathReaderEvaluator()
 
-    publisher = build_session(
-        session_id="publisher-other",
-        role=SessionRole.PUBLISHER,
-        path="enlace",
-    )
-
-    reader = build_session(
-        session_id="reader-other",
-        role=SessionRole.READER,
-        path="enlace",
+    path = build_path(
+        status=MediaPathStatus.OFFLINE,
+        source=MediaSource(
+            source_type="mpegtsSource"
+        ),
+        reader_count=0,
+        ready=False,
+        available=False,
+        online=False,
     )
 
     result = evaluator.evaluate(
-        snapshot=build_snapshot(
-            publisher,
-            reader,
-        ),
-        policies=(
-            build_policy(
-                path="ejtv",
-            ),
-        ),
+        snapshot=build_snapshot(path),
+        policies=(build_policy(),),
     )
 
     assert (
@@ -222,49 +212,58 @@ def test_sessions_on_other_paths_are_ignored() -> None:
     )
 
 
-def test_multiple_readers_are_preserved() -> None:
+def test_path_without_source_is_inactive_even_if_status_active() -> None:
     evaluator = CriticalPathReaderEvaluator()
 
-    publisher = build_session(
-        session_id="publisher-1",
-        role=SessionRole.PUBLISHER,
-    )
-
-    first_reader = build_session(
-        session_id="reader-1",
-        role=SessionRole.READER,
-    )
-
-    second_reader = build_session(
-        session_id="reader-2",
-        role=SessionRole.READER,
+    path = MediaPath(
+        name="ejtv",
+        configuration_name="ejtv",
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=None,
+        readers=(),
     )
 
     result = evaluator.evaluate(
-        snapshot=build_snapshot(
-            publisher,
-            first_reader,
-            second_reader,
-        ),
+        snapshot=build_snapshot(path),
         policies=(build_policy(),),
     )
 
     assert (
         result[0].state
-        is CriticalPathReaderState.HAS_READERS
+        is CriticalPathReaderState.INACTIVE
     )
 
-    assert result[0].readers == (
-        first_reader,
-        second_reader,
+
+def test_other_paths_are_ignored() -> None:
+    evaluator = CriticalPathReaderEvaluator()
+
+    enlace = build_path(
+        name="enlace",
+        reader_count=1,
     )
+
+    result = evaluator.evaluate(
+        snapshot=build_snapshot(enlace),
+        policies=(build_policy(path="ejtv"),),
+    )
+
+    assert (
+        result[0].state
+        is CriticalPathReaderState.INACTIVE
+    )
+    assert result[0].media_path is None
 
 
 def test_disabled_policy_is_not_evaluated() -> None:
     evaluator = CriticalPathReaderEvaluator()
 
     result = evaluator.evaluate(
-        snapshot=build_snapshot(),
+        snapshot=build_snapshot(
+            build_path()
+        ),
         policies=(
             build_policy(
                 enabled=False,
@@ -281,12 +280,8 @@ def test_multiple_policies_are_sorted_by_path() -> None:
     result = evaluator.evaluate(
         snapshot=build_snapshot(),
         policies=(
-            build_policy(
-                path="z-path",
-            ),
-            build_policy(
-                path="a-path",
-            ),
+            build_policy(path="z-path"),
+            build_policy(path="a-path"),
         ),
     )
 
@@ -312,12 +307,8 @@ def test_duplicate_paths_are_rejected() -> None:
         evaluator.evaluate(
             snapshot=build_snapshot(),
             policies=(
-                build_policy(
-                    path="ejtv",
-                ),
-                build_policy(
-                    path="ejtv",
-                ),
+                build_policy(path="ejtv"),
+                build_policy(path="ejtv"),
             ),
         )
 
@@ -327,7 +318,7 @@ def test_invalid_snapshot_is_rejected() -> None:
 
     with pytest.raises(
         TypeError,
-        match="snapshot must be a SessionSnapshot",
+        match="snapshot must be a MediaMTXSnapshot",
     ):
         evaluator.evaluate(
             snapshot="invalid",  # type: ignore[arg-type]
@@ -374,38 +365,66 @@ def test_evaluation_rejects_invalid_policy() -> None:
         CriticalPathReaderEvaluation(
             policy="invalid",  # type: ignore[arg-type]
             state=CriticalPathReaderState.INACTIVE,
-            publishers=(),
-            readers=(),
+            media_path=None,
         )
 
 
-def test_no_readers_requires_publisher() -> None:
+def test_evaluation_rejects_invalid_media_path() -> None:
+    with pytest.raises(
+        TypeError,
+        match="media_path must be a MediaPath or None",
+    ):
+        CriticalPathReaderEvaluation(
+            policy=build_policy(),
+            state=CriticalPathReaderState.INACTIVE,
+            media_path="invalid",  # type: ignore[arg-type]
+        )
+
+
+def test_has_readers_requires_media_path() -> None:
     with pytest.raises(
         ValueError,
         match=(
-            "NO_READERS evaluation requires "
-            "at least one publisher"
+            "active critical-path evaluation requires "
+            "a media_path"
         ),
     ):
         CriticalPathReaderEvaluation(
             policy=build_policy(),
-            state=CriticalPathReaderState.NO_READERS,
-            publishers=(),
-            readers=(),
+            state=CriticalPathReaderState.HAS_READERS,
+            media_path=None,
         )
 
 
-def test_inconsistent_requires_reader() -> None:
+def test_has_readers_requires_at_least_one_reader() -> None:
     with pytest.raises(
         ValueError,
         match=(
-            "INCONSISTENT evaluation requires "
+            "HAS_READERS evaluation requires "
             "at least one reader"
         ),
     ):
         CriticalPathReaderEvaluation(
             policy=build_policy(),
-            state=CriticalPathReaderState.INCONSISTENT,
-            publishers=(),
-            readers=(),
+            state=CriticalPathReaderState.HAS_READERS,
+            media_path=build_path(
+                reader_count=0,
+            ),
+        )
+
+
+def test_no_readers_requires_zero_readers() -> None:
+    with pytest.raises(
+        ValueError,
+        match=(
+            "NO_READERS evaluation requires "
+            "zero readers"
+        ),
+    ):
+        CriticalPathReaderEvaluation(
+            policy=build_policy(),
+            state=CriticalPathReaderState.NO_READERS,
+            media_path=build_path(
+                reader_count=1,
+            ),
         )

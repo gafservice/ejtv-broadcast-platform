@@ -4,10 +4,11 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from app.domain.sessions import (
-    ActiveSession,
-    SessionProtocol,
-    SessionRole,
+from app.domain.streaming.models import (
+    MediaPath,
+    MediaPathStatus,
+    MediaReader,
+    MediaSource,
 )
 from app.noc.domain.critical_path_policy import (
     CriticalPathPolicy,
@@ -114,25 +115,28 @@ def policy(
     )
 
 
-def build_session(
+def build_media_path(
     *,
-    session_id: str,
-    role: SessionRole,
     path: str,
-) -> ActiveSession:
-    return ActiveSession(
-        session_id=session_id,
-        protocol=SessionProtocol.SRT,
-        role=role,
-        state=(
-            "publish"
-            if role is SessionRole.PUBLISHER
-            else "read"
+    reader_count: int,
+) -> MediaPath:
+    return MediaPath(
+        name=path,
+        configuration_name=path,
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type="mpegtsSource",
         ),
-        remote_ip="201.192.154.132",
-        remote_port=50000,
-        path=path,
-        connected_since=BASE_TIME,
+        readers=tuple(
+            MediaReader(
+                reader_type="srtConn",
+                reader_id=f"reader-{path}-{index}",
+            )
+            for index in range(reader_count)
+        ),
     )
 
 
@@ -145,59 +149,31 @@ def stabilization(
     expected_policy = policy(path)
 
     if state is CriticalPathReaderState.NO_READERS:
-        publishers = (
-            build_session(
-                session_id=f"publisher-{path}",
-                role=SessionRole.PUBLISHER,
-                path=path,
-            ),
+        media_path = build_media_path(
+            path=path,
+            reader_count=0,
         )
-        readers = ()
         no_readers_since = (
             BASE_TIME - timedelta(seconds=15)
         )
 
     elif state is CriticalPathReaderState.HAS_READERS:
-        publishers = (
-            build_session(
-                session_id=f"publisher-{path}",
-                role=SessionRole.PUBLISHER,
-                path=path,
-            ),
-        )
-        readers = (
-            build_session(
-                session_id=f"reader-{path}",
-                role=SessionRole.READER,
-                path=path,
-            ),
-        )
-        no_readers_since = None
-        confirmed_no_readers = False
-
-    elif state is CriticalPathReaderState.INCONSISTENT:
-        publishers = ()
-        readers = (
-            build_session(
-                session_id=f"reader-{path}",
-                role=SessionRole.READER,
-                path=path,
-            ),
+        media_path = build_media_path(
+            path=path,
+            reader_count=1,
         )
         no_readers_since = None
         confirmed_no_readers = False
 
     else:
-        publishers = ()
-        readers = ()
+        media_path = None
         no_readers_since = None
         confirmed_no_readers = False
 
     evaluation = CriticalPathReaderEvaluation(
         policy=expected_policy,
         state=state,
-        publishers=publishers,
-        readers=readers,
+        media_path=media_path,
     )
 
     return CriticalPathReaderStabilization(
@@ -206,7 +182,6 @@ def stabilization(
         no_readers_since=no_readers_since,
         confirmed_no_readers=confirmed_no_readers,
     )
-
 
 def test_service_requires_alarm_service() -> None:
     with pytest.raises(TypeError):
@@ -302,7 +277,6 @@ def test_repeated_no_readers_does_not_duplicate() -> None:
     (
         CriticalPathReaderState.HAS_READERS,
         CriticalPathReaderState.INACTIVE,
-        CriticalPathReaderState.INCONSISTENT,
     ),
 )
 def test_non_no_readers_resolves_active_alarm(
