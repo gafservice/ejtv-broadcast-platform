@@ -228,10 +228,23 @@ class NodeSessionPolicyLoader:
                 15,
             )
 
+            unavailable_grace_seconds = item.get(
+                "unavailable_grace_seconds",
+                15,
+            )
+
             self._validate_seconds(
                 grace_seconds,
                 field_name=(
                     "no_readers_grace_seconds"
+                ),
+                allow_zero=True,
+            )
+
+            self._validate_seconds(
+                unavailable_grace_seconds,
+                field_name=(
+                    "unavailable_grace_seconds"
                 ),
                 allow_zero=True,
             )
@@ -242,6 +255,9 @@ class NodeSessionPolicyLoader:
                     enabled=enabled,
                     no_readers_grace_period=timedelta(
                         seconds=grace_seconds
+                    ),
+                    unavailable_grace_period=timedelta(
+                        seconds=unavailable_grace_seconds
                     ),
                 )
             )

@@ -53,6 +53,7 @@ def test_loads_complete_session_policy_mapping() -> None:
                         "path": "ejtv",
                         "enabled": True,
                         "no_readers_grace_seconds": 30,
+                        "unavailable_grace_seconds": 45,
                     }
                 ],
                 "reconnect_flapping": {
@@ -90,6 +91,10 @@ def test_loads_complete_session_policy_mapping() -> None:
     assert (
         critical.no_readers_grace_period
         == timedelta(seconds=30)
+    )
+    assert (
+        critical.unavailable_grace_period
+        == timedelta(seconds=45)
     )
 
     assert config.reconnect_flapping is not None
@@ -145,6 +150,10 @@ def test_defaults_are_applied() -> None:
     assert critical.enabled is True
     assert (
         critical.no_readers_grace_period
+        == timedelta(seconds=15)
+    )
+    assert (
+        critical.unavailable_grace_period
         == timedelta(seconds=15)
     )
 
