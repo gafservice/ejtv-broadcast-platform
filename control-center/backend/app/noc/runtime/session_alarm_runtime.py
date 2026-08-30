@@ -29,6 +29,16 @@ from app.noc.services.critical_path_no_readers_alarm_service import (
     CriticalPathNoReadersAlarmResult,
     CriticalPathNoReadersAlarmService,
 )
+from app.noc.services.critical_path_availability_evaluator import (
+    CriticalPathAvailabilityEvaluator,
+)
+from app.noc.services.critical_path_availability_stabilizer import (
+    CriticalPathAvailabilityStabilizer,
+)
+from app.noc.services.critical_path_unavailable_alarm_service import (
+    CriticalPathUnavailableAlarmResult,
+    CriticalPathUnavailableAlarmService,
+)
 from app.noc.services.critical_path_reader_evaluator import (
     CriticalPathReaderEvaluator,
 )
@@ -73,6 +83,10 @@ class SessionAlarmRuntimeResult:
         CriticalPathNoReadersAlarmResult,
         ...,
     ]
+    critical_path_unavailable_results: tuple[
+        CriticalPathUnavailableAlarmResult,
+        ...,
+    ]
 
 
 class SessionAlarmRuntime:
@@ -84,6 +98,7 @@ class SessionAlarmRuntime:
         expected_session_alarm_service: ExpectedSessionAlarmService,
         reconnect_flapping_alarm_service: ReconnectFlappingAlarmService,
         critical_path_alarm_service: CriticalPathNoReadersAlarmService,
+        critical_path_unavailable_alarm_service: CriticalPathUnavailableAlarmService,
         expected_session_policies: tuple[
             ExpectedSessionPolicy,
             ...,
@@ -97,6 +112,8 @@ class SessionAlarmRuntime:
         reconnect_flapping_evaluator: ReconnectFlappingEvaluator | None = None,
         critical_path_evaluator: CriticalPathReaderEvaluator | None = None,
         critical_path_stabilizer: CriticalPathReaderStabilizer | None = None,
+        critical_path_availability_evaluator: CriticalPathAvailabilityEvaluator | None = None,
+        critical_path_availability_stabilizer: CriticalPathAvailabilityStabilizer | None = None,
         reconnect_flapping_enabled: bool = True,
     ) -> None:
         if not isinstance(
@@ -124,6 +141,15 @@ class SessionAlarmRuntime:
             raise TypeError(
                 "critical_path_alarm_service must be a "
                 "CriticalPathNoReadersAlarmService"
+            )
+
+        if not isinstance(
+            critical_path_unavailable_alarm_service,
+            CriticalPathUnavailableAlarmService,
+        ):
+            raise TypeError(
+                "critical_path_unavailable_alarm_service must be a "
+                "CriticalPathUnavailableAlarmService"
             )
 
         if not isinstance(expected_session_policies, tuple):
@@ -159,6 +185,9 @@ class SessionAlarmRuntime:
         self._critical_path_alarm_service = (
             critical_path_alarm_service
         )
+        self._critical_path_unavailable_alarm_service = (
+            critical_path_unavailable_alarm_service
+        )
 
         self._expected_session_policies = (
             expected_session_policies
@@ -191,6 +220,17 @@ class SessionAlarmRuntime:
             critical_path_stabilizer
             if critical_path_stabilizer is not None
             else CriticalPathReaderStabilizer()
+        )
+
+        self._critical_path_availability_evaluator = (
+            critical_path_availability_evaluator
+            if critical_path_availability_evaluator is not None
+            else CriticalPathAvailabilityEvaluator()
+        )
+        self._critical_path_availability_stabilizer = (
+            critical_path_availability_stabilizer
+            if critical_path_availability_stabilizer is not None
+            else CriticalPathAvailabilityStabilizer()
         )
 
         if not isinstance(
@@ -343,6 +383,36 @@ class SessionAlarmRuntime:
 
             critical_results.append(result)
 
+        unavailable_results: list[
+            CriticalPathUnavailableAlarmResult
+        ] = []
+
+        availability_evaluations = (
+            self._critical_path_availability_evaluator.evaluate(
+                snapshot=media_snapshot,
+                policies=self._critical_path_policies,
+            )
+        )
+
+        for evaluation in availability_evaluations:
+            stabilization = (
+                self._critical_path_availability_stabilizer.stabilize(
+                    evaluation=evaluation,
+                    observed_at=timestamp,
+                )
+            )
+
+            result = (
+                self._critical_path_unavailable_alarm_service.process(
+                    node_id=node_id,
+                    instance_id=instance_id,
+                    stabilization=stabilization,
+                    timestamp=timestamp,
+                )
+            )
+
+            unavailable_results.append(result)
+
         return SessionAlarmRuntimeResult(
             expected_session_results=tuple(
                 expected_results
@@ -352,6 +422,9 @@ class SessionAlarmRuntime:
             ),
             critical_path_results=tuple(
                 critical_results
+            ),
+            critical_path_unavailable_results=tuple(
+                unavailable_results
             ),
         )
 

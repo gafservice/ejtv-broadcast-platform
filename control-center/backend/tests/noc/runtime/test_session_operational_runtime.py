@@ -31,6 +31,9 @@ from app.noc.services.alarm_service import AlarmService
 from app.noc.services.critical_path_no_readers_alarm_service import (
     CriticalPathNoReadersAlarmService,
 )
+from app.noc.services.critical_path_unavailable_alarm_service import (
+    CriticalPathUnavailableAlarmService,
+)
 from app.noc.services.event_service import EventService
 from app.noc.services.expected_session_alarm_service import (
     ExpectedSessionAlarmService,
@@ -95,6 +98,11 @@ def build_context():
         ),
         critical_path_alarm_service=(
             CriticalPathNoReadersAlarmService(
+                alarm_service=alarm_service,
+            )
+        ),
+        critical_path_unavailable_alarm_service=(
+            CriticalPathUnavailableAlarmService(
                 alarm_service=alarm_service,
             )
         ),

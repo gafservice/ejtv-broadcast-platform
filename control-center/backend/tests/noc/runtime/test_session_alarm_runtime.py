@@ -22,6 +22,7 @@ from app.noc.domain.expected_session_policy import (
     ExpectedSessionPolicy,
 )
 from app.noc.domain.node import Node
+from app.noc.domain.node_alarm import AlarmState
 from app.noc.domain.node_id import NodeId
 from app.noc.domain.node_type import NodeType
 from app.noc.domain.reconnect_flapping_policy import (
@@ -35,6 +36,9 @@ from app.noc.runtime.session_alarm_runtime import (
 from app.noc.services.alarm_service import AlarmService
 from app.noc.services.critical_path_no_readers_alarm_service import (
     CriticalPathNoReadersAlarmService,
+)
+from app.noc.services.critical_path_unavailable_alarm_service import (
+    CriticalPathUnavailableAlarmService,
 )
 from app.noc.services.expected_session_alarm_service import (
     ExpectedSessionAlarmService,
@@ -121,6 +125,11 @@ def make_context():
         ),
         critical_path_alarm_service=(
             CriticalPathNoReadersAlarmService(
+                alarm_service=alarm_service,
+            )
+        ),
+        critical_path_unavailable_alarm_service=(
+            CriticalPathUnavailableAlarmService(
                 alarm_service=alarm_service,
             )
         ),
@@ -607,6 +616,11 @@ def test_reconnect_flapping_may_be_disabled() -> None:
                 alarm_service=alarm_service,
             )
         ),
+        critical_path_unavailable_alarm_service=(
+            CriticalPathUnavailableAlarmService(
+                alarm_service=alarm_service,
+            )
+        ),
         reconnect_flapping_enabled=False,
     )
 
@@ -643,3 +657,168 @@ def test_reconnect_flapping_may_be_disabled() -> None:
         node.node_id,
         instance.instance_id,
     ) == ()
+
+
+def test_critical_path_unavailable_runtime_lifecycle() -> None:
+    (
+        node,
+        instance,
+        alarm_service,
+        runtime,
+    ) = make_context()
+
+    healthy_media = build_media_snapshot(
+        captured_at=BASE_TIME,
+        reader_count=1,
+    )
+
+    first = runtime.process(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        session_snapshot=build_snapshot(
+            captured_at=BASE_TIME,
+            sessions=(),
+        ),
+        media_snapshot=healthy_media,
+        transitions=(),
+        timestamp=BASE_TIME,
+    )
+
+    assert len(
+        first.critical_path_unavailable_results
+    ) == 1
+
+    assert (
+        first.critical_path_unavailable_results[0]
+        .stabilization
+        .confirmed_unavailable
+        is False
+    )
+
+    #
+    # Path disappears at t=5.
+    #
+    missing_media_5 = MediaMTXSnapshot(
+        captured_at=BASE_TIME + timedelta(seconds=5),
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=1,
+    )
+
+    second = runtime.process(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        session_snapshot=build_snapshot(
+            captured_at=BASE_TIME + timedelta(seconds=5),
+            sessions=(),
+        ),
+        media_snapshot=missing_media_5,
+        transitions=(),
+        timestamp=BASE_TIME + timedelta(seconds=5),
+    )
+
+    unavailable_result = (
+        second.critical_path_unavailable_results[0]
+    )
+
+    assert (
+        unavailable_result
+        .stabilization
+        .confirmed_unavailable
+        is False
+    )
+
+    assert unavailable_result.alarm is None
+
+    #
+    # t=20 -> 15 continuous seconds unavailable.
+    #
+    missing_media_20 = MediaMTXSnapshot(
+        captured_at=BASE_TIME + timedelta(seconds=20),
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=1,
+    )
+
+    third = runtime.process(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        session_snapshot=build_snapshot(
+            captured_at=BASE_TIME + timedelta(seconds=20),
+            sessions=(),
+        ),
+        media_snapshot=missing_media_20,
+        transitions=(),
+        timestamp=BASE_TIME + timedelta(seconds=20),
+    )
+
+    alarm_result = (
+        third.critical_path_unavailable_results[0]
+    )
+
+    assert (
+        alarm_result
+        .stabilization
+        .confirmed_unavailable
+        is True
+    )
+
+    assert alarm_result.alarm is not None
+    assert (
+        alarm_result.alarm.alarm_type
+        == "CRITICAL_PATH_UNAVAILABLE"
+    )
+    assert (
+        alarm_result.alarm.state
+        is AlarmState.ACTIVE
+    )
+
+    raised_alarm_id = alarm_result.alarm.alarm_id
+
+    assert "CRITICAL_PATH_UNAVAILABLE" in (
+        active_alarm_types(
+            alarm_service,
+            node,
+            instance,
+        )
+    )
+
+    #
+    # t=25 -> path returns healthy.
+    #
+    recovered = runtime.process(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        session_snapshot=build_snapshot(
+            captured_at=BASE_TIME + timedelta(seconds=25),
+            sessions=(),
+        ),
+        media_snapshot=build_media_snapshot(
+            captured_at=BASE_TIME + timedelta(seconds=25),
+            reader_count=1,
+        ),
+        transitions=(),
+        timestamp=BASE_TIME + timedelta(seconds=25),
+    )
+
+    recovered_result = (
+        recovered.critical_path_unavailable_results[0]
+    )
+
+    assert recovered_result.alarm is not None
+    assert (
+        recovered_result.alarm.state
+        is AlarmState.RESOLVED
+    )
+    assert (
+        recovered_result.alarm.alarm_id
+        == raised_alarm_id
+    )
+
+    assert "CRITICAL_PATH_UNAVAILABLE" not in (
+        active_alarm_types(
+            alarm_service,
+            node,
+            instance,
+        )
+    )

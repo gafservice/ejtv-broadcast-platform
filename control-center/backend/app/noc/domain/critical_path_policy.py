@@ -24,6 +24,9 @@ class CriticalPathPolicy:
     no_readers_grace_period: timedelta = timedelta(
         seconds=15
     )
+    unavailable_grace_period: timedelta = timedelta(
+        seconds=15
+    )
 
     def __post_init__(self) -> None:
         if not isinstance(self.path, str):
@@ -63,4 +66,20 @@ class CriticalPathPolicy:
         ):
             raise ValueError(
                 "no_readers_grace_period must not be negative"
+            )
+
+        if not isinstance(
+            self.unavailable_grace_period,
+            timedelta,
+        ):
+            raise TypeError(
+                "unavailable_grace_period must be a timedelta"
+            )
+
+        if (
+            self.unavailable_grace_period
+            < timedelta(0)
+        ):
+            raise ValueError(
+                "unavailable_grace_period must not be negative"
             )
