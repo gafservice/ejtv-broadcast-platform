@@ -180,6 +180,7 @@ class DashboardApplication:
                     previous=self._previous_session_snapshot,
                     current=session_snapshot,
                     media_snapshot=snapshot,
+                    streaming_measurement=measurement,
                     timestamp=session_snapshot.captured_at,
                 )
             elif self._session_transition_event_service is not None:

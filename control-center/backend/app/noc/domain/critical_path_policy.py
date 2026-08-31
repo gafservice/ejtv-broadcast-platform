@@ -27,6 +27,9 @@ class CriticalPathPolicy:
     unavailable_grace_period: timedelta = timedelta(
         seconds=15
     )
+    traffic_stalled_grace_period: timedelta = timedelta(
+        seconds=15
+    )
 
     def __post_init__(self) -> None:
         if not isinstance(self.path, str):
@@ -82,4 +85,20 @@ class CriticalPathPolicy:
         ):
             raise ValueError(
                 "unavailable_grace_period must not be negative"
+            )
+
+        if not isinstance(
+            self.traffic_stalled_grace_period,
+            timedelta,
+        ):
+            raise TypeError(
+                "traffic_stalled_grace_period must be a timedelta"
+            )
+
+        if (
+            self.traffic_stalled_grace_period
+            < timedelta(0)
+        ):
+            raise ValueError(
+                "traffic_stalled_grace_period must not be negative"
             )

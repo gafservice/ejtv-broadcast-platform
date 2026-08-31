@@ -8,6 +8,10 @@ from app.domain.sessions import (
     SessionRole,
     SessionSnapshot,
 )
+from app.domain.streaming.metrics import (
+    MeasurementQuality,
+    StreamingMeasurement,
+)
 from app.domain.streaming.models import (
     MediaMTXSnapshot,
 )
@@ -33,6 +37,9 @@ from app.noc.services.critical_path_no_readers_alarm_service import (
 )
 from app.noc.services.critical_path_unavailable_alarm_service import (
     CriticalPathUnavailableAlarmService,
+)
+from app.noc.services.critical_path_traffic_stalled_alarm_service import (
+    CriticalPathTrafficStalledAlarmService,
 )
 from app.noc.services.event_service import EventService
 from app.noc.services.expected_session_alarm_service import (
@@ -106,6 +113,11 @@ def build_context():
                 alarm_service=alarm_service,
             )
         ),
+        critical_path_traffic_stalled_alarm_service=(
+            CriticalPathTrafficStalledAlarmService(
+                alarm_service=alarm_service,
+            )
+        ),
         expected_session_policies=(
             ExpectedSessionPolicy(
                 policy_id="expected-reader",
@@ -175,6 +187,23 @@ def snapshot(
     )
 
 
+def streaming_measurement(
+    *,
+    captured_at: datetime = TIMESTAMP,
+) -> StreamingMeasurement:
+    """Build the initial no-rate baseline measurement."""
+
+    return StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=None,
+        interval_seconds=None,
+        paths=(),
+        total_inbound_bitrate_bps=None,
+        total_outbound_bitrate_bps=None,
+        quality=MeasurementQuality.NOT_AVAILABLE,
+    )
+
+
 def media_snapshot(
     *,
     captured_at: datetime = TIMESTAMP,
@@ -218,6 +247,7 @@ def test_operational_runtime_shares_one_transition_set() -> None:
         previous=previous,
         current=current,
         media_snapshot=media_snapshot(),
+        streaming_measurement=streaming_measurement(),
         timestamp=TIMESTAMP,
     )
 
@@ -274,6 +304,7 @@ def test_first_snapshot_is_baseline_for_transitions() -> None:
         previous=None,
         current=current,
         media_snapshot=media_snapshot(),
+        streaming_measurement=streaming_measurement(),
         timestamp=TIMESTAMP,
     )
 

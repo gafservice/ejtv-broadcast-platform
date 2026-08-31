@@ -732,6 +732,7 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
     )
 
     session_transition_event_service = Mock()
+    session_operational_runtime = Mock()
 
     event_service = Mock()
     event_records = (
@@ -790,6 +791,9 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
         session_transition_event_service=(
             session_transition_event_service
         ),
+        session_operational_runtime=(
+            session_operational_runtime
+        ),
         event_service=event_service,
         alarm_service=alarm_service,
         node_id=node_id,
@@ -800,13 +804,17 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
 
     assert result is dashboard_data
 
-    session_transition_event_service.process.assert_called_once_with(
+    session_operational_runtime.process.assert_called_once_with(
         node_id=node_id,
         instance_id=instance_id,
         previous=None,
         current=session_snapshot,
+        media_snapshot=snapshot,
+        streaming_measurement=measurement,
         timestamp=session_snapshot.captured_at,
     )
+
+    session_transition_event_service.process.assert_not_called()
 
     telemetry_refresh_service.refresh_from_capture.assert_called_once_with(
         node_id=node_id,

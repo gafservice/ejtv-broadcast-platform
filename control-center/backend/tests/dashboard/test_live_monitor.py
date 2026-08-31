@@ -74,6 +74,8 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
     expected_session_alarm_service = Mock()
     reconnect_flapping_alarm_service = Mock()
     critical_path_alarm_service = Mock()
+    critical_path_unavailable_alarm_service = Mock()
+    critical_path_traffic_stalled_alarm_service = Mock()
 
     session_alarm_runtime = Mock()
     session_operational_runtime = Mock()
@@ -304,6 +306,30 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
             )
         )
 
+        critical_path_unavailable_alarm_service_class = (
+            stack.enter_context(
+                patch(
+                    "app.dashboard.live_monitor."
+                    "CriticalPathUnavailableAlarmService",
+                    return_value=(
+                        critical_path_unavailable_alarm_service
+                    ),
+                )
+            )
+        )
+
+        critical_path_traffic_stalled_alarm_service_class = (
+            stack.enter_context(
+                patch(
+                    "app.dashboard.live_monitor."
+                    "CriticalPathTrafficStalledAlarmService",
+                    return_value=(
+                        critical_path_traffic_stalled_alarm_service
+                    ),
+                )
+            )
+        )
+
         session_alarm_runtime_class = stack.enter_context(
             patch(
                 "app.dashboard.live_monitor.SessionAlarmRuntime",
@@ -475,6 +501,14 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
         alarm_service=alarm_service,
     )
 
+    critical_path_unavailable_alarm_service_class.assert_called_once_with(
+        alarm_service=alarm_service,
+    )
+
+    critical_path_traffic_stalled_alarm_service_class.assert_called_once_with(
+        alarm_service=alarm_service,
+    )
+
     session_alarm_runtime_class.assert_called_once_with(
         expected_session_alarm_service=(
             expected_session_alarm_service
@@ -484,6 +518,12 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
         ),
         critical_path_alarm_service=(
             critical_path_alarm_service
+        ),
+        critical_path_unavailable_alarm_service=(
+            critical_path_unavailable_alarm_service
+        ),
+        critical_path_traffic_stalled_alarm_service=(
+            critical_path_traffic_stalled_alarm_service
         ),
         expected_session_policies=(
             session_policy.expected_sessions

@@ -57,6 +57,9 @@ from app.noc.services.critical_path_no_readers_alarm_service import (
 from app.noc.services.critical_path_unavailable_alarm_service import (
     CriticalPathUnavailableAlarmService,
 )
+from app.noc.services.critical_path_traffic_stalled_alarm_service import (
+    CriticalPathTrafficStalledAlarmService,
+)
 from app.noc.services.expected_session_alarm_service import (
     ExpectedSessionAlarmService,
 )
@@ -222,6 +225,11 @@ def build_dashboard_application() -> DashboardApplication:
         ),
         critical_path_unavailable_alarm_service=(
             CriticalPathUnavailableAlarmService(
+                alarm_service=alarm_service,
+            )
+        ),
+        critical_path_traffic_stalled_alarm_service=(
+            CriticalPathTrafficStalledAlarmService(
                 alarm_service=alarm_service,
             )
         ),

@@ -394,3 +394,69 @@ def test_real_ejtv_profile_can_be_loaded() -> None:
     )
 
     assert config.reconnect_flapping.threshold == 3
+
+
+def test_loads_traffic_stalled_grace_seconds() -> None:
+    loader = NodeSessionPolicyLoader()
+
+    config = loader.from_mapping(
+        {
+            "node": "streaming-core",
+            "session_policies": {
+                "critical_paths": [
+                    {
+                        "path": "ejtv",
+                        "enabled": True,
+                        "traffic_stalled_grace_seconds": 30,
+                    }
+                ]
+            },
+        }
+    )
+
+    assert len(config.critical_paths) == 1
+    assert (
+        config.critical_paths[0].traffic_stalled_grace_period
+        == timedelta(seconds=30)
+    )
+
+
+def test_traffic_stalled_grace_defaults_to_15_seconds() -> None:
+    loader = NodeSessionPolicyLoader()
+
+    config = loader.from_mapping(
+        {
+            "node": "streaming-core",
+            "session_policies": {
+                "critical_paths": [
+                    {
+                        "path": "ejtv",
+                    }
+                ]
+            },
+        }
+    )
+
+    assert (
+        config.critical_paths[0].traffic_stalled_grace_period
+        == timedelta(seconds=15)
+    )
+
+
+def test_rejects_negative_traffic_stalled_grace_seconds() -> None:
+    loader = NodeSessionPolicyLoader()
+
+    with pytest.raises(ValueError):
+        loader.from_mapping(
+            {
+                "node": "streaming-core",
+                "session_policies": {
+                    "critical_paths": [
+                        {
+                            "path": "ejtv",
+                            "traffic_stalled_grace_seconds": -1,
+                        }
+                    ]
+                },
+            }
+        )

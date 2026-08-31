@@ -7,7 +7,9 @@ alarm pipelines:
 
 - expected multimedia sessions;
 - reconnect flapping;
-- critical paths without readers.
+- critical paths without readers;
+- critical path availability;
+- critical path traffic health.
 
 The runtime owns orchestration only. Domain interpretation, temporal
 stabilization and alarm lifecycle remain delegated to their respective
@@ -20,6 +22,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from app.domain.sessions import SessionSnapshot
+from app.domain.streaming.metrics import StreamingMeasurement
 from app.domain.streaming.models import MediaMTXSnapshot
 from app.noc.domain.critical_path_policy import CriticalPathPolicy
 from app.noc.domain.expected_session_policy import ExpectedSessionPolicy
@@ -38,6 +41,16 @@ from app.noc.services.critical_path_availability_stabilizer import (
 from app.noc.services.critical_path_unavailable_alarm_service import (
     CriticalPathUnavailableAlarmResult,
     CriticalPathUnavailableAlarmService,
+)
+from app.noc.services.critical_path_traffic_evaluator import (
+    CriticalPathTrafficEvaluator,
+)
+from app.noc.services.critical_path_traffic_stabilizer import (
+    CriticalPathTrafficStabilizer,
+)
+from app.noc.services.critical_path_traffic_stalled_alarm_service import (
+    CriticalPathTrafficStalledAlarmResult,
+    CriticalPathTrafficStalledAlarmService,
 )
 from app.noc.services.critical_path_reader_evaluator import (
     CriticalPathReaderEvaluator,
@@ -87,6 +100,10 @@ class SessionAlarmRuntimeResult:
         CriticalPathUnavailableAlarmResult,
         ...,
     ]
+    critical_path_traffic_stalled_results: tuple[
+        CriticalPathTrafficStalledAlarmResult,
+        ...,
+    ]
 
 
 class SessionAlarmRuntime:
@@ -99,6 +116,7 @@ class SessionAlarmRuntime:
         reconnect_flapping_alarm_service: ReconnectFlappingAlarmService,
         critical_path_alarm_service: CriticalPathNoReadersAlarmService,
         critical_path_unavailable_alarm_service: CriticalPathUnavailableAlarmService,
+        critical_path_traffic_stalled_alarm_service: CriticalPathTrafficStalledAlarmService,
         expected_session_policies: tuple[
             ExpectedSessionPolicy,
             ...,
@@ -114,6 +132,8 @@ class SessionAlarmRuntime:
         critical_path_stabilizer: CriticalPathReaderStabilizer | None = None,
         critical_path_availability_evaluator: CriticalPathAvailabilityEvaluator | None = None,
         critical_path_availability_stabilizer: CriticalPathAvailabilityStabilizer | None = None,
+        critical_path_traffic_evaluator: CriticalPathTrafficEvaluator | None = None,
+        critical_path_traffic_stabilizer: CriticalPathTrafficStabilizer | None = None,
         reconnect_flapping_enabled: bool = True,
     ) -> None:
         if not isinstance(
@@ -152,6 +172,15 @@ class SessionAlarmRuntime:
                 "CriticalPathUnavailableAlarmService"
             )
 
+        if not isinstance(
+            critical_path_traffic_stalled_alarm_service,
+            CriticalPathTrafficStalledAlarmService,
+        ):
+            raise TypeError(
+                "critical_path_traffic_stalled_alarm_service must be a "
+                "CriticalPathTrafficStalledAlarmService"
+            )
+
         if not isinstance(expected_session_policies, tuple):
             raise TypeError(
                 "expected_session_policies must be a tuple"
@@ -187,6 +216,10 @@ class SessionAlarmRuntime:
         )
         self._critical_path_unavailable_alarm_service = (
             critical_path_unavailable_alarm_service
+        )
+
+        self._critical_path_traffic_stalled_alarm_service = (
+            critical_path_traffic_stalled_alarm_service
         )
 
         self._expected_session_policies = (
@@ -233,6 +266,17 @@ class SessionAlarmRuntime:
             else CriticalPathAvailabilityStabilizer()
         )
 
+        self._critical_path_traffic_evaluator = (
+            critical_path_traffic_evaluator
+            if critical_path_traffic_evaluator is not None
+            else CriticalPathTrafficEvaluator()
+        )
+        self._critical_path_traffic_stabilizer = (
+            critical_path_traffic_stabilizer
+            if critical_path_traffic_stabilizer is not None
+            else CriticalPathTrafficStabilizer()
+        )
+
         if not isinstance(
             reconnect_flapping_enabled,
             bool,
@@ -252,6 +296,7 @@ class SessionAlarmRuntime:
         instance_id: NodeInstanceId,
         session_snapshot: SessionSnapshot,
         media_snapshot: MediaMTXSnapshot,
+        streaming_measurement: StreamingMeasurement,
         transitions: tuple[SessionTransition, ...],
         timestamp: datetime,
     ) -> SessionAlarmRuntimeResult:
@@ -262,6 +307,7 @@ class SessionAlarmRuntime:
             instance_id=instance_id,
             session_snapshot=session_snapshot,
             media_snapshot=media_snapshot,
+            streaming_measurement=streaming_measurement,
             transitions=transitions,
             timestamp=timestamp,
         )
@@ -413,6 +459,37 @@ class SessionAlarmRuntime:
 
             unavailable_results.append(result)
 
+        traffic_results: list[
+            CriticalPathTrafficStalledAlarmResult
+        ] = []
+
+        traffic_evaluations = (
+            self._critical_path_traffic_evaluator.evaluate(
+                snapshot=media_snapshot,
+                measurement=streaming_measurement,
+                policies=self._critical_path_policies,
+            )
+        )
+
+        for evaluation in traffic_evaluations:
+            stabilization = (
+                self._critical_path_traffic_stabilizer.stabilize(
+                    evaluation=evaluation,
+                    observed_at=timestamp,
+                )
+            )
+
+            result = (
+                self._critical_path_traffic_stalled_alarm_service.process(
+                    node_id=node_id,
+                    instance_id=instance_id,
+                    stabilization=stabilization,
+                    timestamp=timestamp,
+                )
+            )
+
+            traffic_results.append(result)
+
         return SessionAlarmRuntimeResult(
             expected_session_results=tuple(
                 expected_results
@@ -426,6 +503,9 @@ class SessionAlarmRuntime:
             critical_path_unavailable_results=tuple(
                 unavailable_results
             ),
+            critical_path_traffic_stalled_results=tuple(
+                traffic_results
+            ),
         )
 
     @staticmethod
@@ -435,6 +515,7 @@ class SessionAlarmRuntime:
         instance_id: NodeInstanceId,
         session_snapshot: SessionSnapshot,
         media_snapshot: MediaMTXSnapshot,
+        streaming_measurement: StreamingMeasurement,
         transitions: tuple[SessionTransition, ...],
         timestamp: datetime,
     ) -> None:
@@ -462,6 +543,14 @@ class SessionAlarmRuntime:
         ):
             raise TypeError(
                 "media_snapshot must be a MediaMTXSnapshot"
+            )
+
+        if not isinstance(
+            streaming_measurement,
+            StreamingMeasurement,
+        ):
+            raise TypeError(
+                "streaming_measurement must be a StreamingMeasurement"
             )
 
         if not isinstance(transitions, tuple):

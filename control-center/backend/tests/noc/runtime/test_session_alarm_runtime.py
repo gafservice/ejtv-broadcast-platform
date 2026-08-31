@@ -8,6 +8,11 @@ from app.domain.sessions import (
     SessionRole,
     SessionSnapshot,
 )
+from app.domain.streaming.metrics import (
+    MeasurementQuality,
+    StreamingMeasurement,
+    StreamingPathMeasurement,
+)
 from app.domain.streaming.models import (
     MediaMTXSnapshot,
     MediaPath,
@@ -39,6 +44,9 @@ from app.noc.services.critical_path_no_readers_alarm_service import (
 )
 from app.noc.services.critical_path_unavailable_alarm_service import (
     CriticalPathUnavailableAlarmService,
+)
+from app.noc.services.critical_path_traffic_stalled_alarm_service import (
+    CriticalPathTrafficStalledAlarmService,
 )
 from app.noc.services.expected_session_alarm_service import (
     ExpectedSessionAlarmService,
@@ -130,6 +138,11 @@ def make_context():
         ),
         critical_path_unavailable_alarm_service=(
             CriticalPathUnavailableAlarmService(
+                alarm_service=alarm_service,
+            )
+        ),
+        critical_path_traffic_stalled_alarm_service=(
+            CriticalPathTrafficStalledAlarmService(
                 alarm_service=alarm_service,
             )
         ),
@@ -252,6 +265,60 @@ def build_media_snapshot(
     )
 
 
+def build_streaming_measurement(
+    *,
+    captured_at: datetime = BASE_TIME,
+) -> StreamingMeasurement:
+    """Build a baseline measurement with no reliable traffic rate yet."""
+
+    return StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=None,
+        interval_seconds=None,
+        paths=(),
+        total_inbound_bitrate_bps=None,
+        total_outbound_bitrate_bps=None,
+        quality=MeasurementQuality.NOT_AVAILABLE,
+    )
+
+
+def build_available_streaming_measurement(
+    *,
+    captured_at: datetime,
+    inbound_bitrate_bps: float,
+    reader_count: int = 1,
+) -> StreamingMeasurement:
+    """Build one reliable traffic measurement for the critical path."""
+
+    previous_captured_at = (
+        captured_at - timedelta(seconds=1)
+    )
+
+    path_measurement = StreamingPathMeasurement(
+        name="critical",
+        status=MediaPathStatus.ACTIVE,
+        previous_status=MediaPathStatus.ACTIVE,
+        reader_count=reader_count,
+        reader_delta=0,
+        inbound_delta_bytes=0,
+        outbound_delta_bytes=0,
+        inbound_bitrate_bps=inbound_bitrate_bps,
+        outbound_bitrate_bps=0.0,
+        state_changed=False,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    return StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=previous_captured_at,
+        interval_seconds=1.0,
+        paths=(path_measurement,),
+        total_inbound_bitrate_bps=inbound_bitrate_bps,
+        total_outbound_bitrate_bps=0.0,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+
 def build_transition(
     *,
     kind: SessionTransitionKind,
@@ -318,6 +385,7 @@ def test_all_session_alarm_policies_coexist_and_recover() -> None:
             captured_at=BASE_TIME,
             reader_count=0,
         ),
+        streaming_measurement=build_streaming_measurement(),
         transitions=(),
         timestamp=BASE_TIME,
     )
@@ -369,6 +437,7 @@ def test_all_session_alarm_policies_coexist_and_recover() -> None:
             ),
             reader_count=0,
         ),
+        streaming_measurement=build_streaming_measurement(),
         transitions=(),
         timestamp=(
             BASE_TIME
@@ -409,6 +478,7 @@ def test_all_session_alarm_policies_coexist_and_recover() -> None:
             ),
             reader_count=0,
         ),
+        streaming_measurement=build_streaming_measurement(),
         transitions=(
             build_transition(
                 kind=SessionTransitionKind.DISCONNECTED,
@@ -464,6 +534,7 @@ def test_all_session_alarm_policies_coexist_and_recover() -> None:
             ),
             reader_count=0,
         ),
+        streaming_measurement=build_streaming_measurement(),
         transitions=(
             build_transition(
                 kind=SessionTransitionKind.DISCONNECTED,
@@ -533,6 +604,7 @@ def test_all_session_alarm_policies_coexist_and_recover() -> None:
             ),
             reader_count=1,
         ),
+        streaming_measurement=build_streaming_measurement(),
         transitions=(),
         timestamp=(
             BASE_TIME
@@ -575,6 +647,7 @@ def test_all_session_alarm_policies_coexist_and_recover() -> None:
             ),
             reader_count=1,
         ),
+        streaming_measurement=build_streaming_measurement(),
         transitions=(),
         timestamp=(
             BASE_TIME
@@ -621,6 +694,11 @@ def test_reconnect_flapping_may_be_disabled() -> None:
                 alarm_service=alarm_service,
             )
         ),
+        critical_path_traffic_stalled_alarm_service=(
+            CriticalPathTrafficStalledAlarmService(
+                alarm_service=alarm_service,
+            )
+        ),
         reconnect_flapping_enabled=False,
     )
 
@@ -637,6 +715,7 @@ def test_reconnect_flapping_may_be_disabled() -> None:
             reported_item_count=0,
             reported_page_count=0,
         ),
+        streaming_measurement=build_streaming_measurement(),
         transitions=(
             build_transition(
                 kind=SessionTransitionKind.DISCONNECTED,
@@ -680,6 +759,7 @@ def test_critical_path_unavailable_runtime_lifecycle() -> None:
             sessions=(),
         ),
         media_snapshot=healthy_media,
+        streaming_measurement=build_streaming_measurement(),
         transitions=(),
         timestamp=BASE_TIME,
     )
@@ -713,6 +793,7 @@ def test_critical_path_unavailable_runtime_lifecycle() -> None:
             sessions=(),
         ),
         media_snapshot=missing_media_5,
+        streaming_measurement=build_streaming_measurement(),
         transitions=(),
         timestamp=BASE_TIME + timedelta(seconds=5),
     )
@@ -748,6 +829,7 @@ def test_critical_path_unavailable_runtime_lifecycle() -> None:
             sessions=(),
         ),
         media_snapshot=missing_media_20,
+        streaming_measurement=build_streaming_measurement(),
         transitions=(),
         timestamp=BASE_TIME + timedelta(seconds=20),
     )
@@ -797,6 +879,7 @@ def test_critical_path_unavailable_runtime_lifecycle() -> None:
             captured_at=BASE_TIME + timedelta(seconds=25),
             reader_count=1,
         ),
+        streaming_measurement=build_streaming_measurement(),
         transitions=(),
         timestamp=BASE_TIME + timedelta(seconds=25),
     )
@@ -816,6 +899,270 @@ def test_critical_path_unavailable_runtime_lifecycle() -> None:
     )
 
     assert "CRITICAL_PATH_UNAVAILABLE" not in (
+        active_alarm_types(
+            alarm_service,
+            node,
+            instance,
+        )
+    )
+
+def test_critical_path_traffic_stalled_runtime_lifecycle() -> None:
+    (
+        node,
+        instance,
+        alarm_service,
+        runtime,
+    ) = make_context()
+
+    #
+    # t=0 -> healthy inbound traffic.
+    #
+    first = runtime.process(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        session_snapshot=build_snapshot(
+            captured_at=BASE_TIME,
+            sessions=(),
+        ),
+        media_snapshot=build_media_snapshot(
+            captured_at=BASE_TIME,
+            reader_count=1,
+        ),
+        streaming_measurement=(
+            build_available_streaming_measurement(
+                captured_at=BASE_TIME,
+                inbound_bitrate_bps=4_500_000.0,
+            )
+        ),
+        transitions=(),
+        timestamp=BASE_TIME,
+    )
+
+    assert len(
+        first.critical_path_traffic_stalled_results
+    ) == 1
+
+    healthy_result = (
+        first.critical_path_traffic_stalled_results[0]
+    )
+
+    assert (
+        healthy_result.stabilization.confirmed_stalled
+        is False
+    )
+    assert healthy_result.alarm is None
+
+    assert "CRITICAL_PATH_TRAFFIC_STALLED" not in (
+        active_alarm_types(
+            alarm_service,
+            node,
+            instance,
+        )
+    )
+
+    #
+    # t=5 -> inbound traffic stops.
+    # Grace period begins.
+    #
+    stalled_5 = runtime.process(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        session_snapshot=build_snapshot(
+            captured_at=BASE_TIME + timedelta(seconds=5),
+            sessions=(),
+        ),
+        media_snapshot=build_media_snapshot(
+            captured_at=BASE_TIME + timedelta(seconds=5),
+            reader_count=1,
+        ),
+        streaming_measurement=(
+            build_available_streaming_measurement(
+                captured_at=BASE_TIME + timedelta(seconds=5),
+                inbound_bitrate_bps=0.0,
+            )
+        ),
+        transitions=(),
+        timestamp=BASE_TIME + timedelta(seconds=5),
+    )
+
+    stalled_result_5 = (
+        stalled_5.critical_path_traffic_stalled_results[0]
+    )
+
+    assert (
+        stalled_result_5.stabilization.confirmed_stalled
+        is False
+    )
+    assert stalled_result_5.alarm is None
+
+    #
+    # t=19 -> only 14 continuous seconds stalled.
+    #
+    stalled_19 = runtime.process(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        session_snapshot=build_snapshot(
+            captured_at=BASE_TIME + timedelta(seconds=19),
+            sessions=(),
+        ),
+        media_snapshot=build_media_snapshot(
+            captured_at=BASE_TIME + timedelta(seconds=19),
+            reader_count=1,
+        ),
+        streaming_measurement=(
+            build_available_streaming_measurement(
+                captured_at=BASE_TIME + timedelta(seconds=19),
+                inbound_bitrate_bps=0.0,
+            )
+        ),
+        transitions=(),
+        timestamp=BASE_TIME + timedelta(seconds=19),
+    )
+
+    assert (
+        stalled_19
+        .critical_path_traffic_stalled_results[0]
+        .stabilization
+        .confirmed_stalled
+        is False
+    )
+
+    #
+    # t=20 -> exactly 15 continuous seconds stalled.
+    #
+    stalled_20 = runtime.process(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        session_snapshot=build_snapshot(
+            captured_at=BASE_TIME + timedelta(seconds=20),
+            sessions=(),
+        ),
+        media_snapshot=build_media_snapshot(
+            captured_at=BASE_TIME + timedelta(seconds=20),
+            reader_count=1,
+        ),
+        streaming_measurement=(
+            build_available_streaming_measurement(
+                captured_at=BASE_TIME + timedelta(seconds=20),
+                inbound_bitrate_bps=0.0,
+            )
+        ),
+        transitions=(),
+        timestamp=BASE_TIME + timedelta(seconds=20),
+    )
+
+    alarm_result = (
+        stalled_20.critical_path_traffic_stalled_results[0]
+    )
+
+    assert (
+        alarm_result.stabilization.confirmed_stalled
+        is True
+    )
+    assert alarm_result.alarm is not None
+    assert (
+        alarm_result.alarm.alarm_type
+        == "CRITICAL_PATH_TRAFFIC_STALLED"
+    )
+    assert alarm_result.alarm.state is AlarmState.ACTIVE
+
+    raised_alarm_id = alarm_result.alarm.alarm_id
+
+    assert "CRITICAL_PATH_TRAFFIC_STALLED" in (
+        active_alarm_types(
+            alarm_service,
+            node,
+            instance,
+        )
+    )
+
+    #
+    # t=30 -> still stalled; same alarm, no duplicate.
+    #
+    stalled_30 = runtime.process(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        session_snapshot=build_snapshot(
+            captured_at=BASE_TIME + timedelta(seconds=30),
+            sessions=(),
+        ),
+        media_snapshot=build_media_snapshot(
+            captured_at=BASE_TIME + timedelta(seconds=30),
+            reader_count=1,
+        ),
+        streaming_measurement=(
+            build_available_streaming_measurement(
+                captured_at=BASE_TIME + timedelta(seconds=30),
+                inbound_bitrate_bps=0.0,
+            )
+        ),
+        transitions=(),
+        timestamp=BASE_TIME + timedelta(seconds=30),
+    )
+
+    persistent_result = (
+        stalled_30.critical_path_traffic_stalled_results[0]
+    )
+
+    assert persistent_result.alarm is not None
+    assert (
+        persistent_result.alarm.alarm_id
+        == raised_alarm_id
+    )
+
+    active_traffic_alarms = tuple(
+        alarm
+        for alarm in alarm_service.active(
+            node.node_id,
+            instance.instance_id,
+        )
+        if (
+            alarm.alarm_type
+            == "CRITICAL_PATH_TRAFFIC_STALLED"
+        )
+    )
+
+    assert len(active_traffic_alarms) == 1
+
+    #
+    # t=35 -> positive inbound traffic proves recovery.
+    #
+    recovered = runtime.process(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        session_snapshot=build_snapshot(
+            captured_at=BASE_TIME + timedelta(seconds=35),
+            sessions=(),
+        ),
+        media_snapshot=build_media_snapshot(
+            captured_at=BASE_TIME + timedelta(seconds=35),
+            reader_count=1,
+        ),
+        streaming_measurement=(
+            build_available_streaming_measurement(
+                captured_at=BASE_TIME + timedelta(seconds=35),
+                inbound_bitrate_bps=4_600_000.0,
+            )
+        ),
+        transitions=(),
+        timestamp=BASE_TIME + timedelta(seconds=35),
+    )
+
+    recovered_result = (
+        recovered.critical_path_traffic_stalled_results[0]
+    )
+
+    assert recovered_result.alarm is not None
+    assert (
+        recovered_result.alarm.alarm_id
+        == raised_alarm_id
+    )
+    assert (
+        recovered_result.alarm.state
+        is AlarmState.RESOLVED
+    )
+
+    assert "CRITICAL_PATH_TRAFFIC_STALLED" not in (
         active_alarm_types(
             alarm_service,
             node,

@@ -34,6 +34,7 @@ session_policies:
       enabled: true
       no_readers_grace_seconds: 15
       unavailable_grace_seconds: 15
+      traffic_stalled_grace_seconds: 15
 
   reconnect_flapping:
     reconnect_timeout_seconds: 10

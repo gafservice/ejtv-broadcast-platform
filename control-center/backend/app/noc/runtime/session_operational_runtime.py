@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from app.domain.sessions import SessionSnapshot
+from app.domain.streaming.metrics import StreamingMeasurement
 from app.domain.streaming.models import MediaMTXSnapshot
 from app.noc.domain.node_id import NodeId
 from app.noc.domain.node_instance import NodeInstanceId
@@ -107,6 +108,7 @@ class SessionOperationalRuntime:
         previous: SessionSnapshot | None,
         current: SessionSnapshot,
         media_snapshot: MediaMTXSnapshot,
+        streaming_measurement: StreamingMeasurement,
         timestamp: datetime,
     ) -> SessionOperationalRuntimeResult:
         """Process one session observation cycle."""
@@ -117,6 +119,7 @@ class SessionOperationalRuntime:
             previous=previous,
             current=current,
             media_snapshot=media_snapshot,
+            streaming_measurement=streaming_measurement,
             timestamp=timestamp,
         )
 
@@ -139,6 +142,7 @@ class SessionOperationalRuntime:
             instance_id=instance_id,
             session_snapshot=current,
             media_snapshot=media_snapshot,
+            streaming_measurement=streaming_measurement,
             transitions=transitions,
             timestamp=timestamp,
         )
@@ -157,6 +161,7 @@ class SessionOperationalRuntime:
         previous: SessionSnapshot | None,
         current: SessionSnapshot,
         media_snapshot: MediaMTXSnapshot,
+        streaming_measurement: StreamingMeasurement,
         timestamp: datetime,
     ) -> None:
         if not isinstance(node_id, NodeId):
@@ -197,6 +202,14 @@ class SessionOperationalRuntime:
         ):
             raise TypeError(
                 "media_snapshot must be a MediaMTXSnapshot"
+            )
+
+        if not isinstance(
+            streaming_measurement,
+            StreamingMeasurement,
+        ):
+            raise TypeError(
+                "streaming_measurement must be a StreamingMeasurement"
             )
 
         if not isinstance(timestamp, datetime):
