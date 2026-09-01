@@ -22,6 +22,7 @@ class ActiveAlarmRowData:
     role: str = "-"
 
     def __post_init__(self) -> None:
+
         for field_name in (
             "alarm_id",
             "alarm_type",
@@ -77,8 +78,23 @@ class ActiveAlarmsPanelData:
     """Colección de alarmas activas preparada para el dashboard."""
 
     alarms: tuple[ActiveAlarmRowData, ...]
+    total_items: int | None = None
 
     def __post_init__(self) -> None:
+        if self.total_items is not None:
+            if (
+                isinstance(self.total_items, bool)
+                or not isinstance(self.total_items, int)
+            ):
+                raise TypeError(
+                    "total_items must be an int or None"
+                )
+
+            if self.total_items < 0:
+                raise ValueError(
+                    "total_items must be greater than or equal to zero"
+                )
+
         if not isinstance(
             self.alarms,
             tuple,

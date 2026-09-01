@@ -29,6 +29,7 @@ from app.domain.system import (
 import pytest
 
 from app.dashboard.services.dashboard_service import DashboardService
+from app.dashboard.models.panel_viewport import PanelViewport
 from app.domain.sessions.measurement import SessionMeasurement
 from app.domain.sessions.quality import SessionQuality
 
@@ -1386,7 +1387,10 @@ def test_build_recent_events_panel_limits_results() -> None:
 
     panel = service.build_recent_events_panel(
         events=events,
-        limit=5,
+        viewport=PanelViewport(
+            offset=0,
+            page_size=5,
+        ),
     )
 
     assert panel.event_count == 5
@@ -1435,22 +1439,16 @@ def test_build_recent_events_panel_rejects_invalid_event() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    "limit",
-    (
-        0,
-        -1,
-    ),
-)
-def test_build_recent_events_panel_requires_positive_limit(
-    limit: int,
-) -> None:
+def test_build_recent_events_panel_rejects_invalid_viewport() -> None:
     service = DashboardService()
 
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        TypeError,
+        match="viewport must be a PanelViewport",
+    ):
         service.build_recent_events_panel(
             events=(),
-            limit=limit,
+            viewport="bad",  # type: ignore[arg-type]
         )
 
 
@@ -1711,7 +1709,10 @@ def test_build_active_alarms_panel_limits_results() -> None:
 
     panel = service.build_active_alarms_panel(
         alarms=alarms,
-        limit=3,
+        viewport=PanelViewport(
+            offset=0,
+            page_size=3,
+        ),
     )
 
     assert panel.alarm_count == 3
@@ -1755,22 +1756,16 @@ def test_build_active_alarms_panel_rejects_invalid_alarm() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    "limit",
-    (
-        0,
-        -1,
-    ),
-)
-def test_build_active_alarms_panel_requires_positive_limit(
-    limit: int,
-) -> None:
+def test_build_active_alarms_panel_rejects_invalid_viewport() -> None:
     service = DashboardService()
 
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        TypeError,
+        match="viewport must be a PanelViewport",
+    ):
         service.build_active_alarms_panel(
             alarms=(),
-            limit=limit,
+            viewport="bad",  # type: ignore[arg-type]
         )
 
 
@@ -1885,3 +1880,206 @@ def test_build_active_alarms_panel_preserves_session_operational_context() -> No
     assert row.path == "impact"
     assert row.protocol == "SRT"
     assert row.role == "READER"
+
+
+def test_build_recent_events_panel_applies_viewport_offset() -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from app.noc.domain.node_event import (
+        EventRecord,
+        EventSeverity,
+    )
+    from app.noc.domain.node_instance import NodeInstanceId
+
+    service = DashboardService()
+
+    base = datetime(
+        2026,
+        9,
+        1,
+        0,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    source = NodeInstanceId("streaming-primary")
+
+    events = tuple(
+        EventRecord(
+            event_id=f"event-{index}",
+            event_type="TEST_EVENT",
+            severity=EventSeverity.INFO,
+            timestamp=base + timedelta(seconds=index),
+            source=source,
+            title=f"Event {index}",
+            description=f"Event {index}",
+        )
+        for index in range(10)
+    )
+
+    panel = service.build_recent_events_panel(
+        events=events,
+        viewport=PanelViewport(
+            offset=2,
+            page_size=3,
+        ),
+    )
+
+    assert tuple(
+        row.event_id
+        for row in panel.events
+    ) == (
+        "event-7",
+        "event-6",
+        "event-5",
+    )
+    assert panel.total_items == 10
+
+
+def test_build_recent_events_panel_without_viewport_returns_all() -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from app.noc.domain.node_event import (
+        EventRecord,
+        EventSeverity,
+    )
+    from app.noc.domain.node_instance import NodeInstanceId
+
+    service = DashboardService()
+
+    base = datetime(
+        2026,
+        9,
+        1,
+        0,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    source = NodeInstanceId("streaming-primary")
+
+    events = tuple(
+        EventRecord(
+            event_id=f"event-{index}",
+            event_type="TEST_EVENT",
+            severity=EventSeverity.INFO,
+            timestamp=base + timedelta(seconds=index),
+            source=source,
+            title=f"Event {index}",
+            description=f"Event {index}",
+        )
+        for index in range(8)
+    )
+
+    panel = service.build_recent_events_panel(
+        events=events,
+    )
+
+    assert panel.event_count == 8
+
+
+def test_build_active_alarms_panel_applies_viewport_offset() -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from app.noc.domain.node_alarm import (
+        AlarmRecord,
+        AlarmSeverity,
+        AlarmState,
+    )
+    from app.noc.domain.node_instance import NodeInstanceId
+
+    service = DashboardService()
+
+    base = datetime(
+        2026,
+        9,
+        1,
+        0,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    source = NodeInstanceId("streaming-primary")
+
+    alarms = tuple(
+        AlarmRecord(
+            alarm_id=f"alarm-{index}",
+            alarm_type="TEST_ALARM",
+            severity=AlarmSeverity.WARNING,
+            state=AlarmState.ACTIVE,
+            timestamp=base + timedelta(seconds=index),
+            source=source,
+            title=f"Alarm {index}",
+            description=f"Alarm {index}",
+        )
+        for index in range(8)
+    )
+
+    panel = service.build_active_alarms_panel(
+        alarms=alarms,
+        viewport=PanelViewport(
+            offset=1,
+            page_size=3,
+        ),
+    )
+
+    assert tuple(
+        row.alarm_id
+        for row in panel.alarms
+    ) == (
+        "alarm-6",
+        "alarm-5",
+        "alarm-4",
+    )
+    assert panel.total_items == 8
+
+
+def test_build_active_connections_panel_applies_viewport() -> None:
+    from unittest.mock import Mock
+
+    service = DashboardService()
+
+    sessions = []
+
+    for index in range(10):
+        session = Mock()
+
+        session.session_id = f"session-{index}"
+        session.remote_address = f"192.0.2.{index}:9000"
+        session.location_label = "Costa Rica"
+        session.country_code = "CR"
+        session.asn = 12345
+        session.provider = "Example ISP"
+
+        session.protocol.value = "SRT"
+        session.path = f"path-{index}"
+        session.role.value = "READER"
+
+        session.effective_bitrate_mbps = 5.0
+        session.duration_seconds.return_value = 30.0
+        session.username = None
+
+        sessions.append(session)
+
+    measurement = Mock()
+    measurement.sessions = tuple(sessions)
+    measurement.captured_at = Mock()
+
+    panel = service.build_active_connections_panel(
+        measurement=measurement,
+        viewport=PanelViewport(
+            offset=3,
+            page_size=4,
+        ),
+    )
+
+    assert tuple(
+        row.session_id
+        for row in panel.connections
+    ) == (
+        "session-3",
+        "session-4",
+        "session-5",
+        "session-6",
+    )
+    assert panel.total_items == 10

@@ -1,5 +1,6 @@
 """Servicio de aplicación para construir datos del dashboard."""
 
+from app.dashboard.models.panel_viewport import PanelViewport
 from app.dashboard.models import (
     ActiveAlarmRowData,
     ActiveAlarmsPanelData,
@@ -141,6 +142,7 @@ class DashboardService:
         self,
         *,
         measurement: SessionMeasurement,
+        viewport: PanelViewport | None = None,
     ) -> ActiveConnectionsPanelData:
         """Construye los datos del panel CONNECTED CLIENTS."""
 
@@ -168,16 +170,22 @@ class DashboardService:
             for session in measurement.sessions
         )
 
+        selected_connections = self._apply_viewport(
+            connections,
+            viewport,
+        )
+
         return ActiveConnectionsPanelData(
             captured_at=measurement.captured_at,
-            connections=connections,
+            connections=selected_connections,
+            total_items=len(connections),
         )
 
     def build_active_alarms_panel(
         self,
         *,
         alarms: tuple[AlarmRecord, ...],
-        limit: int = 5,
+        viewport: PanelViewport | None = None,
     ) -> ActiveAlarmsPanelData:
         """Prepara alarmas operacionales activas para presentación."""
 
@@ -196,19 +204,6 @@ class DashboardService:
                     "AlarmRecord objects"
                 )
 
-        if isinstance(limit, bool) or not isinstance(
-            limit,
-            int,
-        ):
-            raise TypeError(
-                "limit must be an integer"
-            )
-
-        if limit <= 0:
-            raise ValueError(
-                "limit must be greater than zero"
-            )
-
         attention = tuple(
             alarm
             for alarm in alarms
@@ -221,7 +216,10 @@ class DashboardService:
             reverse=True,
         )
 
-        selected = ordered[:limit]
+        selected = self._apply_viewport(
+            tuple(ordered),
+            viewport,
+        )
 
         rows = tuple(
             ActiveAlarmRowData(
@@ -257,13 +255,14 @@ class DashboardService:
 
         return ActiveAlarmsPanelData(
             alarms=rows,
+            total_items=len(attention),
         )
 
     def build_recent_events_panel(
         self,
         *,
         events: tuple[EventRecord, ...],
-        limit: int = 5,
+        viewport: PanelViewport | None = None,
     ) -> RecentEventsPanelData:
         """Prepara eventos operacionales recientes para presentación."""
 
@@ -282,26 +281,16 @@ class DashboardService:
                     "EventRecord objects"
                 )
 
-        if isinstance(limit, bool) or not isinstance(
-            limit,
-            int,
-        ):
-            raise TypeError(
-                "limit must be an integer"
-            )
-
-        if limit <= 0:
-            raise ValueError(
-                "limit must be greater than zero"
-            )
-
         ordered = sorted(
             events,
             key=lambda event: event.timestamp,
             reverse=True,
         )
 
-        selected = ordered[:limit]
+        selected = self._apply_viewport(
+            tuple(ordered),
+            viewport,
+        )
 
         rows = tuple(
             RecentEventRowData(
@@ -336,7 +325,29 @@ class DashboardService:
 
         return RecentEventsPanelData(
             events=rows,
+            total_items=len(ordered),
         )
+
+    @staticmethod
+    def _apply_viewport(
+        items: tuple,
+        viewport: PanelViewport | None,
+    ) -> tuple:
+        """Aplica una ventana visible sin alterar la colección fuente."""
+
+        if viewport is None:
+            return items
+
+        if not isinstance(viewport, PanelViewport):
+            raise TypeError(
+                "viewport must be a PanelViewport"
+            )
+
+        start, end = viewport.bounds(
+            len(items)
+        )
+
+        return items[start:end]
 
     @staticmethod
     def _attribute_value(
@@ -591,6 +602,7 @@ class DashboardService:
         node_health: NodeHealthPanelData | None = None,
         recent_events: RecentEventsPanelData | None = None,
         active_alarms: ActiveAlarmsPanelData | None = None,
+        active_connections_viewport: PanelViewport | None = None,
     ) -> DashboardData:
         """Agrupa todas las secciones del dashboard."""
 
@@ -624,6 +636,7 @@ class DashboardService:
         node_health: NodeHealthPanelData | None = None,
         recent_events: RecentEventsPanelData | None = None,
         active_alarms: ActiveAlarmsPanelData | None = None,
+        active_connections_viewport: PanelViewport | None = None,
     ) -> DashboardData:
         """Construye el dashboard completo desde snapshot y medición."""
 
@@ -677,6 +690,7 @@ class DashboardService:
         active_connections = (
             self.build_active_connections_panel(
                 measurement=session_measurement,
+                viewport=active_connections_viewport,
             )
             if session_measurement is not None
             else None

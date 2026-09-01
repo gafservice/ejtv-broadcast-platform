@@ -27,7 +27,6 @@ class ActiveConnectionsPanelRenderer:
                     justify="center",
                 ),
                 title="CONNECTED CLIENTS",
-                border_style="cyan",
             )
 
         table = Table(
@@ -125,7 +124,6 @@ class ActiveConnectionsPanelRenderer:
                 "CONNECTED CLIENTS "
                 f"[{len(data.connections)}]"
             ),
-            border_style="cyan",
         )
 
     @staticmethod

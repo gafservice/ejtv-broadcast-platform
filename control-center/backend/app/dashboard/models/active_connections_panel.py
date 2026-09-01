@@ -27,6 +27,7 @@ class ActiveConnectionRow:
     username: str | None = None
 
     def __post_init__(self) -> None:
+
         """Valida los valores utilizados por una fila."""
 
         text_values = (
@@ -77,8 +78,23 @@ class ActiveConnectionsPanelData:
 
     captured_at: datetime
     connections: tuple[ActiveConnectionRow, ...]
+    total_items: int | None = None
 
     def __post_init__(self) -> None:
+        if self.total_items is not None:
+            if (
+                isinstance(self.total_items, bool)
+                or not isinstance(self.total_items, int)
+            ):
+                raise TypeError(
+                    "total_items must be an int or None"
+                )
+
+            if self.total_items < 0:
+                raise ValueError(
+                    "total_items must be greater than or equal to zero"
+                )
+
         """Valida invariantes generales del panel."""
 
         if self.captured_at.tzinfo is None:

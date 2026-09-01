@@ -1,8 +1,13 @@
 """Renderizador principal del dashboard."""
 
 from rich.layout import Layout
+from rich.panel import Panel
 
 from app.dashboard.models import DashboardData
+from app.dashboard.models.dashboard_navigation_state import (
+    DashboardNavigationState,
+    NavigablePanel,
+)
 from app.dashboard.renderers.active_alarms_panel_renderer import (
     ActiveAlarmsPanelRenderer,
 )
@@ -62,8 +67,25 @@ class DashboardRenderer:
         )
         self._path_table_renderer = PathTableRenderer()
 
-    def render(self, data: DashboardData) -> Layout:
+    def render(
+        self,
+        data: DashboardData,
+        *,
+        navigation_state: DashboardNavigationState | None = None,
+    ) -> Layout:
         """Convierte DashboardData en un layout completo de Rich."""
+
+        if (
+            navigation_state is not None
+            and not isinstance(
+                navigation_state,
+                DashboardNavigationState,
+            )
+        ):
+            raise TypeError(
+                "navigation_state must be a "
+                "DashboardNavigationState or None"
+            )
 
         layout = Layout(name="dashboard")
 
@@ -169,24 +191,66 @@ class DashboardRenderer:
             )
 
         if data.active_connections is not None:
-            layout["active_connections"].update(
+            active_connections_panel = (
                 self._active_connections_renderer.render(
                     data.active_connections
                 )
             )
 
+            self._decorate_navigable_panel(
+                active_connections_panel,
+                navigation_state=navigation_state,
+                panel=NavigablePanel.ACTIVE_CONNECTIONS,
+                total_items=data.active_connections.total_items,
+                visible_items=len(
+                    data.active_connections.connections
+                ),
+            )
+
+            layout["active_connections"].update(
+                active_connections_panel
+            )
+
         if data.active_alarms is not None:
-            layout["active_alarms"].update(
+            active_alarms_panel = (
                 self._active_alarms_renderer.render(
                     data.active_alarms
                 )
             )
 
+            self._decorate_navigable_panel(
+                active_alarms_panel,
+                navigation_state=navigation_state,
+                panel=NavigablePanel.ACTIVE_ALARMS,
+                total_items=data.active_alarms.total_items,
+                visible_items=len(
+                    data.active_alarms.alarms
+                ),
+            )
+
+            layout["active_alarms"].update(
+                active_alarms_panel
+            )
+
         if data.recent_events is not None:
-            layout["recent_events"].update(
+            recent_events_panel = (
                 self._recent_events_renderer.render(
                     data.recent_events
                 )
+            )
+
+            self._decorate_navigable_panel(
+                recent_events_panel,
+                navigation_state=navigation_state,
+                panel=NavigablePanel.RECENT_EVENTS,
+                total_items=data.recent_events.total_items,
+                visible_items=len(
+                    data.recent_events.events
+                ),
+            )
+
+            layout["recent_events"].update(
+                recent_events_panel
             )
 
         layout["paths"].update(
@@ -194,3 +258,103 @@ class DashboardRenderer:
         )
 
         return layout
+
+    @staticmethod
+    def _decorate_navigable_panel(
+        rich_panel: Panel,
+        *,
+        navigation_state: DashboardNavigationState | None,
+        panel: NavigablePanel,
+        total_items: int | None,
+        visible_items: int,
+    ) -> None:
+        """Añade foco y posición a un panel navegable."""
+
+        if not isinstance(rich_panel, Panel):
+            raise TypeError(
+                "rich_panel must be a rich.panel.Panel"
+            )
+
+        if not isinstance(panel, NavigablePanel):
+            raise TypeError(
+                "panel must be a NavigablePanel"
+            )
+
+        if (
+            isinstance(total_items, bool)
+            or (
+                total_items is not None
+                and not isinstance(total_items, int)
+            )
+        ):
+            raise TypeError(
+                "total_items must be an int or None"
+            )
+
+        if total_items is not None and total_items < 0:
+            raise ValueError(
+                "total_items must not be negative"
+            )
+
+        if (
+            isinstance(visible_items, bool)
+            or not isinstance(visible_items, int)
+        ):
+            raise TypeError(
+                "visible_items must be an integer"
+            )
+
+        if visible_items < 0:
+            raise ValueError(
+                "visible_items must not be negative"
+            )
+
+        total = (
+            total_items
+            if total_items is not None
+            else visible_items
+        )
+
+        title = str(rich_panel.title or "")
+
+        if navigation_state is None:
+            position = (
+                "0 / 0"
+                if total == 0
+                else f"1–{visible_items} / {total}"
+            )
+        else:
+            viewport = navigation_state.viewport_for(
+                panel
+            )
+
+            start, end = viewport.bounds(total)
+
+            position = (
+                "0 / 0"
+                if total == 0
+                else f"{start + 1}–{end} / {total}"
+            )
+
+            is_active = (
+                navigation_state.active_panel is panel
+            )
+
+            if is_active:
+                rich_panel.border_style = "bold bright_yellow"
+
+        if (
+            navigation_state is not None
+            and navigation_state.active_panel is panel
+        ):
+            title = (
+                f"▶ {title}"
+                if title
+                else "▶"
+            )
+
+        rich_panel.title = (
+            f"{title} · {position}"
+            if title
+            else position
+        )

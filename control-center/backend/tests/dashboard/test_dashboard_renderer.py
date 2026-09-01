@@ -626,3 +626,199 @@ def test_active_alarms_precede_recent_events_in_layout() -> None:
         child_names.index("active_alarms")
         < child_names.index("recent_events")
     )
+
+
+def test_navigation_visual_state_decorates_navigable_panels() -> None:
+    """Los paneles navegables deben mostrar foco y posición."""
+
+    from datetime import UTC, datetime
+
+    from app.dashboard.models import (
+        ActiveAlarmsPanelData,
+        ActiveConnectionsPanelData,
+        RecentEventsPanelData,
+    )
+    from app.dashboard.models.dashboard_navigation_state import (
+        DashboardNavigationState,
+        NavigablePanel,
+    )
+
+    renderer = DashboardRenderer()
+    base_data = build_dashboard_data()
+
+    data = DashboardData(
+        server=base_data.server,
+        streaming=base_data.streaming,
+        paths=base_data.paths,
+        health=base_data.health,
+        active_connections=ActiveConnectionsPanelData(
+            captured_at=datetime(
+                2026,
+                9,
+                1,
+                12,
+                0,
+                tzinfo=UTC,
+            ),
+            connections=(),
+            total_items=0,
+        ),
+        active_alarms=ActiveAlarmsPanelData(
+            alarms=(),
+            total_items=0,
+        ),
+        recent_events=RecentEventsPanelData(
+            events=(),
+            total_items=0,
+        ),
+    )
+
+    navigation_state = DashboardNavigationState(
+        active_panel=NavigablePanel.ACTIVE_CONNECTIONS,
+    )
+
+    layout = renderer.render(
+        data,
+        navigation_state=navigation_state,
+    )
+
+    connections_panel = (
+        layout["active_connections"].renderable
+    )
+    alarms_panel = (
+        layout["active_alarms"].renderable
+    )
+    events_panel = (
+        layout["recent_events"].renderable
+    )
+
+    assert "0 / 0" in str(connections_panel.title)
+    assert "0 / 0" in str(alarms_panel.title)
+    assert "0 / 0" in str(events_panel.title)
+
+    assert connections_panel.border_style == "bold bright_yellow"
+    assert alarms_panel.border_style != "bold bright_yellow"
+    assert events_panel.border_style != "bold bright_yellow"
+
+
+def test_navigation_visual_focus_follows_active_panel() -> None:
+    """El foco visual debe seguir al panel seleccionado."""
+
+    from datetime import UTC, datetime
+
+    from app.dashboard.models import (
+        ActiveAlarmsPanelData,
+        ActiveConnectionsPanelData,
+        RecentEventsPanelData,
+    )
+    from app.dashboard.models.dashboard_navigation_state import (
+        DashboardNavigationState,
+        NavigablePanel,
+    )
+
+    renderer = DashboardRenderer()
+    base_data = build_dashboard_data()
+
+    data = DashboardData(
+        server=base_data.server,
+        streaming=base_data.streaming,
+        paths=base_data.paths,
+        health=base_data.health,
+        active_connections=ActiveConnectionsPanelData(
+            captured_at=datetime(
+                2026,
+                9,
+                1,
+                12,
+                0,
+                tzinfo=UTC,
+            ),
+            connections=(),
+            total_items=0,
+        ),
+        active_alarms=ActiveAlarmsPanelData(
+            alarms=(),
+            total_items=0,
+        ),
+        recent_events=RecentEventsPanelData(
+            events=(),
+            total_items=0,
+        ),
+    )
+
+    navigation_state = DashboardNavigationState(
+        active_panel=NavigablePanel.ACTIVE_ALARMS,
+    )
+
+    layout = renderer.render(
+        data,
+        navigation_state=navigation_state,
+    )
+
+    assert (
+        layout["active_connections"]
+        .renderable
+        .border_style
+        != "bold bright_yellow"
+    )
+
+    assert (
+        layout["active_alarms"]
+        .renderable
+        .border_style
+        == "bold bright_yellow"
+    )
+
+    assert (
+        layout["recent_events"]
+        .renderable
+        .border_style
+        != "bold bright_yellow"
+    )
+
+
+def test_navigation_visual_position_uses_viewport_bounds() -> None:
+    """El título debe indicar la ventana visible dentro del total."""
+
+    from app.dashboard.models import (
+        RecentEventsPanelData,
+    )
+    from app.dashboard.models.dashboard_navigation_state import (
+        DashboardNavigationState,
+        NavigablePanel,
+    )
+    from app.dashboard.models.panel_viewport import (
+        PanelViewport,
+    )
+
+    renderer = DashboardRenderer()
+    base_data = build_dashboard_data()
+
+    data = DashboardData(
+        server=base_data.server,
+        streaming=base_data.streaming,
+        paths=base_data.paths,
+        health=base_data.health,
+        recent_events=RecentEventsPanelData(
+            events=(),
+            total_items=27,
+        ),
+    )
+
+    navigation_state = DashboardNavigationState(
+        active_panel=NavigablePanel.RECENT_EVENTS,
+        recent_events=PanelViewport(
+            offset=5,
+            page_size=5,
+        ),
+    )
+
+    layout = renderer.render(
+        data,
+        navigation_state=navigation_state,
+    )
+
+    panel = layout["recent_events"].renderable
+
+    assert "6–10 / 27" in str(panel.title)
+    assert panel.border_style == "bold bright_yellow"

@@ -17,6 +17,7 @@ from app.dashboard.models import (
     NodeHealthPanelData,
     RecentEventsPanelData,
 )
+from app.dashboard.models.panel_viewport import PanelViewport
 from app.dashboard.services.dashboard_service import DashboardService
 from app.domain.sessions.measurement import SessionMeasurement
 from app.domain.streaming import (
@@ -51,6 +52,7 @@ class DashboardSnapshotInput:
     node_health: NodeHealthPanelData | None = None
     recent_events: RecentEventsPanelData | None = None
     active_alarms: ActiveAlarmsPanelData | None = None
+    active_connections_viewport: PanelViewport | None = None
 
 
 class DashboardSnapshotService:
@@ -122,4 +124,7 @@ class DashboardSnapshotService:
             node_health=snapshot_input.node_health,
             recent_events=snapshot_input.recent_events,
             active_alarms=snapshot_input.active_alarms,
+            active_connections_viewport=(
+                snapshot_input.active_connections_viewport
+            ),
         )

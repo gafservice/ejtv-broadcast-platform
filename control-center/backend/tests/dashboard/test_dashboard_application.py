@@ -8,6 +8,16 @@ from rich.layout import Layout
 
 from app.dashboard.application import DashboardApplication
 from app.dashboard.models import DashboardData
+from app.dashboard.models.panel_viewport import PanelViewport
+from app.dashboard.models.dashboard_navigation_action import (
+    DashboardNavigationAction,
+)
+from app.dashboard.models.dashboard_navigation_state import (
+    DashboardNavigationState,
+)
+from app.dashboard.models.dashboard_navigation_totals import (
+    DashboardNavigationTotals,
+)
 from app.domain.streaming import (
     MeasurementQuality,
     MediaMTXSnapshot,
@@ -145,10 +155,15 @@ def test_run_once_builds_and_renders_dashboard() -> None:
         node_health=None,
         recent_events=None,
         active_alarms=None,
+        active_connections_viewport=PanelViewport(
+            offset=0,
+            page_size=7,
+        ),
     )
 
     dashboard_renderer.render.assert_called_once_with(
-        dashboard_data
+        dashboard_data,
+        navigation_state=application.navigation_state,
     )
 
 
@@ -356,8 +371,14 @@ def test_run_once_uses_previous_snapshot_on_second_execution() -> None:
 
     dashboard_renderer.render.assert_has_calls(
         [
-            call(first_dashboard_data),
-            call(second_dashboard_data),
+            call(
+                first_dashboard_data,
+                navigation_state=application.navigation_state,
+            ),
+            call(
+                second_dashboard_data,
+                navigation_state=application.navigation_state,
+            ),
         ]
     )
 
@@ -601,10 +622,15 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         node_health=None,
         recent_events=None,
         active_alarms=None,
+        active_connections_viewport=PanelViewport(
+            offset=0,
+            page_size=7,
+        ),
     )
 
     dashboard_renderer.render.assert_called_once_with(
-        dashboard_data
+        dashboard_data,
+        navigation_state=application.navigation_state,
     )
 
 
@@ -760,6 +786,15 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
 
     dashboard_data = Mock(spec=DashboardData)
 
+    dashboard_data.active_connections = Mock()
+    dashboard_data.active_connections.total_items = 10
+
+    dashboard_data.active_alarms = Mock()
+    dashboard_data.active_alarms.total_items = 8
+
+    dashboard_data.recent_events = Mock()
+    dashboard_data.recent_events.total_items = 20
+
     dashboard_snapshot_service = Mock()
     dashboard_snapshot_service.build_snapshot.return_value = (
         dashboard_data
@@ -775,6 +810,21 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
 
     instance_id = NodeInstanceId(
         "streaming-primary"
+    )
+
+    navigation_state = DashboardNavigationState(
+        active_connections=PanelViewport(
+            offset=4,
+            page_size=7,
+        ),
+        active_alarms=PanelViewport(
+            offset=8,
+            page_size=5,
+        ),
+        recent_events=PanelViewport(
+            offset=12,
+            page_size=5,
+        ),
     )
 
     application = DashboardApplication(
@@ -798,6 +848,7 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
         alarm_service=alarm_service,
         node_id=node_id,
         instance_id=instance_id,
+        navigation_state=navigation_state,
     )
 
     result = application.build_dashboard()
@@ -834,6 +885,10 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
 
     dashboard_service.build_recent_events_panel.assert_called_once_with(
         events=event_records,
+        viewport=PanelViewport(
+            offset=12,
+            page_size=5,
+        ),
     )
 
     alarm_service.active.assert_called_once_with(
@@ -843,6 +898,10 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
 
     dashboard_service.build_active_alarms_panel.assert_called_once_with(
         alarms=alarm_records,
+        viewport=PanelViewport(
+            offset=8,
+            page_size=5,
+        ),
     )
 
     snapshot_input = (
@@ -855,6 +914,130 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
     assert snapshot_input.node_health is node_health_panel
     assert snapshot_input.recent_events is recent_events_panel
     assert snapshot_input.active_alarms is active_alarms_panel
+    assert snapshot_input.active_connections_viewport == PanelViewport(
+        offset=4,
+        page_size=7,
+    )
+
+    assert application.navigation_state == navigation_state
+
+    assert application.navigation_totals.active_connections == 10
+    assert application.navigation_totals.active_alarms == 8
+    assert application.navigation_totals.recent_events == 20
+
+    application.apply_navigation_action(
+        DashboardNavigationAction.SCROLL_DOWN
+    )
+
+    assert application.navigation_state.active_connections == PanelViewport(
+        offset=3,
+        page_size=7,
+    )
+    assert application.navigation_state.active_alarms == PanelViewport(
+        offset=8,
+        page_size=5,
+    )
+    assert application.navigation_state.recent_events == PanelViewport(
+        offset=12,
+        page_size=5,
+    )
+
+    application.apply_navigation_action(
+        DashboardNavigationAction.NEXT_PANEL
+    )
+
+    assert application.navigation_state.active_panel.value == (
+        "active_alarms"
+    )
+
+    assert application.navigation_state.active_connections == PanelViewport(
+        offset=3,
+        page_size=7,
+    )
+    assert application.navigation_state.active_alarms == PanelViewport(
+        offset=8,
+        page_size=5,
+    )
+    assert application.navigation_state.recent_events == PanelViewport(
+        offset=12,
+        page_size=5,
+    )
+
+    # --------------------------------------------------------
+    # Segundo refresh: los tres viewports deben conservarse.
+    # --------------------------------------------------------
+
+    second_result = application.build_dashboard()
+
+    assert second_result is dashboard_data
+
+    assert application.navigation_state.active_panel.value == (
+        "active_alarms"
+    )
+    assert application.navigation_state.active_connections == PanelViewport(
+        offset=3,
+        page_size=7,
+    )
+    assert application.navigation_state.active_alarms == PanelViewport(
+        offset=8,
+        page_size=5,
+    )
+    assert application.navigation_state.recent_events == PanelViewport(
+        offset=12,
+        page_size=5,
+    )
+
+    recent_event_calls = (
+        dashboard_service
+        .build_recent_events_panel
+        .call_args_list
+    )
+
+    assert len(recent_event_calls) == 2
+    assert recent_event_calls[0].kwargs["viewport"] == PanelViewport(
+        offset=12,
+        page_size=5,
+    )
+    assert recent_event_calls[1].kwargs["viewport"] == PanelViewport(
+        offset=12,
+        page_size=5,
+    )
+
+    active_alarm_calls = (
+        dashboard_service
+        .build_active_alarms_panel
+        .call_args_list
+    )
+
+    assert len(active_alarm_calls) == 2
+    assert active_alarm_calls[0].kwargs["viewport"] == PanelViewport(
+        offset=8,
+        page_size=5,
+    )
+    assert active_alarm_calls[1].kwargs["viewport"] == PanelViewport(
+        offset=8,
+        page_size=5,
+    )
+
+    snapshot_calls = (
+        dashboard_snapshot_service
+        .build_snapshot
+        .call_args_list
+    )
+
+    assert len(snapshot_calls) == 2
+
+    first_snapshot_input = snapshot_calls[0].args[0]
+    second_snapshot_input = snapshot_calls[1].args[0]
+
+    assert first_snapshot_input.active_connections_viewport == PanelViewport(
+        offset=4,
+        page_size=7,
+    )
+    assert second_snapshot_input.active_connections_viewport == PanelViewport(
+        offset=3,
+        page_size=7,
+    )
 
 
 @pytest.mark.parametrize(
@@ -904,3 +1087,306 @@ def test_application_rejects_partial_noc_configuration(
             node_id=node_id,
             instance_id=instance_id,
         )
+
+
+def test_run_quit_key_stops_before_next_refresh() -> None:
+    """q debe terminar el runtime sin ejecutar otra captura."""
+
+    application = DashboardApplication(
+        mediamtx_adapter=Mock(),
+        session_adapter=Mock(),
+        streaming_service=Mock(),
+        session_service=Mock(),
+        dashboard_service=Mock(),
+        dashboard_renderer=Mock(),
+        system_service=Mock(),
+    )
+
+    first_layout = Mock(spec=Layout)
+
+    application.run_once = Mock(
+        return_value=first_layout
+    )
+
+    keyboard_input = Mock()
+    keyboard_input.active = True
+    keyboard_input.__enter__ = Mock(
+        return_value=keyboard_input
+    )
+    keyboard_input.__exit__ = Mock(
+        return_value=False
+    )
+    keyboard_input.read_available.return_value = b"q"
+
+    application._keyboard_input = keyboard_input
+
+    live_instance = Mock()
+
+    live_context = Mock()
+    live_context.__enter__ = Mock(
+        return_value=live_instance
+    )
+    live_context.__exit__ = Mock(
+        return_value=False
+    )
+
+    with (
+        patch(
+            "app.dashboard.application.Live",
+            return_value=live_context,
+        ),
+        patch(
+            "app.dashboard.application.monotonic",
+            side_effect=(0.0, 0.1),
+        ),
+    ):
+        application.run(
+            refresh_interval_seconds=1.0,
+            max_iterations=2,
+        )
+
+    application.run_once.assert_called_once_with()
+
+    live_instance.update.assert_called_once_with(
+        first_layout,
+        refresh=True,
+    )
+
+    keyboard_input.read_available.assert_called_once_with(
+        timeout_seconds=0.9,
+    )
+
+
+def test_run_navigation_key_preserves_normal_refresh_cadence() -> None:
+    """Una tecla de navegación no debe provocar una captura extra."""
+
+    application = DashboardApplication(
+        mediamtx_adapter=Mock(),
+        session_adapter=Mock(),
+        streaming_service=Mock(),
+        session_service=Mock(),
+        dashboard_service=Mock(),
+        dashboard_renderer=Mock(),
+        system_service=Mock(),
+    )
+
+    first_layout = Mock(spec=Layout)
+    second_layout = Mock(spec=Layout)
+
+    application.run_once = Mock(
+        side_effect=(
+            first_layout,
+            second_layout,
+        )
+    )
+
+    application._navigation_totals = DashboardNavigationTotals(
+        active_connections=20,
+        active_alarms=0,
+        recent_events=0,
+    )
+
+    keyboard_input = Mock()
+    keyboard_input.active = True
+    keyboard_input.__enter__ = Mock(
+        return_value=keyboard_input
+    )
+    keyboard_input.__exit__ = Mock(
+        return_value=False
+    )
+    keyboard_input.read_available.side_effect = (
+        b"\x1b[B",
+        None,
+    )
+
+    application._keyboard_input = keyboard_input
+
+    live_instance = Mock()
+
+    live_context = Mock()
+    live_context.__enter__ = Mock(
+        return_value=live_instance
+    )
+    live_context.__exit__ = Mock(
+        return_value=False
+    )
+
+    with (
+        patch(
+            "app.dashboard.application.Live",
+            return_value=live_context,
+        ),
+        patch(
+            "app.dashboard.application.monotonic",
+            side_effect=(
+                0.0,
+                0.1,
+                0.2,
+            ),
+        ),
+    ):
+        application.run(
+            refresh_interval_seconds=1.0,
+            max_iterations=2,
+        )
+
+    assert application.run_once.call_count == 2
+
+    assert live_instance.update.call_args_list == [
+        call(first_layout, refresh=True),
+        call(second_layout, refresh=True),
+    ]
+
+    assert (
+        application.navigation_state.active_connections.offset
+        == 1
+    )
+
+    assert keyboard_input.read_available.call_args_list == [
+        call(timeout_seconds=0.9),
+        call(timeout_seconds=0.8),
+    ]
+
+
+def test_run_multiple_navigation_keys_do_not_add_refreshes() -> None:
+    """Varias teclas dentro del intervalo no deben recapturar telemetría."""
+
+    application = DashboardApplication(
+        mediamtx_adapter=Mock(),
+        session_adapter=Mock(),
+        streaming_service=Mock(),
+        session_service=Mock(),
+        dashboard_service=Mock(),
+        dashboard_renderer=Mock(),
+        system_service=Mock(),
+    )
+
+    first_layout = Mock(spec=Layout)
+    second_layout = Mock(spec=Layout)
+
+    application.run_once = Mock(
+        side_effect=(
+            first_layout,
+            second_layout,
+        )
+    )
+
+    application._navigation_totals = DashboardNavigationTotals(
+        active_connections=20,
+        active_alarms=20,
+        recent_events=20,
+    )
+
+    keyboard_input = Mock()
+    keyboard_input.active = True
+    keyboard_input.__enter__ = Mock(
+        return_value=keyboard_input
+    )
+    keyboard_input.__exit__ = Mock(
+        return_value=False
+    )
+    keyboard_input.read_available.side_effect = (
+        b"\x1b[B",
+        b"\x1b[B",
+        b"\t",
+        b"\x1b[6~",
+        None,
+    )
+
+    application._keyboard_input = keyboard_input
+
+    live_instance = Mock()
+
+    live_context = Mock()
+    live_context.__enter__ = Mock(
+        return_value=live_instance
+    )
+    live_context.__exit__ = Mock(
+        return_value=False
+    )
+
+    with (
+        patch(
+            "app.dashboard.application.Live",
+            return_value=live_context,
+        ),
+        patch(
+            "app.dashboard.application.monotonic",
+            side_effect=(
+                0.0,
+                0.1,
+                0.2,
+                0.3,
+                0.4,
+                0.5,
+            ),
+        ),
+    ):
+        application.run(
+            refresh_interval_seconds=1.0,
+            max_iterations=2,
+        )
+
+    assert application.run_once.call_count == 2
+
+    assert (
+        application.navigation_state.active_connections.offset
+        == 2
+    )
+
+    assert (
+        application.navigation_state.active_panel.value
+        == "active_alarms"
+    )
+
+    assert (
+        application.navigation_state.active_alarms.offset
+        == 5
+    )
+
+
+def test_run_once_passes_current_navigation_state_to_renderer() -> None:
+    """El renderer debe recibir el estado UI vigente de la aplicación."""
+
+    from app.dashboard.models.dashboard_navigation_state import (
+        DashboardNavigationState,
+        NavigablePanel,
+    )
+    from app.dashboard.models.panel_viewport import PanelViewport
+
+    application = Mock(spec=DashboardApplication)
+
+    navigation_state = DashboardNavigationState(
+        active_panel=NavigablePanel.RECENT_EVENTS,
+        active_connections=PanelViewport(
+            offset=3,
+            page_size=7,
+        ),
+        active_alarms=PanelViewport(
+            offset=5,
+            page_size=5,
+        ),
+        recent_events=PanelViewport(
+            offset=10,
+            page_size=5,
+        ),
+    )
+
+    dashboard_data = Mock(spec=DashboardData)
+    rendered_dashboard = Mock(spec=Layout)
+
+    application.build_dashboard.return_value = dashboard_data
+    application._dashboard_renderer = Mock()
+    application._dashboard_renderer.render.return_value = (
+        rendered_dashboard
+    )
+    application._navigation_state = navigation_state
+
+    result = DashboardApplication.run_once(application)
+
+    assert result is rendered_dashboard
+
+    application._dashboard_renderer.render.assert_called_once_with(
+        dashboard_data,
+        navigation_state=navigation_state,
+    )

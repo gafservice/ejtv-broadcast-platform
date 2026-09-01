@@ -21,6 +21,7 @@ class RecentEventRowData:
     role: str = "-"
 
     def __post_init__(self) -> None:
+
         for field_name in (
             "event_id",
             "event_type",
@@ -75,8 +76,23 @@ class RecentEventsPanelData:
     """Colección de eventos recientes preparada para el dashboard."""
 
     events: tuple[RecentEventRowData, ...]
+    total_items: int | None = None
 
     def __post_init__(self) -> None:
+        if self.total_items is not None:
+            if (
+                isinstance(self.total_items, bool)
+                or not isinstance(self.total_items, int)
+            ):
+                raise TypeError(
+                    "total_items must be an int or None"
+                )
+
+            if self.total_items < 0:
+                raise ValueError(
+                    "total_items must be greater than or equal to zero"
+                )
+
         if not isinstance(
             self.events,
             tuple,

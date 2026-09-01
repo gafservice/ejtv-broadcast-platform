@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 from datetime import datetime
-from time import sleep
+from time import monotonic, sleep
 
 
 from rich.layout import Layout
@@ -14,7 +15,25 @@ from app.adapters.mediamtx.metrics_client import MediaMTXMetricsClient
 from app.adapters.mediamtx.metrics_parser import MediaMTXMetricsParser
 from app.adapters.mediamtx.session_adapter import MediaMTXSessionAdapter
 from app.dashboard.renderers.dashboard_renderer import DashboardRenderer
+from app.dashboard.models.dashboard_navigation_action import (
+    DashboardNavigationAction,
+)
+from app.dashboard.models.dashboard_navigation_state import (
+    DashboardNavigationState,
+)
+from app.dashboard.models.dashboard_navigation_totals import (
+    DashboardNavigationTotals,
+)
 from app.dashboard.models import DashboardData
+from app.dashboard.services.dashboard_navigation_controller import (
+    DashboardNavigationController,
+)
+from app.dashboard.services.dashboard_key_parser import (
+    DashboardKeyParser,
+)
+from app.dashboard.services.posix_keyboard_input import (
+    PosixKeyboardInput,
+)
 from app.dashboard.services.dashboard_service import DashboardService
 from app.dashboard.services.dashboard_snapshot_service import (
     DashboardSnapshotInput,
@@ -74,6 +93,10 @@ class DashboardApplication:
         alarm_service: AlarmService | None = None,
         node_id: NodeId | None = None,
         instance_id: NodeInstanceId | None = None,
+        navigation_state: DashboardNavigationState | None = None,
+        navigation_controller: DashboardNavigationController | None = None,
+        key_parser: DashboardKeyParser | None = None,
+        keyboard_input: PosixKeyboardInput | None = None,
     ) -> None:
         self._mediamtx_adapter = mediamtx_adapter
         self._session_adapter = session_adapter
@@ -111,6 +134,32 @@ class DashboardApplication:
         self._node_id = node_id
         self._instance_id = instance_id
 
+        self._navigation_state = (
+            navigation_state
+            if navigation_state is not None
+            else DashboardNavigationState()
+        )
+
+        self._navigation_totals = DashboardNavigationTotals()
+
+        self._navigation_controller = (
+            navigation_controller
+            if navigation_controller is not None
+            else DashboardNavigationController()
+        )
+
+        self._key_parser = (
+            key_parser
+            if key_parser is not None
+            else DashboardKeyParser()
+        )
+
+        self._keyboard_input = (
+            keyboard_input
+            if keyboard_input is not None
+            else PosixKeyboardInput()
+        )
+
         self._previous_snapshot: MediaMTXSnapshot | None = None
         self._previous_session_snapshot: SessionSnapshot | None = None
         self._previous_system_resources: SystemResources | None = None
@@ -118,6 +167,58 @@ class DashboardApplication:
 
         self._validate_health_dependencies()
         self._validate_noc_dependencies()
+
+    @property
+    def navigation_state(self) -> DashboardNavigationState:
+        """Estado interactivo actual del dashboard."""
+
+        return self._navigation_state
+
+    @property
+    def navigation_totals(self) -> DashboardNavigationTotals:
+        """Totales navegables de la última captura."""
+
+        return self._navigation_totals
+
+    def set_navigation_state(
+        self,
+        state: DashboardNavigationState,
+    ) -> None:
+        """Reemplaza el estado interactivo del dashboard."""
+
+        if not isinstance(
+            state,
+            DashboardNavigationState,
+        ):
+            raise TypeError(
+                "state must be a DashboardNavigationState"
+            )
+
+        self._navigation_state = state
+
+    def apply_navigation_action(
+        self,
+        action: DashboardNavigationAction,
+    ) -> None:
+        """Aplica una acción sobre el panel actualmente seleccionado."""
+
+        if not isinstance(
+            action,
+            DashboardNavigationAction,
+        ):
+            raise TypeError(
+                "action must be a DashboardNavigationAction"
+            )
+
+        total_items = self._navigation_totals.for_panel(
+            self._navigation_state.active_panel
+        )
+
+        self._navigation_state = self._navigation_controller.apply(
+            self._navigation_state,
+            action,
+            total_items=total_items,
+        )
 
     @property
     def latest_health(self) -> StreamingHealth | None:
@@ -215,6 +316,7 @@ class DashboardApplication:
             recent_events = (
                 self._dashboard_service.build_recent_events_panel(
                     events=event_records,
+                    viewport=self._navigation_state.recent_events,
                 )
             )
 
@@ -226,6 +328,7 @@ class DashboardApplication:
             active_alarms = (
                 self._dashboard_service.build_active_alarms_panel(
                     alarms=alarm_records,
+                    viewport=self._navigation_state.active_alarms,
                 )
             )
 
@@ -236,6 +339,9 @@ class DashboardApplication:
             "snapshot": snapshot,
             "measurement": measurement,
             "session_measurement": session_measurement,
+            "active_connections_viewport": (
+                self._navigation_state.active_connections
+            ),
             "system_resources": system_resources,
             "previous_system_resources": self._previous_system_resources,
             "network_interfaces": network_interfaces,
@@ -259,6 +365,18 @@ class DashboardApplication:
             snapshot_input
         )
 
+        self._navigation_totals = DashboardNavigationTotals(
+            active_connections=self._panel_total(
+                dashboard_data.active_connections
+            ),
+            active_alarms=self._panel_total(
+                dashboard_data.active_alarms
+            ),
+            recent_events=self._panel_total(
+                dashboard_data.recent_events
+            ),
+        )
+
         self._previous_snapshot = snapshot
         self._previous_session_snapshot = session_snapshot
         self._previous_system_resources = system_resources
@@ -273,8 +391,9 @@ class DashboardApplication:
         dashboard_data = self.build_dashboard()
 
         return self._dashboard_renderer.render(
-            dashboard_data
-    )
+            dashboard_data,
+            navigation_state=self._navigation_state,
+        )
 
     def run(
         self,
@@ -286,10 +405,29 @@ class DashboardApplication:
 
         iteration = 0
 
-        with Live(
-            screen=True,
-            auto_refresh=False,
-        ) as live:
+        keyboard_input = getattr(
+            self,
+            "_keyboard_input",
+            None,
+        )
+        key_parser = getattr(
+            self,
+            "_key_parser",
+            None,
+        )
+
+        with ExitStack() as stack:
+            live = stack.enter_context(
+                Live(
+                    screen=True,
+                    auto_refresh=False,
+                )
+            )
+
+            if keyboard_input is not None:
+                keyboard_input = stack.enter_context(
+                    keyboard_input
+                )
 
             while (
                 max_iterations is None
@@ -310,7 +448,83 @@ class DashboardApplication:
                 ):
                     break
 
-                sleep(refresh_interval_seconds)
+                should_quit = DashboardApplication._wait_for_navigation_input(
+                    self,
+                    refresh_interval_seconds=(
+                        refresh_interval_seconds
+                    ),
+                    keyboard_input=keyboard_input,
+                    key_parser=key_parser,
+                )
+
+                if should_quit:
+                    break
+
+    def _wait_for_navigation_input(
+        self,
+        *,
+        refresh_interval_seconds: float,
+        keyboard_input: PosixKeyboardInput | None,
+        key_parser: DashboardKeyParser | None,
+    ) -> bool:
+        """Espera el próximo refresh procesando navegación sin recapturar."""
+
+        if (
+            keyboard_input is None
+            or key_parser is None
+            or not keyboard_input.active
+        ):
+            sleep(refresh_interval_seconds)
+            return False
+
+        deadline = monotonic() + refresh_interval_seconds
+
+        while True:
+            remaining = deadline - monotonic()
+
+            if remaining <= 0:
+                return False
+
+            sequence = keyboard_input.read_available(
+                timeout_seconds=remaining,
+            )
+
+            if sequence is None:
+                return False
+
+            action = key_parser.parse(sequence)
+
+            if action is None:
+                continue
+
+            if action is DashboardNavigationAction.QUIT:
+                return True
+
+            self.apply_navigation_action(action)
+
+    @staticmethod
+    def _panel_total(panel: object | None) -> int:
+        """Obtiene un total navegable válido informado por un panel."""
+
+        if panel is None:
+            return 0
+
+        total_items = getattr(
+            panel,
+            "total_items",
+            None,
+        )
+
+        if (
+            isinstance(total_items, bool)
+            or not isinstance(total_items, int)
+        ):
+            return 0
+
+        if total_items < 0:
+            return 0
+
+        return total_items
 
     def _build_streaming_health(
     self,
