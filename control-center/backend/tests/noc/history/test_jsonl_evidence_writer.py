@@ -707,3 +707,253 @@ def test_multiprocess_distinct_identities_are_all_preserved(
     }
 
     assert actual_ids == set(event_ids)
+
+
+def test_append_event_is_rejected_after_day_is_sealed(
+    tmp_path,
+) -> None:
+    import pytest
+
+    from app.noc.history.evidence_day_sealer import (
+        EvidenceDaySealer,
+    )
+    from app.noc.history.jsonl_evidence_writer import (
+        EvidenceDaySealedError,
+    )
+
+    timestamp = datetime(
+        2026,
+        9,
+        1,
+        12,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    writer = JsonlEvidenceWriter(tmp_path)
+
+    writer.append_event(
+        make_event_record(
+            event_id="event-before-seal",
+            timestamp=timestamp,
+        )
+    )
+
+    EvidenceDaySealer(
+        tmp_path
+    ).seal_day(
+        timestamp.date()
+    )
+
+    with pytest.raises(
+        EvidenceDaySealedError
+    ):
+        writer.append_event(
+            make_event_record(
+                event_id="event-after-seal",
+                timestamp=timestamp,
+            )
+        )
+
+
+def test_append_alarm_transition_is_rejected_after_day_is_sealed(
+    tmp_path,
+) -> None:
+    import pytest
+
+    from app.noc.history.evidence_day_sealer import (
+        EvidenceDaySealer,
+    )
+    from app.noc.history.jsonl_evidence_writer import (
+        EvidenceDaySealedError,
+    )
+
+    timestamp = datetime(
+        2026,
+        9,
+        1,
+        12,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    writer = JsonlEvidenceWriter(tmp_path)
+
+    writer.append_alarm_transition(
+        make_transition(
+            transition_id="transition-before-seal",
+            timestamp=timestamp,
+        )
+    )
+
+    EvidenceDaySealer(
+        tmp_path
+    ).seal_day(
+        timestamp.date()
+    )
+
+    with pytest.raises(
+        EvidenceDaySealedError
+    ):
+        writer.append_alarm_transition(
+            make_transition(
+                transition_id="transition-after-seal",
+                timestamp=timestamp,
+            )
+        )
+
+
+def _multiprocess_seal_race_append(
+    root_path: str,
+    start_event,
+    result_queue,
+) -> None:
+    from datetime import datetime, timezone
+
+    from app.noc.history.jsonl_evidence_writer import (
+        EvidenceDaySealedError,
+        JsonlEvidenceWriter,
+    )
+
+    timestamp = datetime(
+        2026,
+        9,
+        1,
+        12,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    writer = JsonlEvidenceWriter(
+        root_path
+    )
+
+    start_event.wait()
+
+    try:
+        writer.append_event(
+            make_event_record(
+                event_id="event-seal-race",
+                timestamp=timestamp,
+            )
+        )
+    except EvidenceDaySealedError:
+        result_queue.put(
+            ("append", "sealed")
+        )
+    else:
+        result_queue.put(
+            ("append", "appended")
+        )
+
+
+def _multiprocess_seal_race_seal(
+    root_path: str,
+    start_event,
+    result_queue,
+) -> None:
+    from datetime import date
+
+    from app.noc.history.evidence_day_sealer import (
+        EvidenceDaySealer,
+    )
+
+    sealer = EvidenceDaySealer(
+        root_path
+    )
+
+    start_event.wait()
+
+    result = sealer.seal_day(
+        date(2026, 9, 1)
+    )
+
+    result_queue.put(
+        (
+            "seal",
+            "created"
+            if result.created
+            else "existing",
+        )
+    )
+
+
+def test_multiprocess_seal_and_append_are_serialized(
+    tmp_path,
+) -> None:
+    import multiprocessing
+
+    from datetime import date
+
+    from app.noc.history.evidence_day_sealer import (
+        EvidenceDaySealer,
+    )
+
+    context = multiprocessing.get_context(
+        "spawn"
+    )
+
+    start_event = context.Event()
+    result_queue = context.Queue()
+
+    append_process = context.Process(
+        target=_multiprocess_seal_race_append,
+        args=(
+            str(tmp_path),
+            start_event,
+            result_queue,
+        ),
+    )
+
+    seal_process = context.Process(
+        target=_multiprocess_seal_race_seal,
+        args=(
+            str(tmp_path),
+            start_event,
+            result_queue,
+        ),
+    )
+
+    append_process.start()
+    seal_process.start()
+
+    start_event.set()
+
+    append_process.join(
+        timeout=10
+    )
+    seal_process.join(
+        timeout=10
+    )
+
+    assert append_process.exitcode == 0
+    assert seal_process.exitcode == 0
+
+    results = {
+        result_queue.get(timeout=5)
+        for _ in range(2)
+    }
+
+    assert (
+        "seal",
+        "created",
+    ) in results
+
+    append_results = {
+        result
+        for source, result in results
+        if source == "append"
+    }
+
+    assert append_results in (
+        {"appended"},
+        {"sealed"},
+    )
+
+    sealer = EvidenceDaySealer(
+        tmp_path
+    )
+
+    assert sealer.verify_day(
+        date(2026, 9, 1)
+    ) is True

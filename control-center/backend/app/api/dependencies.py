@@ -35,6 +35,9 @@ from app.noc.history.sqlite_database import (
 from app.noc.history.sqlite_event_repository import (
     SQLiteEventHistoryRepository,
 )
+from app.noc.history.evidence_day_sealer import (
+    EvidenceDaySealer,
+)
 from app.noc.history.jsonl_evidence_writer import (
     JsonlEvidenceWriter,
 )
@@ -322,6 +325,15 @@ def get_daily_alarm_continuity_service(
 
 
 @lru_cache
+def get_evidence_day_sealer() -> EvidenceDaySealer:
+    """Construye el sellador diario SHA-256 del NOC."""
+
+    return EvidenceDaySealer(
+        get_noc_evidence_writer().root_path
+    )
+
+
+@lru_cache
 def get_daily_history_maintenance_runtime(
 ) -> DailyHistoryMaintenanceRuntime:
     """Construye el mantenimiento histórico diario del NOC."""
@@ -332,6 +344,9 @@ def get_daily_history_maintenance_runtime(
         ),
         reconciliation_service=(
             get_evidence_reconciliation_service()
+        ),
+        evidence_day_sealer=(
+            get_evidence_day_sealer()
         ),
     )
 

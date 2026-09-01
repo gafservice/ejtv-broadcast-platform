@@ -9,6 +9,9 @@ from typing import Callable
 
 from app.noc.domain.node_id import NodeId
 from app.noc.domain.node_instance import NodeInstanceId
+from app.noc.history.evidence_day_sealer import (
+    EvidenceDaySealer,
+)
 from app.noc.services.daily_alarm_continuity_service import (
     DailyAlarmContinuityService,
 )
@@ -28,6 +31,7 @@ class DailyHistoryMaintenanceRuntime:
         *,
         continuity_service: DailyAlarmContinuityService,
         reconciliation_service: EvidenceReconciliationService,
+        evidence_day_sealer: EvidenceDaySealer,
         clock: Callable[[], datetime] | None = None,
         retry_delay_seconds: float = 60.0,
     ) -> None:
@@ -47,6 +51,15 @@ class DailyHistoryMaintenanceRuntime:
             raise TypeError(
                 "reconciliation_service must be an "
                 "EvidenceReconciliationService"
+            )
+
+        if not isinstance(
+            evidence_day_sealer,
+            EvidenceDaySealer,
+        ):
+            raise TypeError(
+                "evidence_day_sealer must be an "
+                "EvidenceDaySealer"
             )
 
         if (
@@ -70,6 +83,7 @@ class DailyHistoryMaintenanceRuntime:
 
         self._continuity_service = continuity_service
         self._reconciliation_service = reconciliation_service
+        self._evidence_day_sealer = evidence_day_sealer
         self._clock = clock or (
             lambda: datetime.now(timezone.utc)
         )
@@ -129,6 +143,17 @@ class DailyHistoryMaintenanceRuntime:
             end=reconciliation_end,
             node_id=node_id,
             instance_id=instance_id,
+        )
+
+        mature_day = (
+            effective_through.astimezone(
+                timezone.utc
+            ).date()
+            - timedelta(days=2)
+        )
+
+        self._evidence_day_sealer.seal_day(
+            mature_day
         )
 
     async def run_forever(

@@ -3,6 +3,9 @@ from unittest.mock import Mock
 
 from app.noc.domain.node_id import NodeId
 from app.noc.domain.node_instance import NodeInstanceId
+from app.noc.history.evidence_day_sealer import (
+    EvidenceDaySealer,
+)
 from app.noc.runtime.daily_history_maintenance import (
     DailyHistoryMaintenanceRuntime,
 )
@@ -78,6 +81,9 @@ def test_run_once_executes_continuity_before_reconciliation() -> None:
     reconciliation = Mock(
         spec=EvidenceReconciliationService
     )
+    sealer = Mock(
+        spec=EvidenceDaySealer
+    )
 
     continuity.catch_up.side_effect = (
         lambda **_: calls.append("continuity")
@@ -86,10 +92,14 @@ def test_run_once_executes_continuity_before_reconciliation() -> None:
     reconciliation.reconcile_between.side_effect = (
         lambda **_: calls.append("reconciliation")
     )
+    sealer.seal_day.side_effect = (
+        lambda *_: calls.append("sealing")
+    )
 
     runtime = DailyHistoryMaintenanceRuntime(
         continuity_service=continuity,
         reconciliation_service=reconciliation,
+        evidence_day_sealer=sealer,
     )
 
     node_id = NodeId(
@@ -127,6 +137,7 @@ def test_run_once_executes_continuity_before_reconciliation() -> None:
     assert calls == [
         "continuity",
         "reconciliation",
+        "sealing",
     ]
 
     continuity.catch_up.assert_called_once_with(
@@ -142,6 +153,10 @@ def test_run_once_executes_continuity_before_reconciliation() -> None:
         instance_id=instance_id,
     )
 
+    sealer.seal_day.assert_called_once_with(
+        boundary.date() - timedelta(days=2)
+    )
+
 
 def test_run_forever_executes_at_next_utc_boundary(
     monkeypatch,
@@ -155,6 +170,9 @@ def test_run_forever_executes_at_next_utc_boundary(
     )
     reconciliation = Mock(
         spec=EvidenceReconciliationService
+    )
+    sealer = Mock(
+        spec=EvidenceDaySealer
     )
 
     continuity.catch_up.side_effect = (
@@ -200,6 +218,7 @@ def test_run_forever_executes_at_next_utc_boundary(
     runtime = DailyHistoryMaintenanceRuntime(
         continuity_service=continuity,
         reconciliation_service=reconciliation,
+        evidence_day_sealer=sealer,
         clock=lambda: next(times),
     )
 
@@ -336,6 +355,9 @@ def test_daily_boundary_persists_carried_forward_and_writes_new_day_jsonl(
     evidence_writer = JsonlEvidenceWriter(
         tmp_path / "evidence"
     )
+    evidence_day_sealer = EvidenceDaySealer(
+        tmp_path / "evidence"
+    )
 
     continuity_service = DailyAlarmContinuityService(
         alarm_repo
@@ -386,6 +408,7 @@ def test_daily_boundary_persists_carried_forward_and_writes_new_day_jsonl(
     runtime = DailyHistoryMaintenanceRuntime(
         continuity_service=continuity_service,
         reconciliation_service=reconciliation_service,
+        evidence_day_sealer=evidence_day_sealer,
     )
 
     boundary = datetime(
@@ -461,6 +484,9 @@ def test_retry_delay_must_be_positive() -> None:
     reconciliation = Mock(
         spec=EvidenceReconciliationService
     )
+    sealer = Mock(
+        spec=EvidenceDaySealer
+    )
 
     with pytest.raises(
         ValueError,
@@ -469,6 +495,7 @@ def test_retry_delay_must_be_positive() -> None:
         DailyHistoryMaintenanceRuntime(
             continuity_service=continuity,
             reconciliation_service=reconciliation,
+        evidence_day_sealer=sealer,
             retry_delay_seconds=0,
         )
 
@@ -483,6 +510,9 @@ def test_run_forever_retries_same_boundary_after_failure(
     )
     reconciliation = Mock(
         spec=EvidenceReconciliationService
+    )
+    sealer = Mock(
+        spec=EvidenceDaySealer
     )
 
     now = datetime(
@@ -508,6 +538,7 @@ def test_run_forever_retries_same_boundary_after_failure(
     runtime = DailyHistoryMaintenanceRuntime(
         continuity_service=continuity,
         reconciliation_service=reconciliation,
+        evidence_day_sealer=sealer,
         clock=lambda: now,
         retry_delay_seconds=7.0,
     )

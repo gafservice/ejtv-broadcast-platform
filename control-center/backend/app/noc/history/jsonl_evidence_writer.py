@@ -10,13 +10,15 @@ Conflicting reuse of an identifier is rejected.
 
 from __future__ import annotations
 
-import fcntl
 import json
 import os
 from pathlib import Path
 from threading import RLock
 
 from app.noc.history.alarm_transition import AlarmTransition
+from app.noc.history.daily_evidence_lock import (
+    DailyEvidenceLock,
+)
 from app.noc.history.evidence_writer import (
     EvidenceWriter,
     serialize_alarm_transition_evidence,
@@ -29,12 +31,21 @@ class EvidenceConflictError(ValueError):
     """Raised when an evidence identifier is reused with different data."""
 
 
+class EvidenceDaySealedError(RuntimeError):
+    """Raised when evidence is appended to a sealed UTC day."""
+
+
 class JsonlEvidenceWriter(EvidenceWriter):
     """Append operational evidence to UTC daily JSONL files."""
+
+    MANIFEST_FILENAME = "manifest.sha256"
 
     def __init__(self, root_path: str | Path) -> None:
         self._root_path = Path(root_path)
         self._lock = RLock()
+        self._daily_lock = DailyEvidenceLock(
+            self._root_path
+        )
 
     @property
     def root_path(self) -> Path:
@@ -52,6 +63,7 @@ class JsonlEvidenceWriter(EvidenceWriter):
         )
 
         self._append_idempotent(
+            day=record.recorded_at.date(),
             path=path,
             encoded=serialize_event_evidence(record),
             identity_field="event_id",
@@ -70,6 +82,7 @@ class JsonlEvidenceWriter(EvidenceWriter):
         )
 
         self._append_idempotent(
+            day=transition.timestamp.date(),
             path=path,
             encoded=serialize_alarm_transition_evidence(
                 transition
@@ -97,30 +110,34 @@ class JsonlEvidenceWriter(EvidenceWriter):
     def _append_idempotent(
         self,
         *,
+        day,
         path: Path,
         encoded: str,
         identity_field: str,
         identity: str,
     ) -> None:
-        """Append one canonical line with process-safe idempotency."""
+        """Append one canonical line with day-wide process safety."""
 
         with self._lock:
-            path.parent.mkdir(
-                parents=True,
-                exist_ok=True,
-            )
-
-            with path.open(
-                "a+",
-                encoding="utf-8",
-                newline="\n",
-            ) as handle:
-                fcntl.flock(
-                    handle.fileno(),
-                    fcntl.LOCK_EX,
+            with self._daily_lock.exclusive(
+                day
+            ) as directory:
+                manifest_path = (
+                    directory
+                    / self.MANIFEST_FILENAME
                 )
 
-                try:
+                if manifest_path.exists():
+                    raise EvidenceDaySealedError(
+                        "evidence day is sealed: "
+                        f"{directory}"
+                    )
+
+                with path.open(
+                    "a+",
+                    encoding="utf-8",
+                    newline="\n",
+                ) as handle:
                     handle.seek(0)
 
                     for raw_line in handle:
@@ -164,9 +181,3 @@ class JsonlEvidenceWriter(EvidenceWriter):
                     handle.write("\n")
                     handle.flush()
                     os.fsync(handle.fileno())
-
-                finally:
-                    fcntl.flock(
-                        handle.fileno(),
-                        fcntl.LOCK_UN,
-                    )
