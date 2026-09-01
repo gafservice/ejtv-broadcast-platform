@@ -14,6 +14,9 @@ from app.noc.registry.registry import (
     NodeNotFoundError,
     NodeRegistry,
 )
+from app.noc.history.event_history_record import (
+    EventHistoryRecord,
+)
 from app.noc.history.memory_repository import (
     InMemoryEventHistoryRepository,
 )
@@ -506,3 +509,155 @@ def test_history_failure_does_not_modify_instance_events():
         instance.instance_id,
         event.event_id,
     ) is None
+
+
+class FailOnceNodeRepository(MemoryRepository):
+    def __init__(self):
+        super().__init__()
+        self.fail_next_save = False
+
+    def save(self, node):
+        if self.fail_next_save:
+            self.fail_next_save = False
+            raise RuntimeError(
+                "simulated node repository failure"
+            )
+
+        return super().save(node)
+
+
+def test_record_retry_succeeds_when_durable_history_already_matches():
+    repository = FailOnceNodeRepository()
+    registry = NodeRegistry(repository)
+
+    node = Node(
+        node_id=NodeId.create(
+            id="streaming-core",
+            name="streaming",
+            display_name="Streaming Core",
+            created_at=BASE_TIME,
+        ),
+        node_type=NodeType.STREAMING,
+    )
+
+    instance = node.create_instance(
+        instance_id="streaming-primary"
+    )
+
+    registry.register(node)
+
+    history = InMemoryEventHistoryRepository()
+
+    service = EventService(
+        registry,
+        history_repository=history,
+    )
+
+    event = make_event()
+
+    repository.fail_next_save = True
+
+    with pytest.raises(
+        RuntimeError,
+        match="simulated node repository failure",
+    ):
+        service.record(
+            node.node_id,
+            instance.instance_id,
+            event,
+        )
+
+    historical = history.get(
+        event.event_id
+    )
+
+    assert historical is not None
+    assert historical.event == event
+
+    receipt = service.record(
+        node.node_id,
+        instance.instance_id,
+        event,
+    )
+
+    assert receipt.disposition is EventDisposition.RECORDED
+    assert receipt.event == event
+
+    assert instance.events == (event,)
+
+    historical = history.get(
+        event.event_id
+    )
+
+    assert historical is not None
+    assert historical.event == event
+
+
+def test_record_rejects_conflicting_existing_durable_event():
+    repository = MemoryRepository()
+    registry = NodeRegistry(repository)
+
+    node = Node(
+        node_id=NodeId.create(
+            id="streaming-core",
+            name="streaming",
+            display_name="Streaming Core",
+            created_at=BASE_TIME,
+        ),
+        node_type=NodeType.STREAMING,
+    )
+
+    instance = node.create_instance(
+        instance_id="streaming-primary"
+    )
+
+    registry.register(node)
+
+    history = InMemoryEventHistoryRepository()
+
+    original = make_event()
+
+    history.append(
+        EventHistoryRecord(
+            event=original,
+            node_id=node.node_id,
+            instance_id=instance.instance_id,
+            recorded_at=original.timestamp,
+        )
+    )
+
+    conflicting = EventRecord(
+        event_id=original.event_id,
+        event_type=original.event_type,
+        severity=original.severity,
+        timestamp=original.timestamp,
+        source=original.source,
+        title="Conflicting event",
+        description=original.description,
+        attributes=original.attributes,
+        correlation_id=original.correlation_id,
+    )
+
+    service = EventService(
+        registry,
+        history_repository=history,
+    )
+
+    with pytest.raises(
+        DuplicateEventError,
+        match="conflicting durable history",
+    ):
+        service.record(
+            node.node_id,
+            instance.instance_id,
+            conflicting,
+        )
+
+    assert instance.events == ()
+
+    historical = history.get(
+        original.event_id
+    )
+
+    assert historical is not None
+    assert historical.event == original

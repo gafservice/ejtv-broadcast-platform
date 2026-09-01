@@ -20,6 +20,12 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
     settings.node_network_policy_path = (
         "/tmp/ejtv-01.yaml"
     )
+    settings.noc_history_database_path = (
+        "/tmp/noc-history.db"
+    )
+    settings.noc_history_database_path = (
+        "/tmp/noc-history.db"
+    )
 
     api_http_client = Mock()
     metrics_http_client = Mock()
@@ -41,6 +47,11 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
 
     repository = Mock()
     node_registry = Mock()
+
+    history_database = Mock()
+    event_history_repository = Mock()
+    alarm_history_repository = Mock()
+    alarm_recovery_service = Mock()
 
     bootstrap_result = Mock()
     bootstrap_result.node.node_id = Mock()
@@ -208,6 +219,34 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
                         "app.dashboard.live_monitor.NodeInstanceId",
                         return_value=node_instance_id,
                     )
+        )
+
+        history_database_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.SQLiteHistoryDatabase",
+                return_value=history_database,
+            )
+        )
+
+        event_history_repository_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.SQLiteEventHistoryRepository",
+                return_value=event_history_repository,
+            )
+        )
+
+        alarm_history_repository_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.SQLiteAlarmHistoryRepository",
+                return_value=alarm_history_repository,
+            )
+        )
+
+        alarm_recovery_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.AlarmRecoveryService",
+                return_value=alarm_recovery_service,
+            )
         )
 
         metric_service_class = stack.enter_context(
@@ -447,6 +486,18 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
         "streaming-primary"
     )
 
+    history_database_class.assert_called_once_with(
+        "/tmp/noc-history.db"
+    )
+
+    event_history_repository_class.assert_called_once_with(
+        history_database
+    )
+
+    alarm_history_repository_class.assert_called_once_with(
+        history_database
+    )
+
     metric_service_class.assert_called_once_with(
         node_registry
     )
@@ -456,7 +507,8 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
     )
 
     event_service_class.assert_called_once_with(
-        node_registry
+        node_registry,
+        history_repository=event_history_repository,
     )
 
     health_transition_event_service_class.assert_called_once_with(
@@ -468,7 +520,18 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
     )
 
     alarm_service_class.assert_called_once_with(
-        node_registry
+        node_registry,
+        history_repository=alarm_history_repository,
+    )
+
+    alarm_recovery_service_class.assert_called_once_with(
+        registry=node_registry,
+        history_repository=alarm_history_repository,
+    )
+
+    alarm_recovery_service.recover.assert_called_once_with(
+        node_id=bootstrap_result.node.node_id,
+        instance_id=node_instance_id,
     )
 
     health_transition_alarm_service_class.assert_called_once_with(

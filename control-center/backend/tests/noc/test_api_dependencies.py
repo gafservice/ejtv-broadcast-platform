@@ -1,7 +1,11 @@
 """Tests for NOC runtime dependency composition."""
 
 from app.api.dependencies import (
+    get_alarm_history_repository,
+    get_alarm_recovery_service,
     get_alarm_service,
+    get_event_history_repository,
+    get_noc_history_database,
     get_health_service,
     get_capacity_service,
     get_heartbeat_service,
@@ -26,7 +30,11 @@ def clear_noc_dependency_caches() -> None:
     """Reset all NOC dependency factories."""
 
     get_snapshot_service.cache_clear()
+    get_alarm_recovery_service.cache_clear()
     get_alarm_service.cache_clear()
+    get_alarm_history_repository.cache_clear()
+    get_event_history_repository.cache_clear()
+    get_noc_history_database.cache_clear()
     get_metric_service.cache_clear()
     get_heartbeat_service.cache_clear()
     get_health_service.cache_clear()
@@ -279,4 +287,47 @@ def test_health_service_uses_shared_registry() -> None:
     assert (
         get_health_service().registry
         is registry
+    )
+
+
+def test_noc_history_database_is_cached() -> None:
+    first = get_noc_history_database()
+    second = get_noc_history_database()
+
+    assert first is second
+
+
+def test_history_repositories_share_database() -> None:
+    database = get_noc_history_database()
+
+    event_history = get_event_history_repository()
+    alarm_history = get_alarm_history_repository()
+
+    assert event_history._database is database
+    assert alarm_history._database is database
+
+
+def test_alarm_service_uses_shared_history_repository() -> None:
+    history = get_alarm_history_repository()
+
+    assert (
+        get_alarm_service().history_repository
+        is history
+    )
+
+
+def test_alarm_recovery_service_is_cached() -> None:
+    first = get_alarm_recovery_service()
+    second = get_alarm_recovery_service()
+
+    assert first is second
+
+
+def test_alarm_recovery_service_uses_shared_dependencies() -> None:
+    service = get_alarm_recovery_service()
+
+    assert service._registry is get_node_registry()
+    assert (
+        service._history_repository
+        is get_alarm_history_repository()
     )

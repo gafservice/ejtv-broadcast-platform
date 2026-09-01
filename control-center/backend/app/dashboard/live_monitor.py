@@ -34,6 +34,15 @@ from app.noc.domain.node_instance import NodeInstanceId
 from app.noc.infrastructure.memory_repository import (
     InMemoryNodeRepository,
 )
+from app.noc.history.sqlite_alarm_repository import (
+    SQLiteAlarmHistoryRepository,
+)
+from app.noc.history.sqlite_database import (
+    SQLiteHistoryDatabase,
+)
+from app.noc.history.sqlite_event_repository import (
+    SQLiteEventHistoryRepository,
+)
 from app.noc.infrastructure.node_network_policy_loader import (
     NodeNetworkPolicyLoader,
 )
@@ -51,6 +60,9 @@ from app.noc.runtime.session_operational_runtime import (
     SessionOperationalRuntime,
 )
 from app.noc.services.alarm_service import AlarmService
+from app.noc.services.alarm_recovery_service import (
+    AlarmRecoveryService,
+)
 from app.noc.services.critical_path_no_readers_alarm_service import (
     CriticalPathNoReadersAlarmService,
 )
@@ -153,6 +165,22 @@ def build_dashboard_application() -> DashboardApplication:
         DEFAULT_INSTANCE_ID
     )
 
+    history_database = SQLiteHistoryDatabase(
+        settings.noc_history_database_path
+    )
+
+    event_history_repository = (
+        SQLiteEventHistoryRepository(
+            history_database
+        )
+    )
+
+    alarm_history_repository = (
+        SQLiteAlarmHistoryRepository(
+            history_database
+        )
+    )
+
     metric_service = MetricService(
         node_registry
     )
@@ -162,11 +190,23 @@ def build_dashboard_application() -> DashboardApplication:
     )
 
     event_service = EventService(
-        node_registry
+        node_registry,
+        history_repository=event_history_repository,
     )
 
     alarm_service = AlarmService(
-        node_registry
+        node_registry,
+        history_repository=alarm_history_repository,
+    )
+
+    alarm_recovery_service = AlarmRecoveryService(
+        registry=node_registry,
+        history_repository=alarm_history_repository,
+    )
+
+    alarm_recovery_service.recover(
+        node_id=bootstrap_result.node.node_id,
+        instance_id=node_instance_id,
     )
 
     health_transition_event_service = (

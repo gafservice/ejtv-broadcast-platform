@@ -132,20 +132,57 @@ class EventService:
 
         records = self._records(instance)
 
-        if self._find(records, event.event_id) is not None:
-            raise DuplicateEventError(
-                f"event {event.event_id!r} already exists"
+        existing_event = self._find(
+            records,
+            event.event_id,
+        )
+
+        if self._history_repository is None:
+            if existing_event is not None:
+                raise DuplicateEventError(
+                    f"event {event.event_id!r} already exists"
+                )
+        else:
+            history_record = EventHistoryRecord(
+                event=event,
+                node_id=node_id,
+                instance_id=instance_id,
+                recorded_at=event.timestamp,
             )
 
-        if self._history_repository is not None:
-            self._history_repository.append(
-                EventHistoryRecord(
-                    event=event,
-                    node_id=node_id,
-                    instance_id=instance_id,
-                    recorded_at=event.timestamp,
+            existing_history_record = (
+                self._history_repository.get(
+                    event.event_id
                 )
             )
+
+            if existing_event is not None:
+                if existing_event != event:
+                    raise DuplicateEventError(
+                        f"event {event.event_id!r} already exists "
+                        "with conflicting live projection"
+                    )
+
+                if existing_history_record != history_record:
+                    raise DuplicateEventError(
+                        f"event {event.event_id!r} already exists "
+                        "with conflicting durable history"
+                    )
+
+                return EventReceipt(
+                    disposition=EventDisposition.RECORDED,
+                    event=event,
+                )
+
+            if existing_history_record is None:
+                self._history_repository.append(
+                    history_record
+                )
+            elif existing_history_record != history_record:
+                raise DuplicateEventError(
+                    f"event {event.event_id!r} already exists "
+                    "with conflicting durable history"
+                )
 
         instance.events = records + (event,)
 

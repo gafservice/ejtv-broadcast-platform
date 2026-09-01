@@ -65,6 +65,10 @@ class Settings(BaseSettings):
         )
     )
 
+    noc_history_database_path: str = (
+        "data/noc-history.db"
+    )
+
     # ------------------------------------------------------------------
     # Identity
     # ------------------------------------------------------------------

@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI, Request
 
 from app.api.dependencies import (
+    get_alarm_recovery_service,
     get_capacity_service,
     get_node_registry,
     get_system_service,
@@ -43,6 +44,15 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         registry
     )
 
+    node_instance_id = NodeInstanceId(
+        DEFAULT_INSTANCE_ID
+    )
+
+    get_alarm_recovery_service().recover(
+        node_id=bootstrap_result.node.node_id,
+        instance_id=node_instance_id,
+    )
+
     initialize_noc_runtime_info(
         registry
     )
@@ -56,9 +66,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     telemetry_task = asyncio.create_task(
         get_telemetry_refresh_service().run_forever(
             node_id=bootstrap_result.node.node_id,
-            instance_id=NodeInstanceId(
-                DEFAULT_INSTANCE_ID
-            ),
+            instance_id=node_instance_id,
             interval_seconds=5.0,
         ),
         name="noc-telemetry-refresh",

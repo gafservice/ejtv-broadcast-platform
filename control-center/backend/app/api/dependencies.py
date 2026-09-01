@@ -26,6 +26,15 @@ from app.infrastructure.security.jwt_token_provider import JWTTokenProvider
 from app.noc.infrastructure.memory_repository import (
     InMemoryNodeRepository,
 )
+from app.noc.history.sqlite_alarm_repository import (
+    SQLiteAlarmHistoryRepository,
+)
+from app.noc.history.sqlite_database import (
+    SQLiteHistoryDatabase,
+)
+from app.noc.history.sqlite_event_repository import (
+    SQLiteEventHistoryRepository,
+)
 from app.noc.domain.node_network_policy_config import (
     NodeNetworkPolicyConfig,
 )
@@ -34,6 +43,9 @@ from app.noc.infrastructure.node_network_policy_loader import (
 )
 from app.noc.registry.registry import NodeRegistry
 from app.noc.services.alarm_service import AlarmService
+from app.noc.services.alarm_recovery_service import (
+    AlarmRecoveryService,
+)
 from app.noc.services.health_service import HealthService
 from app.noc.services.heartbeat_service import HeartbeatService
 from app.noc.services.capacity_service import CapacityService
@@ -160,6 +172,35 @@ def get_authentication_service() -> AuthenticationService:
 
 
 @lru_cache
+def get_noc_history_database() -> SQLiteHistoryDatabase:
+    """Construye la base durable compartida del histórico NOC."""
+
+    settings = get_settings()
+
+    return SQLiteHistoryDatabase(
+        settings.noc_history_database_path
+    )
+
+
+@lru_cache
+def get_event_history_repository() -> SQLiteEventHistoryRepository:
+    """Construye el repositorio durable de eventos NOC."""
+
+    return SQLiteEventHistoryRepository(
+        get_noc_history_database()
+    )
+
+
+@lru_cache
+def get_alarm_history_repository() -> SQLiteAlarmHistoryRepository:
+    """Construye el repositorio durable de alarmas NOC."""
+
+    return SQLiteAlarmHistoryRepository(
+        get_noc_history_database()
+    )
+
+
+@lru_cache
 def get_noc_repository() -> InMemoryNodeRepository:
     """Construye el repositorio compartido del runtime NOC."""
 
@@ -216,7 +257,18 @@ def get_alarm_service() -> AlarmService:
     """Construye el servicio compartido de alarmas."""
 
     return AlarmService(
-        get_node_registry()
+        get_node_registry(),
+        history_repository=get_alarm_history_repository(),
+    )
+
+
+@lru_cache
+def get_alarm_recovery_service() -> AlarmRecoveryService:
+    """Construye la recuperación durable de alarmas NOC."""
+
+    return AlarmRecoveryService(
+        registry=get_node_registry(),
+        history_repository=get_alarm_history_repository(),
     )
 
 
