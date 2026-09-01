@@ -23,9 +23,6 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
     settings.noc_history_database_path = (
         "/tmp/noc-history.db"
     )
-    settings.noc_history_database_path = (
-        "/tmp/noc-history.db"
-    )
 
     api_http_client = Mock()
     metrics_http_client = Mock()
@@ -52,6 +49,7 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
     event_history_repository = Mock()
     alarm_history_repository = Mock()
     alarm_recovery_service = Mock()
+    history_query_service = Mock()
 
     bootstrap_result = Mock()
     bootstrap_result.node.node_id = Mock()
@@ -246,6 +244,13 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
             patch(
                 "app.dashboard.live_monitor.AlarmRecoveryService",
                 return_value=alarm_recovery_service,
+            )
+        )
+
+        history_query_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.HistoryQueryService",
+                return_value=history_query_service,
             )
         )
 
@@ -496,6 +501,11 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
 
     alarm_history_repository_class.assert_called_once_with(
         history_database
+    )
+
+    history_query_service_class.assert_called_once_with(
+        event_repository=event_history_repository,
+        alarm_repository=alarm_history_repository,
     )
 
     metric_service_class.assert_called_once_with(

@@ -47,6 +47,9 @@ from app.noc.services.alarm_recovery_service import (
     AlarmRecoveryService,
 )
 from app.noc.services.health_service import HealthService
+from app.noc.services.history_query_service import (
+    HistoryQueryService,
+)
 from app.noc.services.heartbeat_service import HeartbeatService
 from app.noc.services.capacity_service import CapacityService
 from app.noc.services.metric_service import MetricService
@@ -259,6 +262,16 @@ def get_alarm_service() -> AlarmService:
     return AlarmService(
         get_node_registry(),
         history_repository=get_alarm_history_repository(),
+    )
+
+
+@lru_cache
+def get_history_query_service() -> HistoryQueryService:
+    """Construye el servicio compartido de consulta histórica NOC."""
+
+    return HistoryQueryService(
+        event_repository=get_event_history_repository(),
+        alarm_repository=get_alarm_history_repository(),
     )
 
 

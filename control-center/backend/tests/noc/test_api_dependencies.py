@@ -5,6 +5,7 @@ from app.api.dependencies import (
     get_alarm_recovery_service,
     get_alarm_service,
     get_event_history_repository,
+    get_history_query_service,
     get_noc_history_database,
     get_health_service,
     get_capacity_service,
@@ -22,6 +23,9 @@ from app.noc.services.alarm_service import AlarmService
 from app.noc.services.capacity_service import CapacityService
 from app.noc.services.health_service import HealthService
 from app.noc.services.heartbeat_service import HeartbeatService
+from app.noc.services.history_query_service import (
+    HistoryQueryService,
+)
 from app.noc.services.metric_service import MetricService
 from app.noc.services.snapshot_service import SnapshotService
 
@@ -31,6 +35,7 @@ def clear_noc_dependency_caches() -> None:
 
     get_snapshot_service.cache_clear()
     get_alarm_recovery_service.cache_clear()
+    get_history_query_service.cache_clear()
     get_alarm_service.cache_clear()
     get_alarm_history_repository.cache_clear()
     get_event_history_repository.cache_clear()
@@ -329,5 +334,30 @@ def test_alarm_recovery_service_uses_shared_dependencies() -> None:
     assert service._registry is get_node_registry()
     assert (
         service._history_repository
+        is get_alarm_history_repository()
+    )
+
+
+def test_history_query_service_is_cached() -> None:
+    first = get_history_query_service()
+    second = get_history_query_service()
+
+    assert first is second
+    assert isinstance(
+        first,
+        HistoryQueryService,
+    )
+
+
+def test_history_query_service_uses_shared_history_repositories() -> None:
+    service = get_history_query_service()
+
+    assert (
+        service.event_repository
+        is get_event_history_repository()
+    )
+
+    assert (
+        service.alarm_repository
         is get_alarm_history_repository()
     )

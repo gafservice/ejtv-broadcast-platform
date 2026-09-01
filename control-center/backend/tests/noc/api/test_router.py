@@ -1,15 +1,35 @@
 """HTTP integration tests for the NOC API."""
 
+from datetime import datetime, timezone
+from unittest.mock import Mock
+
 from fastapi.testclient import TestClient
 
 from app.api.dependencies import (
     get_authorization_service,
+    get_history_query_service,
     get_node_registry,
     get_snapshot_service,
 )
 from app.api.security import get_current_identity
 from app.main import create_application
 from app.noc.domain.node import Node
+from app.noc.domain.node_alarm import (
+    AlarmSeverity,
+    AlarmState,
+)
+from app.noc.domain.node_event import (
+    EventRecord,
+    EventSeverity,
+)
+from app.noc.domain.node_instance import NodeInstanceId
+from app.noc.history.alarm_transition import (
+    AlarmTransition,
+    AlarmTransitionType,
+)
+from app.noc.history.event_history_record import (
+    EventHistoryRecord,
+)
 from app.noc.domain.node_health import (
     NodeHealth,
     NodeHealthState,
@@ -24,6 +44,9 @@ from app.noc.infrastructure.memory_repository import (
     InMemoryNodeRepository,
 )
 from app.noc.registry.registry import NodeRegistry
+from app.noc.services.history_query_service import (
+    HistoryQueryResult,
+)
 from app.noc.services.snapshot_service import (
     SnapshotService,
 )
@@ -83,8 +106,12 @@ def make_node() -> Node:
 def make_client(
     registry: NodeRegistry,
     snapshot_service: SnapshotService,
+    history_query_service=None,
 ) -> TestClient:
     application = create_application()
+
+    if history_query_service is None:
+        history_query_service = Mock()
 
     application.dependency_overrides[
         get_current_identity
@@ -101,6 +128,10 @@ def make_client(
     application.dependency_overrides[
         get_snapshot_service
     ] = lambda: snapshot_service
+
+    application.dependency_overrides[
+        get_history_query_service
+    ] = lambda: history_query_service
 
     return TestClient(
         application
@@ -345,3 +376,277 @@ def test_noc_requires_authentication() -> None:
     )
 
     assert response.status_code == 401
+
+
+def test_get_last_24_hours_history() -> None:
+    _, registry, snapshots = make_runtime()
+
+    node = make_node()
+    registry.register(node)
+
+    instance = node.instances[0]
+
+    history_query_service = Mock()
+
+    start = datetime(
+        2026,
+        8,
+        31,
+        17,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    end = datetime(
+        2026,
+        9,
+        1,
+        17,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    history_query_service.last_24_hours.return_value = (
+        HistoryQueryResult(
+            start=start,
+            end=end,
+            events=(),
+            alarm_transitions=(),
+        )
+    )
+
+    client = make_client(
+        registry,
+        snapshots,
+        history_query_service,
+    )
+
+    response = client.get(
+        "/api/v1/noc/nodes/"
+        "streaming-core/instances/"
+        "streaming-primary/history/24h"
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()["data"]
+
+    assert data["node_id"] == "streaming-core"
+    assert data["instance_id"] == "streaming-primary"
+
+    assert data["window"] == {
+        "start": "2026-08-31T17:00:00Z",
+        "end": "2026-09-01T17:00:00Z",
+        "duration_hours": 24,
+    }
+
+    assert data["events"] == []
+    assert data["alarm_transitions"] == []
+
+    assert data["totals"] == {
+        "events": 0,
+        "alarm_transitions": 0,
+    }
+
+    history_query_service.last_24_hours.assert_called_once_with(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+
+def test_history_unknown_node_returns_404() -> None:
+    _, registry, snapshots = make_runtime()
+
+    history_query_service = Mock()
+
+    client = make_client(
+        registry,
+        snapshots,
+        history_query_service,
+    )
+
+    response = client.get(
+        "/api/v1/noc/nodes/"
+        "unknown-node/instances/"
+        "streaming-primary/history/24h"
+    )
+
+    assert response.status_code == 404
+
+    history_query_service.last_24_hours.assert_not_called()
+
+
+def test_history_unknown_instance_returns_404() -> None:
+    _, registry, snapshots = make_runtime()
+
+    node = make_node()
+    registry.register(node)
+
+    history_query_service = Mock()
+
+    client = make_client(
+        registry,
+        snapshots,
+        history_query_service,
+    )
+
+    response = client.get(
+        "/api/v1/noc/nodes/"
+        "streaming-core/instances/"
+        "missing-instance/history/24h"
+    )
+
+    assert response.status_code == 404
+
+    history_query_service.last_24_hours.assert_not_called()
+
+
+def test_history_serializes_event_and_alarm_transition() -> None:
+    _, registry, snapshots = make_runtime()
+
+    node = make_node()
+    registry.register(node)
+
+    instance = node.instances[0]
+
+    event_time = datetime(
+        2026,
+        9,
+        1,
+        16,
+        45,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    transition_time = datetime(
+        2026,
+        9,
+        1,
+        16,
+        50,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    event = EventRecord(
+        event_id="event-001",
+        event_type="SESSION_CONNECTED",
+        severity=EventSeverity.INFO,
+        timestamp=event_time,
+        source=instance.instance_id,
+        title="SRT reader connected on ejtv",
+        description="Reader session connected.",
+        attributes={
+            "path": "ejtv",
+            "remote_address": "200.91.123.60:58816",
+            "protocol": "SRT",
+            "role": "READER",
+        },
+        correlation_id="corr-001",
+    )
+
+    event_history = EventHistoryRecord(
+        event=event,
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        recorded_at=event_time,
+    )
+
+    transition = AlarmTransition(
+        transition_id="alarm-transition-test-001",
+        alarm_id="CRITICAL_PATH_TRAFFIC_STALLED:ejtv",
+        transition_type=AlarmTransitionType.OPENED,
+        timestamp=transition_time,
+        source=instance.instance_id,
+        state=AlarmState.ACTIVE,
+        actor="noc-runtime",
+        metadata={
+            "path": "ejtv",
+            "reason": "inbound bitrate is zero",
+        },
+    )
+
+    history_query_service = Mock()
+
+    history_query_service.last_24_hours.return_value = (
+        HistoryQueryResult(
+            start=datetime(
+                2026,
+                8,
+                31,
+                17,
+                0,
+                tzinfo=timezone.utc,
+            ),
+            end=datetime(
+                2026,
+                9,
+                1,
+                17,
+                0,
+                tzinfo=timezone.utc,
+            ),
+            events=(event_history,),
+            alarm_transitions=(transition,),
+        )
+    )
+
+    client = make_client(
+        registry,
+        snapshots,
+        history_query_service,
+    )
+
+    response = client.get(
+        "/api/v1/noc/nodes/"
+        "streaming-core/instances/"
+        "streaming-primary/history/24h"
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()["data"]
+
+    assert data["totals"] == {
+        "events": 1,
+        "alarm_transitions": 1,
+    }
+
+    assert data["events"] == [
+        {
+            "event_id": "event-001",
+            "event_type": "SESSION_CONNECTED",
+            "severity": "INFO",
+            "timestamp": "2026-09-01T16:45:00Z",
+            "source": "streaming-primary",
+            "title": "SRT reader connected on ejtv",
+            "description": "Reader session connected.",
+            "attributes": {
+                "path": "ejtv",
+                "remote_address": "200.91.123.60:58816",
+                "protocol": "SRT",
+                "role": "READER",
+            },
+            "correlation_id": "corr-001",
+            "recorded_at": "2026-09-01T16:45:00Z",
+        }
+    ]
+
+    assert data["alarm_transitions"] == [
+        {
+            "transition_id": "alarm-transition-test-001",
+            "alarm_id": (
+                "CRITICAL_PATH_TRAFFIC_STALLED:ejtv"
+            ),
+            "transition_type": "OPENED",
+            "timestamp": "2026-09-01T16:50:00Z",
+            "source": "streaming-primary",
+            "state": "ACTIVE",
+            "actor": "noc-runtime",
+            "metadata": {
+                "path": "ejtv",
+                "reason": "inbound bitrate is zero",
+            },
+        }
+    ]

@@ -83,6 +83,9 @@ from app.noc.services.reconnect_flapping_evaluator import (
 )
 from app.noc.services.event_service import EventService
 from app.noc.services.health_service import HealthService
+from app.noc.services.history_query_service import (
+    HistoryQueryService,
+)
 from app.noc.services.health_transition_alarm_service import (
     HealthTransitionAlarmService,
 )
@@ -202,6 +205,11 @@ def build_dashboard_application() -> DashboardApplication:
     alarm_recovery_service = AlarmRecoveryService(
         registry=node_registry,
         history_repository=alarm_history_repository,
+    )
+
+    history_query_service = HistoryQueryService(
+        event_repository=event_history_repository,
+        alarm_repository=alarm_history_repository,
     )
 
     alarm_recovery_service.recover(
