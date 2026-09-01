@@ -28,6 +28,12 @@ from app.noc.domain.node_instance import (
     NodeInstance,
     NodeInstanceId,
 )
+from app.noc.history.alarm_transition import (
+    AlarmTransition,
+    AlarmTransitionType,
+    make_alarm_transition_id,
+)
+from app.noc.history.repository import AlarmHistoryRepository
 from app.noc.registry.registry import NodeRegistry
 
 
@@ -78,13 +84,36 @@ class AlarmReceipt:
 class AlarmService:
     """Coordinate alarms for registered NodeInstances."""
 
-    def __init__(self, registry: NodeRegistry) -> None:
+    def __init__(
+        self,
+        registry: NodeRegistry,
+        history_repository: AlarmHistoryRepository | None = None,
+    ) -> None:
         if not isinstance(registry, NodeRegistry):
             raise TypeError(
                 "registry must be a NodeRegistry"
             )
 
+        if (
+            history_repository is not None
+            and not isinstance(
+                history_repository,
+                AlarmHistoryRepository,
+            )
+        ):
+            raise TypeError(
+                "history_repository must implement "
+                "AlarmHistoryRepository"
+            )
+
         self._registry = registry
+        self._history_repository = history_repository
+
+    @property
+    def history_repository(
+        self,
+    ) -> AlarmHistoryRepository | None:
+        return self._history_repository
 
     def raise_alarm(
         self,
@@ -120,6 +149,14 @@ class AlarmService:
             raise DuplicateAlarmError(
                 f"alarm {alarm.alarm_id!r} already exists"
             )
+
+        self._record_history(
+            node_id=node_id,
+            instance_id=instance_id,
+            alarm=alarm,
+            transition_type=AlarmTransitionType.OPENED,
+            timestamp=alarm.timestamp,
+        )
 
         instance.alarms = records + (alarm,)
 
@@ -175,6 +212,15 @@ class AlarmService:
             acknowledged=True,
             acknowledged_by=actor,
             acknowledged_at=when,
+        )
+
+        self._record_history(
+            node_id=node_id,
+            instance_id=instance_id,
+            alarm=updated,
+            transition_type=AlarmTransitionType.ACKNOWLEDGED,
+            timestamp=when,
+            actor=actor,
         )
 
         instance.alarms = self._replace(
@@ -242,6 +288,14 @@ class AlarmService:
             resolved_at=when,
         )
 
+        self._record_history(
+            node_id=node_id,
+            instance_id=instance_id,
+            alarm=updated,
+            transition_type=AlarmTransitionType.RESOLVED,
+            timestamp=when,
+        )
+
         instance.alarms = self._replace(
             records,
             updated,
@@ -297,6 +351,14 @@ class AlarmService:
             current,
             state=AlarmState.CLOSED,
             closed_at=when,
+        )
+
+        self._record_history(
+            node_id=node_id,
+            instance_id=instance_id,
+            alarm=updated,
+            transition_type=AlarmTransitionType.CLOSED,
+            timestamp=when,
         )
 
         instance.alarms = self._replace(
@@ -357,6 +419,45 @@ class AlarmService:
                 instance_id,
             )
             if alarm.requires_attention
+        )
+
+    def _record_history(
+        self,
+        *,
+        node_id: NodeId,
+        instance_id: NodeInstanceId,
+        alarm: AlarmRecord,
+        transition_type: AlarmTransitionType,
+        timestamp: datetime,
+        actor: str | None = None,
+    ) -> None:
+        repository = self._history_repository
+
+        if repository is None:
+            return
+
+        transition = AlarmTransition(
+            transition_id=make_alarm_transition_id(
+                alarm_id=alarm.alarm_id,
+                transition_type=transition_type,
+                timestamp=timestamp,
+                source=instance_id,
+                state=alarm.state,
+            ),
+            alarm_id=alarm.alarm_id,
+            transition_type=transition_type,
+            timestamp=timestamp,
+            source=instance_id,
+            state=alarm.state,
+            actor=actor,
+            metadata=alarm.attributes,
+        )
+
+        repository.record_lifecycle(
+            node_id=node_id,
+            instance_id=instance_id,
+            alarm=alarm,
+            transition=transition,
         )
 
     def _resolve_instance(

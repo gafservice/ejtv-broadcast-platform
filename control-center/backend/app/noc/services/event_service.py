@@ -27,6 +27,12 @@ from app.noc.domain.node_instance import (
     NodeInstance,
     NodeInstanceId,
 )
+from app.noc.history.event_history_record import (
+    EventHistoryRecord,
+)
+from app.noc.history.repository import (
+    EventHistoryRepository,
+)
 from app.noc.registry.registry import NodeRegistry
 
 
@@ -66,17 +72,40 @@ class EventReceipt:
 class EventService:
     """Coordinate events for registered NodeInstances."""
 
-    def __init__(self, registry: NodeRegistry) -> None:
+    def __init__(
+        self,
+        registry: NodeRegistry,
+        history_repository: EventHistoryRepository | None = None,
+    ) -> None:
         if not isinstance(registry, NodeRegistry):
             raise TypeError(
                 "registry must be a NodeRegistry"
             )
 
+        if (
+            history_repository is not None
+            and not isinstance(
+                history_repository,
+                EventHistoryRepository,
+            )
+        ):
+            raise TypeError(
+                "history_repository must implement "
+                "EventHistoryRepository"
+            )
+
         self._registry = registry
+        self._history_repository = history_repository
 
     @property
     def registry(self) -> NodeRegistry:
         return self._registry
+
+    @property
+    def history_repository(
+        self,
+    ) -> EventHistoryRepository | None:
+        return self._history_repository
 
     def record(
         self,
@@ -106,6 +135,16 @@ class EventService:
         if self._find(records, event.event_id) is not None:
             raise DuplicateEventError(
                 f"event {event.event_id!r} already exists"
+            )
+
+        if self._history_repository is not None:
+            self._history_repository.append(
+                EventHistoryRecord(
+                    event=event,
+                    node_id=node_id,
+                    instance_id=instance_id,
+                    recorded_at=event.timestamp,
+                )
             )
 
         instance.events = records + (event,)

@@ -11,6 +11,12 @@ from app.noc.domain.node_alarm import (
 from app.noc.domain.node_id import NodeId
 from app.noc.domain.node_instance import NodeInstanceId
 from app.noc.domain.node_type import NodeType
+from app.noc.history.alarm_transition import (
+    AlarmTransitionType,
+)
+from app.noc.history.memory_repository import (
+    InMemoryAlarmHistoryRepository,
+)
 from app.noc.registry.registry import (
     NodeNotFoundError,
     NodeRegistry,
@@ -85,6 +91,40 @@ def make_context():
         node,
         instance,
         AlarmService(registry),
+    )
+
+
+def make_context_with_history():
+    repository = MemoryRepository()
+    registry = NodeRegistry(repository)
+
+    node = Node(
+        node_id=NodeId.create(
+            id="streaming-core",
+            name="streaming",
+            display_name="Streaming Core",
+        ),
+        node_type=NodeType.STREAMING,
+    )
+
+    instance = node.create_instance(
+        instance_id="streaming-primary"
+    )
+
+    registry.register(node)
+
+    history = InMemoryAlarmHistoryRepository()
+
+    return (
+        repository,
+        registry,
+        node,
+        instance,
+        history,
+        AlarmService(
+            registry,
+            history_repository=history,
+        ),
     )
 
 
@@ -552,3 +592,405 @@ def test_unknown_instance_is_rejected():
                 source="streaming-backup"
             ),
         )
+
+
+def test_raise_alarm_records_opened_history() -> None:
+    (
+        _,
+        _,
+        node,
+        instance,
+        history,
+        service,
+    ) = make_context_with_history()
+
+    alarm = make_alarm()
+
+    receipt = service.raise_alarm(
+        node.node_id,
+        instance.instance_id,
+        alarm,
+    )
+
+    assert receipt.alarm is alarm
+
+    assert history.get_current(
+        alarm.alarm_id
+    ) == alarm
+
+    transitions = history.list_transitions(
+        alarm.alarm_id
+    )
+
+    assert len(transitions) == 1
+
+    transition = transitions[0]
+
+    assert (
+        transition.transition_type
+        is AlarmTransitionType.OPENED
+    )
+    assert transition.alarm_id == alarm.alarm_id
+    assert transition.timestamp == alarm.timestamp
+    assert transition.source == instance.instance_id
+    assert transition.state is AlarmState.ACTIVE
+    assert transition.actor is None
+
+
+class FailingAlarmHistoryRepository:
+    def record_lifecycle(
+        self,
+        *,
+        node_id,
+        instance_id,
+        alarm,
+        transition,
+    ):
+        raise RuntimeError(
+            "simulated durable history failure"
+        )
+
+    def save_current(
+        self,
+        *,
+        node_id,
+        instance_id,
+        alarm,
+    ):
+        raise NotImplementedError
+
+    def append_transition(
+        self,
+        transition,
+    ):
+        raise NotImplementedError
+
+    def get_current(
+        self,
+        alarm_id,
+    ):
+        return None
+
+    def list_active(
+        self,
+        *,
+        node_id=None,
+        instance_id=None,
+    ):
+        return ()
+
+    def list_transitions(
+        self,
+        alarm_id,
+    ):
+        return ()
+
+    def list_transitions_between(
+        self,
+        start,
+        end,
+        *,
+        node_id=None,
+        instance_id=None,
+    ):
+        return ()
+
+
+def test_raise_alarm_history_failure_leaves_aggregate_unchanged() -> None:
+    repository = MemoryRepository()
+    registry = NodeRegistry(repository)
+
+    node = Node(
+        node_id=NodeId.create(
+            id="streaming-core",
+            name="streaming",
+            display_name="Streaming Core",
+        ),
+        node_type=NodeType.STREAMING,
+    )
+
+    instance = node.create_instance(
+        instance_id="streaming-primary"
+    )
+
+    registry.register(node)
+
+    service = AlarmService(
+        registry,
+        history_repository=FailingAlarmHistoryRepository(),
+    )
+
+    alarm = make_alarm()
+
+    with pytest.raises(
+        RuntimeError,
+        match="simulated durable history failure",
+    ):
+        service.raise_alarm(
+            node.node_id,
+            instance.instance_id,
+            alarm,
+        )
+
+    assert instance.alarms == ()
+
+    assert service.get(
+        node.node_id,
+        instance.instance_id,
+        alarm.alarm_id,
+    ) is None
+
+
+def test_acknowledge_records_acknowledged_history() -> None:
+    (
+        _,
+        _,
+        node,
+        instance,
+        history,
+        service,
+    ) = make_context_with_history()
+
+    alarm = make_alarm()
+
+    service.raise_alarm(
+        node.node_id,
+        instance.instance_id,
+        alarm,
+    )
+
+    acknowledged_at = (
+        BASE_TIME + timedelta(seconds=5)
+    )
+
+    receipt = service.acknowledge(
+        node.node_id,
+        instance.instance_id,
+        alarm.alarm_id,
+        acknowledged_by="operator",
+        timestamp=acknowledged_at,
+    )
+
+    current = history.get_current(
+        alarm.alarm_id
+    )
+
+    assert current == receipt.alarm
+    assert current is not None
+    assert current.state is AlarmState.ACKNOWLEDGED
+    assert current.acknowledged is True
+    assert current.acknowledged_by == "operator"
+    assert current.acknowledged_at == acknowledged_at
+
+    transitions = history.list_transitions(
+        alarm.alarm_id
+    )
+
+    assert len(transitions) == 2
+
+    opened, acknowledged = transitions
+
+    assert (
+        opened.transition_type
+        is AlarmTransitionType.OPENED
+    )
+
+    assert (
+        acknowledged.transition_type
+        is AlarmTransitionType.ACKNOWLEDGED
+    )
+    assert acknowledged.timestamp == acknowledged_at
+    assert acknowledged.source == instance.instance_id
+    assert acknowledged.state is AlarmState.ACKNOWLEDGED
+    assert acknowledged.actor == "operator"
+
+
+def test_resolve_records_resolved_history() -> None:
+    (
+        _,
+        _,
+        node,
+        instance,
+        history,
+        service,
+    ) = make_context_with_history()
+
+    alarm = make_alarm()
+
+    service.raise_alarm(
+        node.node_id,
+        instance.instance_id,
+        alarm,
+    )
+
+    acknowledged_at = (
+        BASE_TIME + timedelta(seconds=5)
+    )
+
+    service.acknowledge(
+        node.node_id,
+        instance.instance_id,
+        alarm.alarm_id,
+        acknowledged_by="operator",
+        timestamp=acknowledged_at,
+    )
+
+    resolved_at = (
+        BASE_TIME + timedelta(seconds=10)
+    )
+
+    receipt = service.resolve(
+        node.node_id,
+        instance.instance_id,
+        alarm.alarm_id,
+        timestamp=resolved_at,
+    )
+
+    current = history.get_current(
+        alarm.alarm_id
+    )
+
+    assert current == receipt.alarm
+    assert current is not None
+    assert current.state is AlarmState.RESOLVED
+    assert current.resolved_at == resolved_at
+
+    assert current.acknowledged is True
+    assert current.acknowledged_by == "operator"
+    assert current.acknowledged_at == acknowledged_at
+
+    transitions = history.list_transitions(
+        alarm.alarm_id
+    )
+
+    assert len(transitions) == 3
+
+    opened, acknowledged, resolved = transitions
+
+    assert (
+        opened.transition_type
+        is AlarmTransitionType.OPENED
+    )
+
+    assert (
+        acknowledged.transition_type
+        is AlarmTransitionType.ACKNOWLEDGED
+    )
+
+    assert (
+        resolved.transition_type
+        is AlarmTransitionType.RESOLVED
+    )
+
+    assert resolved.timestamp == resolved_at
+    assert resolved.source == instance.instance_id
+    assert resolved.state is AlarmState.RESOLVED
+    assert resolved.actor is None
+
+
+def test_close_records_closed_history() -> None:
+    (
+        _,
+        _,
+        node,
+        instance,
+        history,
+        service,
+    ) = make_context_with_history()
+
+    alarm = make_alarm()
+
+    service.raise_alarm(
+        node.node_id,
+        instance.instance_id,
+        alarm,
+    )
+
+    acknowledged_at = (
+        BASE_TIME + timedelta(seconds=5)
+    )
+
+    service.acknowledge(
+        node.node_id,
+        instance.instance_id,
+        alarm.alarm_id,
+        acknowledged_by="operator",
+        timestamp=acknowledged_at,
+    )
+
+    resolved_at = (
+        BASE_TIME + timedelta(seconds=10)
+    )
+
+    service.resolve(
+        node.node_id,
+        instance.instance_id,
+        alarm.alarm_id,
+        timestamp=resolved_at,
+    )
+
+    closed_at = (
+        BASE_TIME + timedelta(seconds=20)
+    )
+
+    receipt = service.close(
+        node.node_id,
+        instance.instance_id,
+        alarm.alarm_id,
+        timestamp=closed_at,
+    )
+
+    current = history.get_current(
+        alarm.alarm_id
+    )
+
+    assert current == receipt.alarm
+    assert current is not None
+    assert current.state is AlarmState.CLOSED
+    assert current.closed_at == closed_at
+    assert current.resolved_at == resolved_at
+    assert current.acknowledged_at == acknowledged_at
+
+    transitions = history.list_transitions(
+        alarm.alarm_id
+    )
+
+    assert len(transitions) == 4
+
+    (
+        opened,
+        acknowledged,
+        resolved,
+        closed,
+    ) = transitions
+
+    assert (
+        opened.transition_type
+        is AlarmTransitionType.OPENED
+    )
+
+    assert (
+        acknowledged.transition_type
+        is AlarmTransitionType.ACKNOWLEDGED
+    )
+
+    assert (
+        resolved.transition_type
+        is AlarmTransitionType.RESOLVED
+    )
+
+    assert (
+        closed.transition_type
+        is AlarmTransitionType.CLOSED
+    )
+
+    assert closed.alarm_id == alarm.alarm_id
+    assert closed.timestamp == closed_at
+    assert closed.source == instance.instance_id
+    assert closed.state is AlarmState.CLOSED
+    assert closed.actor is None
+
+    assert {
+        transition.alarm_id
+        for transition in transitions
+    } == {alarm.alarm_id}

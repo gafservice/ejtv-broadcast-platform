@@ -14,6 +14,15 @@ from app.noc.registry.registry import (
     NodeNotFoundError,
     NodeRegistry,
 )
+from app.noc.history.memory_repository import (
+    InMemoryEventHistoryRepository,
+)
+from app.noc.history.sqlite_database import (
+    SQLiteHistoryDatabase,
+)
+from app.noc.history.sqlite_event_repository import (
+    SQLiteEventHistoryRepository,
+)
 from app.noc.services.event_service import (
     DuplicateEventError,
     EventDisposition,
@@ -296,3 +305,204 @@ def test_list_all_returns_recorded_events():
         first,
         second,
     )
+
+
+def test_service_accepts_optional_history_repository():
+    repository = MemoryRepository()
+    registry = NodeRegistry(repository)
+
+    history = InMemoryEventHistoryRepository()
+
+    service = EventService(
+        registry,
+        history_repository=history,
+    )
+
+    assert service.registry is registry
+    assert service.history_repository is history
+
+
+def test_service_rejects_invalid_history_repository():
+    repository = MemoryRepository()
+    registry = NodeRegistry(repository)
+
+    with pytest.raises(TypeError):
+        EventService(
+            registry,
+            history_repository=object(),
+        )
+
+
+def test_record_appends_event_to_history_repository():
+    repository = MemoryRepository()
+    registry = NodeRegistry(repository)
+
+    node = Node(
+        node_id=NodeId.create(
+            id="streaming-core",
+            name="streaming",
+            display_name="Streaming Core",
+            created_at=BASE_TIME,
+        ),
+        node_type=NodeType.STREAMING,
+    )
+
+    instance = node.create_instance(
+        instance_id="streaming-primary"
+    )
+
+    registry.register(node)
+
+    history = InMemoryEventHistoryRepository()
+
+    service = EventService(
+        registry,
+        history_repository=history,
+    )
+
+    event = make_event()
+
+    service.record(
+        node.node_id,
+        instance.instance_id,
+        event,
+    )
+
+    historical = history.get(
+        event.event_id
+    )
+
+    assert historical is not None
+    assert historical.event == event
+    assert historical.node_id == node.node_id
+    assert historical.instance_id == (
+        instance.instance_id
+    )
+    assert historical.recorded_at == (
+        event.timestamp
+    )
+
+
+def test_record_persists_event_to_sqlite_history(
+    tmp_path,
+):
+    database_path = (
+        tmp_path / "noc-history.sqlite3"
+    )
+
+    repository = MemoryRepository()
+    registry = NodeRegistry(repository)
+
+    node = Node(
+        node_id=NodeId.create(
+            id="streaming-core",
+            name="streaming",
+            display_name="Streaming Core",
+            created_at=BASE_TIME,
+        ),
+        node_type=NodeType.STREAMING,
+    )
+
+    instance = node.create_instance(
+        instance_id="streaming-primary"
+    )
+
+    registry.register(node)
+
+    database = SQLiteHistoryDatabase(
+        database_path
+    )
+
+    history = SQLiteEventHistoryRepository(
+        database
+    )
+
+    service = EventService(
+        registry,
+        history_repository=history,
+    )
+
+    event = make_event()
+
+    service.record(
+        node.node_id,
+        instance.instance_id,
+        event,
+    )
+
+    del service
+    del history
+    del database
+
+    reopened = SQLiteEventHistoryRepository(
+        SQLiteHistoryDatabase(
+            database_path
+        )
+    )
+
+    historical = reopened.get(
+        event.event_id
+    )
+
+    assert historical is not None
+    assert historical.event == event
+    assert historical.node_id == node.node_id
+    assert historical.instance_id == (
+        instance.instance_id
+    )
+
+
+class FailingEventHistoryRepository(
+    InMemoryEventHistoryRepository
+):
+    def append(self, record):
+        raise RuntimeError(
+            "simulated durable history failure"
+        )
+
+
+def test_history_failure_does_not_modify_instance_events():
+    repository = MemoryRepository()
+    registry = NodeRegistry(repository)
+
+    node = Node(
+        node_id=NodeId.create(
+            id="streaming-core",
+            name="streaming",
+            display_name="Streaming Core",
+            created_at=BASE_TIME,
+        ),
+        node_type=NodeType.STREAMING,
+    )
+
+    instance = node.create_instance(
+        instance_id="streaming-primary"
+    )
+
+    registry.register(node)
+
+    history = FailingEventHistoryRepository()
+
+    service = EventService(
+        registry,
+        history_repository=history,
+    )
+
+    event = make_event()
+
+    with pytest.raises(
+        RuntimeError,
+        match="simulated durable history failure",
+    ):
+        service.record(
+            node.node_id,
+            instance.instance_id,
+            event,
+        )
+
+    assert instance.events == ()
+    assert service.get(
+        node.node_id,
+        instance.instance_id,
+        event.event_id,
+    ) is None
