@@ -3,11 +3,13 @@
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
+from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, Request
 
 from app.api.dependencies import (
     get_alarm_recovery_service,
+    get_evidence_reconciliation_service,
     get_capacity_service,
     get_node_registry,
     get_system_service,
@@ -49,6 +51,15 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     )
 
     get_alarm_recovery_service().recover(
+        node_id=bootstrap_result.node.node_id,
+        instance_id=node_instance_id,
+    )
+
+    reconciliation_end = datetime.now(timezone.utc)
+
+    get_evidence_reconciliation_service().reconcile_between(
+        start=reconciliation_end - timedelta(hours=48),
+        end=reconciliation_end,
         node_id=bootstrap_result.node.node_id,
         instance_id=node_instance_id,
     )

@@ -69,6 +69,10 @@ class Settings(BaseSettings):
         "data/noc-history.db"
     )
 
+    noc_evidence_path: str = (
+        "data/noc-evidence"
+    )
+
     # ------------------------------------------------------------------
     # Identity
     # ------------------------------------------------------------------

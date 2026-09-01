@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 from app.adapters.linux.linux_system_adapter import LinuxSystemAdapter
 from app.adapters.mediamtx.adapter import MediaMTXAdapter
 from app.adapters.mediamtx.client import MediaMTXClient
@@ -42,6 +44,9 @@ from app.noc.history.sqlite_database import (
 )
 from app.noc.history.sqlite_event_repository import (
     SQLiteEventHistoryRepository,
+)
+from app.noc.history.jsonl_evidence_writer import (
+    JsonlEvidenceWriter,
 )
 from app.noc.infrastructure.node_network_policy_loader import (
     NodeNetworkPolicyLoader,
@@ -85,6 +90,9 @@ from app.noc.services.event_service import EventService
 from app.noc.services.health_service import HealthService
 from app.noc.services.history_query_service import (
     HistoryQueryService,
+)
+from app.noc.services.evidence_reconciliation_service import (
+    EvidenceReconciliationService,
 )
 from app.noc.services.health_transition_alarm_service import (
     HealthTransitionAlarmService,
@@ -184,6 +192,10 @@ def build_dashboard_application() -> DashboardApplication:
         )
     )
 
+    evidence_writer = JsonlEvidenceWriter(
+        settings.noc_evidence_path
+    )
+
     metric_service = MetricService(
         node_registry
     )
@@ -195,11 +207,13 @@ def build_dashboard_application() -> DashboardApplication:
     event_service = EventService(
         node_registry,
         history_repository=event_history_repository,
+        evidence_writer=evidence_writer,
     )
 
     alarm_service = AlarmService(
         node_registry,
         history_repository=alarm_history_repository,
+        evidence_writer=evidence_writer,
     )
 
     alarm_recovery_service = AlarmRecoveryService(
@@ -212,7 +226,24 @@ def build_dashboard_application() -> DashboardApplication:
         alarm_repository=alarm_history_repository,
     )
 
+    evidence_reconciliation_service = (
+        EvidenceReconciliationService(
+            event_repository=event_history_repository,
+            alarm_repository=alarm_history_repository,
+            evidence_writer=evidence_writer,
+        )
+    )
+
     alarm_recovery_service.recover(
+        node_id=bootstrap_result.node.node_id,
+        instance_id=node_instance_id,
+    )
+
+    reconciliation_end = datetime.now(timezone.utc)
+
+    evidence_reconciliation_service.reconcile_between(
+        start=reconciliation_end - timedelta(hours=48),
+        end=reconciliation_end,
         node_id=bootstrap_result.node.node_id,
         instance_id=node_instance_id,
     )

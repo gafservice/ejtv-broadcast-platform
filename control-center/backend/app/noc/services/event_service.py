@@ -30,6 +30,7 @@ from app.noc.domain.node_instance import (
 from app.noc.history.event_history_record import (
     EventHistoryRecord,
 )
+from app.noc.history.evidence_writer import EvidenceWriter
 from app.noc.history.repository import (
     EventHistoryRepository,
 )
@@ -76,6 +77,7 @@ class EventService:
         self,
         registry: NodeRegistry,
         history_repository: EventHistoryRepository | None = None,
+        evidence_writer: EvidenceWriter | None = None,
     ) -> None:
         if not isinstance(registry, NodeRegistry):
             raise TypeError(
@@ -94,8 +96,20 @@ class EventService:
                 "EventHistoryRepository"
             )
 
+        if (
+            evidence_writer is not None
+            and not isinstance(
+                evidence_writer,
+                EvidenceWriter,
+            )
+        ):
+            raise TypeError(
+                "evidence_writer must implement EvidenceWriter"
+            )
+
         self._registry = registry
         self._history_repository = history_repository
+        self._evidence_writer = evidence_writer
 
     @property
     def registry(self) -> NodeRegistry:
@@ -106,6 +120,12 @@ class EventService:
         self,
     ) -> EventHistoryRepository | None:
         return self._history_repository
+
+    @property
+    def evidence_writer(
+        self,
+    ) -> EvidenceWriter | None:
+        return self._evidence_writer
 
     def record(
         self,
@@ -169,6 +189,11 @@ class EventService:
                         "with conflicting durable history"
                     )
 
+                if self._evidence_writer is not None:
+                    self._evidence_writer.append_event(
+                        history_record
+                    )
+
                 return EventReceipt(
                     disposition=EventDisposition.RECORDED,
                     event=event,
@@ -182,6 +207,11 @@ class EventService:
                 raise DuplicateEventError(
                     f"event {event.event_id!r} already exists "
                     "with conflicting durable history"
+                )
+
+            if self._evidence_writer is not None:
+                self._evidence_writer.append_event(
+                    history_record
                 )
 
         instance.events = records + (event,)

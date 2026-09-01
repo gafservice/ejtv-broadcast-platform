@@ -35,6 +35,9 @@ from app.noc.history.sqlite_database import (
 from app.noc.history.sqlite_event_repository import (
     SQLiteEventHistoryRepository,
 )
+from app.noc.history.jsonl_evidence_writer import (
+    JsonlEvidenceWriter,
+)
 from app.noc.domain.node_network_policy_config import (
     NodeNetworkPolicyConfig,
 )
@@ -49,6 +52,9 @@ from app.noc.services.alarm_recovery_service import (
 from app.noc.services.health_service import HealthService
 from app.noc.services.history_query_service import (
     HistoryQueryService,
+)
+from app.noc.services.evidence_reconciliation_service import (
+    EvidenceReconciliationService,
 )
 from app.noc.services.heartbeat_service import HeartbeatService
 from app.noc.services.capacity_service import CapacityService
@@ -186,6 +192,17 @@ def get_noc_history_database() -> SQLiteHistoryDatabase:
 
 
 @lru_cache
+def get_noc_evidence_writer() -> JsonlEvidenceWriter:
+    """Construye el writer compartido de evidencia NOC."""
+
+    settings = get_settings()
+
+    return JsonlEvidenceWriter(
+        settings.noc_evidence_path
+    )
+
+
+@lru_cache
 def get_event_history_repository() -> SQLiteEventHistoryRepository:
     """Construye el repositorio durable de eventos NOC."""
 
@@ -262,6 +279,7 @@ def get_alarm_service() -> AlarmService:
     return AlarmService(
         get_node_registry(),
         history_repository=get_alarm_history_repository(),
+        evidence_writer=get_noc_evidence_writer(),
     )
 
 
@@ -272,6 +290,18 @@ def get_history_query_service() -> HistoryQueryService:
     return HistoryQueryService(
         event_repository=get_event_history_repository(),
         alarm_repository=get_alarm_history_repository(),
+    )
+
+
+@lru_cache
+def get_evidence_reconciliation_service(
+) -> EvidenceReconciliationService:
+    """Construye la reconciliación SQLite -> JSONL."""
+
+    return EvidenceReconciliationService(
+        event_repository=get_event_history_repository(),
+        alarm_repository=get_alarm_history_repository(),
+        evidence_writer=get_noc_evidence_writer(),
     )
 
 

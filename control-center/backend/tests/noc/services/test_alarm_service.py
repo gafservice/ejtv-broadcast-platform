@@ -994,3 +994,135 @@ def test_close_records_closed_history() -> None:
         transition.alarm_id
         for transition in transitions
     } == {alarm.alarm_id}
+
+
+def test_raise_alarm_writes_opened_evidence() -> None:
+    class EvidenceRecorder:
+        def __init__(self):
+            self.events = []
+            self.transitions = []
+
+        def append_event(self, record):
+            self.events.append(record)
+
+        def append_alarm_transition(self, transition):
+            self.transitions.append(transition)
+
+    (
+        _,
+        registry,
+        node,
+        instance,
+        _,
+    ) = make_context()
+
+    history = InMemoryAlarmHistoryRepository()
+    evidence = EvidenceRecorder()
+
+    service = AlarmService(
+        registry,
+        history_repository=history,
+        evidence_writer=evidence,
+    )
+
+    alarm = make_alarm(
+        alarm_id="alarm-evidence-001",
+    )
+
+    service.raise_alarm(
+        node.node_id,
+        instance.instance_id,
+        alarm,
+    )
+
+    assert len(evidence.transitions) == 1
+
+    transition = evidence.transitions[0]
+
+    assert transition.alarm_id == alarm.alarm_id
+    assert (
+        transition.transition_type
+        is AlarmTransitionType.OPENED
+    )
+
+    assert history.list_transitions(
+        alarm.alarm_id
+    ) == (transition,)
+
+
+def test_alarm_lifecycle_writes_all_evidence_transitions() -> None:
+    class EvidenceRecorder:
+        def __init__(self):
+            self.events = []
+            self.transitions = []
+
+        def append_event(self, record):
+            self.events.append(record)
+
+        def append_alarm_transition(self, transition):
+            self.transitions.append(transition)
+
+    (
+        _,
+        registry,
+        node,
+        instance,
+        _,
+    ) = make_context()
+
+    history = InMemoryAlarmHistoryRepository()
+    evidence = EvidenceRecorder()
+
+    service = AlarmService(
+        registry,
+        history_repository=history,
+        evidence_writer=evidence,
+    )
+
+    alarm = make_alarm(
+        alarm_id="alarm-evidence-lifecycle",
+    )
+
+    service.raise_alarm(
+        node.node_id,
+        instance.instance_id,
+        alarm,
+    )
+
+    service.acknowledge(
+        node.node_id,
+        instance.instance_id,
+        alarm.alarm_id,
+        acknowledged_by="operator",
+        timestamp=BASE_TIME + timedelta(seconds=10),
+    )
+
+    service.resolve(
+        node.node_id,
+        instance.instance_id,
+        alarm.alarm_id,
+        timestamp=BASE_TIME + timedelta(seconds=20),
+    )
+
+    service.close(
+        node.node_id,
+        instance.instance_id,
+        alarm.alarm_id,
+        timestamp=BASE_TIME + timedelta(seconds=30),
+    )
+
+    assert [
+        transition.transition_type
+        for transition in evidence.transitions
+    ] == [
+        AlarmTransitionType.OPENED,
+        AlarmTransitionType.ACKNOWLEDGED,
+        AlarmTransitionType.RESOLVED,
+        AlarmTransitionType.CLOSED,
+    ]
+
+    assert tuple(
+        evidence.transitions
+    ) == history.list_transitions(
+        alarm.alarm_id
+    )

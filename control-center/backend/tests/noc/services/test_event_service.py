@@ -661,3 +661,188 @@ def test_record_rejects_conflicting_existing_durable_event():
 
     assert historical is not None
     assert historical.event == original
+
+
+def test_record_writes_evidence_after_durable_history() -> None:
+    class EvidenceRecorder:
+        def __init__(self):
+            self.events = []
+            self.transitions = []
+
+        def append_event(self, record):
+            self.events.append(record)
+
+        def append_alarm_transition(self, transition):
+            self.transitions.append(transition)
+
+    (
+        _,
+        registry,
+        node,
+        instance,
+        _,
+    ) = make_context()
+
+    history = InMemoryEventHistoryRepository()
+    evidence = EvidenceRecorder()
+
+    service = EventService(
+        registry,
+        history_repository=history,
+        evidence_writer=evidence,
+    )
+
+    event = make_event(
+        event_id="event-evidence-001",
+    )
+
+    service.record(
+        node.node_id,
+        instance.instance_id,
+        event,
+    )
+
+    assert len(evidence.events) == 1
+    assert evidence.events[0].event == event
+
+    durable = history.get(event.event_id)
+
+    assert durable == evidence.events[0]
+
+
+def test_record_retry_does_not_duplicate_idempotent_evidence(
+    tmp_path,
+) -> None:
+    from app.noc.history.jsonl_evidence_writer import (
+        JsonlEvidenceWriter,
+    )
+
+    (
+        _,
+        registry,
+        node,
+        instance,
+        _,
+    ) = make_context()
+
+    history = InMemoryEventHistoryRepository()
+    evidence = JsonlEvidenceWriter(tmp_path)
+
+    service = EventService(
+        registry,
+        history_repository=history,
+        evidence_writer=evidence,
+    )
+
+    event = make_event(
+        event_id="event-evidence-retry",
+    )
+
+    service.record(
+        node.node_id,
+        instance.instance_id,
+        event,
+    )
+
+    # Simulate loss of the live projection while durable history
+    # and JSONL evidence survive.
+    instance.events = ()
+
+    service.record(
+        node.node_id,
+        instance.instance_id,
+        event,
+    )
+
+    path = (
+        tmp_path
+        / f"{event.timestamp.year:04d}"
+        / f"{event.timestamp.month:02d}"
+        / f"{event.timestamp.day:02d}"
+        / "events.jsonl"
+    )
+
+    assert len(
+        path.read_text(
+            encoding="utf-8"
+        ).splitlines()
+    ) == 1
+
+    assert instance.events == (event,)
+
+
+def test_record_exact_live_and_durable_retry_repairs_missing_evidence(
+    tmp_path,
+) -> None:
+    from app.noc.history.jsonl_evidence_writer import (
+        JsonlEvidenceWriter,
+    )
+
+    (
+        _,
+        registry,
+        node,
+        instance,
+        _,
+    ) = make_context()
+
+    history = InMemoryEventHistoryRepository()
+
+    evidence_root = tmp_path / "evidence"
+
+    writer = JsonlEvidenceWriter(
+        evidence_root
+    )
+
+    service = EventService(
+        registry,
+        history_repository=history,
+        evidence_writer=writer,
+    )
+
+    event = make_event(
+        event_id="event-evidence-repair",
+    )
+
+    service.record(
+        node.node_id,
+        instance.instance_id,
+        event,
+    )
+
+    path = (
+        evidence_root
+        / f"{event.timestamp.year:04d}"
+        / f"{event.timestamp.month:02d}"
+        / f"{event.timestamp.day:02d}"
+        / "events.jsonl"
+    )
+
+    assert path.exists()
+    assert instance.events == (event,)
+    assert history.get(event.event_id) is not None
+
+    # Simulate loss of JSONL evidence while both the durable
+    # SQLite-equivalent history and live projection survive.
+    path.unlink()
+
+    assert not path.exists()
+    assert instance.events == (event,)
+    assert history.get(event.event_id) is not None
+
+    receipt = service.record(
+        node.node_id,
+        instance.instance_id,
+        event,
+    )
+
+    assert receipt.event == event
+    assert path.exists()
+
+    lines = path.read_text(
+        encoding="utf-8"
+    ).splitlines()
+
+    assert len(lines) == 1
+    assert instance.events == (event,)
+    assert history.get(event.event_id) is not None

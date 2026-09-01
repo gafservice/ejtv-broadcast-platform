@@ -33,6 +33,7 @@ from app.noc.history.alarm_transition import (
     AlarmTransitionType,
     make_alarm_transition_id,
 )
+from app.noc.history.evidence_writer import EvidenceWriter
 from app.noc.history.repository import AlarmHistoryRepository
 from app.noc.registry.registry import NodeRegistry
 
@@ -88,6 +89,7 @@ class AlarmService:
         self,
         registry: NodeRegistry,
         history_repository: AlarmHistoryRepository | None = None,
+        evidence_writer: EvidenceWriter | None = None,
     ) -> None:
         if not isinstance(registry, NodeRegistry):
             raise TypeError(
@@ -106,14 +108,32 @@ class AlarmService:
                 "AlarmHistoryRepository"
             )
 
+        if (
+            evidence_writer is not None
+            and not isinstance(
+                evidence_writer,
+                EvidenceWriter,
+            )
+        ):
+            raise TypeError(
+                "evidence_writer must implement EvidenceWriter"
+            )
+
         self._registry = registry
         self._history_repository = history_repository
+        self._evidence_writer = evidence_writer
 
     @property
     def history_repository(
         self,
     ) -> AlarmHistoryRepository | None:
         return self._history_repository
+
+    @property
+    def evidence_writer(
+        self,
+    ) -> EvidenceWriter | None:
+        return self._evidence_writer
 
     def raise_alarm(
         self,
@@ -459,6 +479,11 @@ class AlarmService:
             alarm=alarm,
             transition=transition,
         )
+
+        if self._evidence_writer is not None:
+            self._evidence_writer.append_alarm_transition(
+                transition
+            )
 
     def _resolve_instance(
         self,
