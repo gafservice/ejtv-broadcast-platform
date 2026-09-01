@@ -56,6 +56,23 @@ class FakeAlarmHistoryRepository:
     ):
         return None
 
+    def list_all(
+        self,
+        *,
+        node_id=None,
+        instance_id=None,
+    ):
+        return ()
+
+    def record_historical_transition(
+        self,
+        *,
+        node_id,
+        instance_id,
+        transition,
+    ) -> None:
+        return None
+
     def list_active(
         self,
         *,

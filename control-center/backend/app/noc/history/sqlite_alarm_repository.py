@@ -407,6 +407,145 @@ class SQLiteAlarmHistoryRepository:
 
         return self._decode_alarm(row)
 
+    def list_all(
+        self,
+        *,
+        node_id: NodeId | None = None,
+        instance_id: NodeInstanceId | None = None,
+    ) -> tuple[AlarmRecord, ...]:
+        if node_id is not None and not isinstance(node_id, NodeId):
+            raise TypeError(
+                "node_id must be a NodeId or None"
+            )
+
+        if (
+            instance_id is not None
+            and not isinstance(instance_id, NodeInstanceId)
+        ):
+            raise TypeError(
+                "instance_id must be a NodeInstanceId or None"
+            )
+
+        clauses: list[str] = []
+        parameters: list[str] = []
+
+        if node_id is not None:
+            clauses.append("node_id = ?")
+            parameters.append(node_id.id)
+
+        if instance_id is not None:
+            clauses.append("instance_id = ?")
+            parameters.append(instance_id.value)
+
+        where = (
+            ""
+            if not clauses
+            else "WHERE " + " AND ".join(clauses)
+        )
+
+        query = f"""
+            SELECT *
+            FROM alarms
+            {where}
+            ORDER BY opened_at ASC, alarm_id ASC
+        """
+
+        with self._database.connect() as connection:
+            rows = connection.execute(
+                query,
+                tuple(parameters),
+            ).fetchall()
+
+        return tuple(
+            self._decode_alarm(row)
+            for row in rows
+        )
+
+    def record_historical_transition(
+        self,
+        *,
+        node_id: NodeId,
+        instance_id: NodeInstanceId,
+        transition: AlarmTransition,
+    ) -> None:
+        if not isinstance(node_id, NodeId):
+            raise TypeError(
+                "node_id must be a NodeId"
+            )
+
+        if not isinstance(
+            instance_id,
+            NodeInstanceId,
+        ):
+            raise TypeError(
+                "instance_id must be a NodeInstanceId"
+            )
+
+        if not isinstance(
+            transition,
+            AlarmTransition,
+        ):
+            raise TypeError(
+                "transition must be an AlarmTransition"
+            )
+
+        if transition.source != instance_id:
+            raise ValueError(
+                "transition source must match instance_id"
+            )
+
+        with self._database.connect() as connection:
+            alarm_row = connection.execute(
+                """
+                SELECT node_id, instance_id
+                FROM alarms
+                WHERE alarm_id = ?
+                """,
+                (transition.alarm_id,),
+            ).fetchone()
+
+            if alarm_row is None:
+                raise ValueError(
+                    "historical transition alarm does not exist"
+                )
+
+            if (
+                alarm_row["node_id"] != node_id.id
+                or alarm_row["instance_id"]
+                != instance_id.value
+            ):
+                raise ValueError(
+                    "alarm_id belongs to another scope"
+                )
+
+            transition_row = connection.execute(
+                """
+                SELECT *
+                FROM alarm_transitions
+                WHERE transition_id = ?
+                """,
+                (transition.transition_id,),
+            ).fetchone()
+
+            if transition_row is not None:
+                existing = self._decode_transition(
+                    transition_row
+                )
+
+                if existing == transition:
+                    return
+
+                raise ValueError(
+                    f"transition "
+                    f"{transition.transition_id!r} "
+                    "already exists with conflicting historical data"
+                )
+
+            self.append_transition(
+                transition,
+                _connection=connection,
+            )
+
     def list_active(
         self,
         *,

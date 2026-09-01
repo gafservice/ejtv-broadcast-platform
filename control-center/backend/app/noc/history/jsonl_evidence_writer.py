@@ -10,7 +10,9 @@ Conflicting reuse of an identifier is rejected.
 
 from __future__ import annotations
 
+import fcntl
 import json
+import os
 from pathlib import Path
 from threading import RLock
 
@@ -100,7 +102,7 @@ class JsonlEvidenceWriter(EvidenceWriter):
         identity_field: str,
         identity: str,
     ) -> None:
-        """Append one canonical line with exact-retry idempotency."""
+        """Append one canonical line with process-safe idempotency."""
 
         with self._lock:
             path.parent.mkdir(
@@ -108,22 +110,35 @@ class JsonlEvidenceWriter(EvidenceWriter):
                 exist_ok=True,
             )
 
-            if path.exists():
-                with path.open(
-                    "r",
-                    encoding="utf-8",
-                ) as handle:
+            with path.open(
+                "a+",
+                encoding="utf-8",
+                newline="\n",
+            ) as handle:
+                fcntl.flock(
+                    handle.fileno(),
+                    fcntl.LOCK_EX,
+                )
+
+                try:
+                    handle.seek(0)
+
                     for raw_line in handle:
-                        line = raw_line.rstrip("\r\n")
+                        line = raw_line.rstrip(
+                            "\r\n"
+                        )
 
                         if not line:
                             continue
 
                         try:
-                            payload = json.loads(line)
+                            payload = json.loads(
+                                line
+                            )
                         except json.JSONDecodeError as exc:
                             raise EvidenceConflictError(
-                                f"invalid JSONL evidence in {path}"
+                                "invalid JSONL evidence "
+                                f"in {path}"
                             ) from exc
 
                         if payload.get(
@@ -135,15 +150,23 @@ class JsonlEvidenceWriter(EvidenceWriter):
                             return
 
                         raise EvidenceConflictError(
-                            f"evidence identity {identity!r} "
-                            "already exists with conflicting payload"
+                            f"evidence identity "
+                            f"{identity!r} already "
+                            "exists with conflicting "
+                            "payload"
                         )
 
-            with path.open(
-                "a",
-                encoding="utf-8",
-                newline="\n",
-            ) as handle:
-                handle.write(encoded)
-                handle.write("\n")
-                handle.flush()
+                    handle.seek(
+                        0,
+                        os.SEEK_END,
+                    )
+                    handle.write(encoded)
+                    handle.write("\n")
+                    handle.flush()
+                    os.fsync(handle.fileno())
+
+                finally:
+                    fcntl.flock(
+                        handle.fileno(),
+                        fcntl.LOCK_UN,
+                    )

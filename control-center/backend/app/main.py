@@ -9,6 +9,8 @@ from fastapi import FastAPI, Request
 
 from app.api.dependencies import (
     get_alarm_recovery_service,
+    get_daily_alarm_continuity_service,
+    get_daily_history_maintenance_runtime,
     get_evidence_reconciliation_service,
     get_capacity_service,
     get_node_registry,
@@ -50,6 +52,14 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         DEFAULT_INSTANCE_ID
     )
 
+    continuity_through = datetime.now(timezone.utc)
+
+    get_daily_alarm_continuity_service().catch_up(
+        node_id=bootstrap_result.node.node_id,
+        instance_id=node_instance_id,
+        through=continuity_through,
+    )
+
     get_alarm_recovery_service().recover(
         node_id=bootstrap_result.node.node_id,
         instance_id=node_instance_id,
@@ -83,13 +93,25 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         name="noc-telemetry-refresh",
     )
 
+    daily_history_task = asyncio.create_task(
+        get_daily_history_maintenance_runtime().run_forever(
+            node_id=bootstrap_result.node.node_id,
+            instance_id=node_instance_id,
+        ),
+        name="noc-daily-history-maintenance",
+    )
+
     try:
         yield
     finally:
         telemetry_task.cancel()
+        daily_history_task.cancel()
 
         with suppress(asyncio.CancelledError):
             await telemetry_task
+
+        with suppress(asyncio.CancelledError):
+            await daily_history_task
 
         await application_shutdown()
 

@@ -49,6 +49,12 @@ from app.noc.services.alarm_service import AlarmService
 from app.noc.services.alarm_recovery_service import (
     AlarmRecoveryService,
 )
+from app.noc.services.daily_alarm_continuity_service import (
+    DailyAlarmContinuityService,
+)
+from app.noc.runtime.daily_history_maintenance import (
+    DailyHistoryMaintenanceRuntime,
+)
 from app.noc.services.health_service import HealthService
 from app.noc.services.history_query_service import (
     HistoryQueryService,
@@ -302,6 +308,31 @@ def get_evidence_reconciliation_service(
         event_repository=get_event_history_repository(),
         alarm_repository=get_alarm_history_repository(),
         evidence_writer=get_noc_evidence_writer(),
+    )
+
+
+@lru_cache
+def get_daily_alarm_continuity_service(
+) -> DailyAlarmContinuityService:
+    """Construye la continuidad diaria durable de alarmas NOC."""
+
+    return DailyAlarmContinuityService(
+        get_alarm_history_repository(),
+    )
+
+
+@lru_cache
+def get_daily_history_maintenance_runtime(
+) -> DailyHistoryMaintenanceRuntime:
+    """Construye el mantenimiento histórico diario del NOC."""
+
+    return DailyHistoryMaintenanceRuntime(
+        continuity_service=(
+            get_daily_alarm_continuity_service()
+        ),
+        reconciliation_service=(
+            get_evidence_reconciliation_service()
+        ),
     )
 
 

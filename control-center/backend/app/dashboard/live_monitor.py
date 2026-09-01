@@ -68,6 +68,9 @@ from app.noc.services.alarm_service import AlarmService
 from app.noc.services.alarm_recovery_service import (
     AlarmRecoveryService,
 )
+from app.noc.services.daily_alarm_continuity_service import (
+    DailyAlarmContinuityService,
+)
 from app.noc.services.critical_path_no_readers_alarm_service import (
     CriticalPathNoReadersAlarmService,
 )
@@ -216,6 +219,12 @@ def build_dashboard_application() -> DashboardApplication:
         evidence_writer=evidence_writer,
     )
 
+    daily_alarm_continuity_service = (
+        DailyAlarmContinuityService(
+            alarm_history_repository,
+        )
+    )
+
     alarm_recovery_service = AlarmRecoveryService(
         registry=node_registry,
         history_repository=alarm_history_repository,
@@ -232,6 +241,14 @@ def build_dashboard_application() -> DashboardApplication:
             alarm_repository=alarm_history_repository,
             evidence_writer=evidence_writer,
         )
+    )
+
+    continuity_through = datetime.now(timezone.utc)
+
+    daily_alarm_continuity_service.catch_up(
+        node_id=bootstrap_result.node.node_id,
+        instance_id=node_instance_id,
+        through=continuity_through,
     )
 
     alarm_recovery_service.recover(

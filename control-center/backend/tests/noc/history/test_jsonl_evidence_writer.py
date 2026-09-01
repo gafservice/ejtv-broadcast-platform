@@ -544,3 +544,166 @@ def test_reopened_writer_preserves_retry_idempotency(
             encoding="utf-8"
         ).splitlines()
     ) == 1
+
+
+def _multiprocess_append_same_event(
+    root_path: str,
+) -> None:
+    timestamp = datetime(
+        2026,
+        9,
+        1,
+        12,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    writer = JsonlEvidenceWriter(
+        root_path
+    )
+
+    writer.append_event(
+        make_event_record(
+            event_id="event-multiprocess-shared",
+            timestamp=timestamp,
+        )
+    )
+
+
+def test_multiprocess_same_identity_is_idempotent(
+    tmp_path,
+) -> None:
+    import multiprocessing
+
+    context = multiprocessing.get_context(
+        "spawn"
+    )
+
+    processes = [
+        context.Process(
+            target=_multiprocess_append_same_event,
+            args=(str(tmp_path),),
+        )
+        for _ in range(8)
+    ]
+
+    for process in processes:
+        process.start()
+
+    for process in processes:
+        process.join(timeout=10)
+
+        assert process.exitcode == 0
+
+    path = (
+        tmp_path
+        / "2026"
+        / "09"
+        / "01"
+        / "events.jsonl"
+    )
+
+    assert path.exists()
+
+    lines = path.read_text(
+        encoding="utf-8"
+    ).splitlines()
+
+    assert len(lines) == 1
+
+    payload = json.loads(lines[0])
+
+    assert payload["event_id"] == (
+        "event-multiprocess-shared"
+    )
+
+
+def _multiprocess_append_distinct_event(
+    root_path: str,
+    event_id: str,
+) -> None:
+    timestamp = datetime(
+        2026,
+        9,
+        1,
+        12,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    writer = JsonlEvidenceWriter(
+        root_path
+    )
+
+    writer.append_event(
+        make_event_record(
+            event_id=event_id,
+            timestamp=timestamp,
+        )
+    )
+
+
+def test_multiprocess_distinct_identities_are_all_preserved(
+    tmp_path,
+) -> None:
+    import multiprocessing
+
+    context = multiprocessing.get_context(
+        "spawn"
+    )
+
+    event_ids = [
+        f"event-multiprocess-{index:02d}"
+        for index in range(12)
+    ]
+
+    processes = [
+        context.Process(
+            target=_multiprocess_append_distinct_event,
+            args=(
+                str(tmp_path),
+                event_id,
+            ),
+        )
+        for event_id in event_ids
+    ]
+
+    for process in processes:
+        process.start()
+
+    for process in processes:
+        process.join(timeout=10)
+
+        assert process.exitcode == 0
+
+    path = (
+        tmp_path
+        / "2026"
+        / "09"
+        / "01"
+        / "events.jsonl"
+    )
+
+    assert path.exists()
+
+    lines = [
+        line
+        for line in path.read_text(
+            encoding="utf-8"
+        ).splitlines()
+        if line.strip()
+    ]
+
+    assert len(lines) == len(event_ids)
+
+    payloads = [
+        json.loads(line)
+        for line in lines
+    ]
+
+    actual_ids = {
+        payload["event_id"]
+        for payload in payloads
+    }
+
+    assert actual_ids == set(event_ids)

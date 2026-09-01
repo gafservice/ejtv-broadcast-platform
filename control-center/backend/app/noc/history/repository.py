@@ -90,6 +90,29 @@ class AlarmHistoryRepository(Protocol):
         """Return the current canonical alarm state."""
         ...
 
+    def list_all(
+        self,
+        *,
+        node_id: NodeId | None = None,
+        instance_id: NodeInstanceId | None = None,
+    ) -> tuple[AlarmRecord, ...]:
+        """Return all current alarm records in the requested scope."""
+        ...
+
+    def record_historical_transition(
+        self,
+        *,
+        node_id: NodeId,
+        instance_id: NodeInstanceId,
+        transition: AlarmTransition,
+    ) -> None:
+        """Persist an immutable transition without changing current state.
+
+        Exact retries of the same transition are idempotent. Reusing the
+        same transition_id with different data is a conflict.
+        """
+        ...
+
     def list_active(
         self,
         *,

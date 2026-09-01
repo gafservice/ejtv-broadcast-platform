@@ -339,6 +339,124 @@ class InMemoryAlarmHistoryRepository:
         with self._lock:
             return self._current.get(normalized)
 
+    def list_all(
+        self,
+        *,
+        node_id: NodeId | None = None,
+        instance_id: NodeInstanceId | None = None,
+    ) -> tuple[AlarmRecord, ...]:
+        if node_id is not None and not isinstance(node_id, NodeId):
+            raise TypeError("node_id must be a NodeId or None")
+
+        if (
+            instance_id is not None
+            and not isinstance(instance_id, NodeInstanceId)
+        ):
+            raise TypeError(
+                "instance_id must be a NodeInstanceId or None"
+            )
+
+        with self._lock:
+            items = tuple(self._current.items())
+            scopes = dict(self._alarm_scope)
+
+        filtered: list[AlarmRecord] = []
+
+        for alarm_id, alarm in items:
+            scope = scopes.get(alarm_id)
+
+            if scope is None:
+                continue
+
+            alarm_node_id, alarm_instance_id = scope
+
+            if (
+                node_id is not None
+                and alarm_node_id != node_id
+            ):
+                continue
+
+            if (
+                instance_id is not None
+                and alarm_instance_id != instance_id
+            ):
+                continue
+
+            filtered.append(alarm)
+
+        return tuple(
+            sorted(
+                filtered,
+                key=lambda item: (
+                    item.timestamp,
+                    item.alarm_id,
+                ),
+            )
+        )
+
+    def record_historical_transition(
+        self,
+        *,
+        node_id: NodeId,
+        instance_id: NodeInstanceId,
+        transition: AlarmTransition,
+    ) -> None:
+        if not isinstance(node_id, NodeId):
+            raise TypeError("node_id must be a NodeId")
+
+        if not isinstance(instance_id, NodeInstanceId):
+            raise TypeError(
+                "instance_id must be a NodeInstanceId"
+            )
+
+        if not isinstance(transition, AlarmTransition):
+            raise TypeError(
+                "transition must be an AlarmTransition"
+            )
+
+        if transition.source != instance_id:
+            raise ValueError(
+                "transition source must match instance_id"
+            )
+
+        with self._lock:
+            scope = self._alarm_scope.get(
+                transition.alarm_id
+            )
+
+            expected_scope = (
+                node_id,
+                instance_id,
+            )
+
+            if scope is None:
+                raise ValueError(
+                    "historical transition alarm does not exist"
+                )
+
+            if scope != expected_scope:
+                raise ValueError(
+                    "alarm_id belongs to another scope"
+                )
+
+            existing = self._transitions.get(
+                transition.transition_id
+            )
+
+            if existing is not None:
+                if existing == transition:
+                    return
+
+                raise ValueError(
+                    f"transition "
+                    f"{transition.transition_id!r} "
+                    "already exists with conflicting historical data"
+                )
+
+            self._transitions[
+                transition.transition_id
+            ] = transition
+
     def list_active(
         self,
         *,
