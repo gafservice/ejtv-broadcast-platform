@@ -1792,3 +1792,96 @@ def test_build_active_alarms_panel_requires_integer_limit(
             alarms=(),
             limit=limit,
         )
+
+
+def test_build_recent_events_panel_preserves_session_operational_context() -> None:
+    from datetime import datetime, timezone
+
+    from app.noc.domain.node_event import (
+        EventRecord,
+        EventSeverity,
+    )
+    from app.noc.domain.node_instance import NodeInstanceId
+
+    service = DashboardService()
+
+    event = EventRecord(
+        event_id="evt-session-001",
+        event_type="SESSION_CONNECTED",
+        severity=EventSeverity.INFO,
+        timestamp=datetime(
+            2026, 9, 1, 1, 30, 0,
+            tzinfo=timezone.utc,
+        ),
+        source=NodeInstanceId("ejtv-01"),
+        title="SRT reader connected on impact",
+        description="Test session event",
+        attributes={
+            "session_id": "srt-test-001",
+            "remote_address": "47.190.17.101:57045",
+            "remote_ip": "47.190.17.101",
+            "path": "impact",
+            "protocol": "SRT",
+            "role": "READER",
+        },
+    )
+
+    panel = service.build_recent_events_panel(
+        events=(event,),
+    )
+
+    assert panel.event_count == 1
+
+    row = panel.events[0]
+
+    assert row.remote_address == "47.190.17.101:57045"
+    assert row.path == "impact"
+    assert row.protocol == "SRT"
+    assert row.role == "READER"
+
+
+def test_build_active_alarms_panel_preserves_session_operational_context() -> None:
+    from datetime import datetime, timezone
+
+    from app.noc.domain.node_alarm import (
+        AlarmRecord,
+        AlarmSeverity,
+        AlarmState,
+    )
+    from app.noc.domain.node_instance import NodeInstanceId
+
+    service = DashboardService()
+
+    alarm = AlarmRecord(
+        alarm_id="alm-session-001",
+        alarm_type="RECONNECT_FLAPPING",
+        severity=AlarmSeverity.MAJOR,
+        state=AlarmState.ACTIVE,
+        timestamp=datetime(
+            2026, 9, 1, 1, 35, 0,
+            tzinfo=timezone.utc,
+        ),
+        source=NodeInstanceId("ejtv-01"),
+        title="Repeated reconnects detected",
+        description="Test reconnect flapping alarm",
+        attributes={
+            "remote_ip": "47.190.17.101",
+            "path": "impact",
+            "protocol": "SRT",
+            "role": "READER",
+            "reconnect_count": "4",
+        },
+    )
+
+    panel = service.build_active_alarms_panel(
+        alarms=(alarm,),
+    )
+
+    assert panel.alarm_count == 1
+
+    row = panel.alarms[0]
+
+    assert row.remote_address == "47.190.17.101"
+    assert row.path == "impact"
+    assert row.protocol == "SRT"
+    assert row.role == "READER"

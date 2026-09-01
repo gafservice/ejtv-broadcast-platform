@@ -92,7 +92,11 @@ def test_render_contains_event_values() -> None:
     assert cells[1].plain == "WARNING"
 
     assert cells[2] == "NODE_HEALTH_DEGRADED"
-    assert cells[3] == "Node health degraded"
+    assert cells[3] == "-"
+    assert cells[4] == "-"
+    assert cells[5] == "-"
+    assert cells[6] == "-"
+    assert cells[7] == "Node health degraded"
 
     assert row is not None
 
@@ -208,7 +212,7 @@ def test_render_empty_recent_events() -> None:
     )
     assert table.row_count == 1
 
-    title_cell = table.columns[3]._cells[0]
+    title_cell = table.columns[7]._cells[0]
 
     assert isinstance(
         title_cell,

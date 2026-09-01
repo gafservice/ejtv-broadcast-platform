@@ -15,6 +15,10 @@ class RecentEventRowData:
     severity: str
     title: str
     occurred_at: datetime
+    remote_address: str = "-"
+    path: str = "-"
+    protocol: str = "-"
+    role: str = "-"
 
     def __post_init__(self) -> None:
         for field_name in (
@@ -22,6 +26,10 @@ class RecentEventRowData:
             "event_type",
             "severity",
             "title",
+            "remote_address",
+            "path",
+            "protocol",
+            "role",
         ):
             value = getattr(
                 self,

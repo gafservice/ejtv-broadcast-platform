@@ -71,11 +71,35 @@ class ActiveAlarmsPanelRenderer:
         )
 
         table.add_column(
+            "REMOTE",
+            no_wrap=True,
+        )
+
+        table.add_column(
+            "PATH",
+            no_wrap=True,
+        )
+
+        table.add_column(
+            "PROTO",
+            no_wrap=True,
+        )
+
+        table.add_column(
+            "ROLE",
+            no_wrap=True,
+        )
+
+        table.add_column(
             "MESSAGE",
         )
 
         if not data.alarms:
             table.add_row(
+                "-",
+                "-",
+                "-",
+                "-",
                 "-",
                 "-",
                 "-",
@@ -98,6 +122,10 @@ class ActiveAlarmsPanelRenderer:
                         alarm
                     ),
                     alarm.alarm_type,
+                    alarm.remote_address,
+                    alarm.path,
+                    alarm.protocol,
+                    alarm.role,
                     alarm.message,
                 )
 

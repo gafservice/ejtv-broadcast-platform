@@ -16,6 +16,10 @@ class ActiveAlarmRowData:
     state: str
     message: str
     opened_at: datetime
+    remote_address: str = "-"
+    path: str = "-"
+    protocol: str = "-"
+    role: str = "-"
 
     def __post_init__(self) -> None:
         for field_name in (
@@ -24,6 +28,10 @@ class ActiveAlarmRowData:
             "severity",
             "state",
             "message",
+            "remote_address",
+            "path",
+            "protocol",
+            "role",
         ):
             value = getattr(
                 self,

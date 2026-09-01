@@ -231,6 +231,26 @@ class DashboardService:
                 state=alarm.state.value,
                 message=alarm.title,
                 opened_at=alarm.timestamp,
+                remote_address=self._attribute_value(
+                    alarm.attributes,
+                    "remote_address",
+                    fallback=self._attribute_value(
+                        alarm.attributes,
+                        "remote_ip",
+                    ),
+                ),
+                path=self._attribute_value(
+                    alarm.attributes,
+                    "path",
+                ),
+                protocol=self._attribute_value(
+                    alarm.attributes,
+                    "protocol",
+                ),
+                role=self._attribute_value(
+                    alarm.attributes,
+                    "role",
+                ),
             )
             for alarm in selected
         )
@@ -290,6 +310,26 @@ class DashboardService:
                 severity=event.severity.value,
                 title=event.title,
                 occurred_at=event.timestamp,
+                remote_address=self._attribute_value(
+                    event.attributes,
+                    "remote_address",
+                    fallback=self._attribute_value(
+                        event.attributes,
+                        "remote_ip",
+                    ),
+                ),
+                path=self._attribute_value(
+                    event.attributes,
+                    "path",
+                ),
+                protocol=self._attribute_value(
+                    event.attributes,
+                    "protocol",
+                ),
+                role=self._attribute_value(
+                    event.attributes,
+                    "role",
+                ),
             )
             for event in selected
         )
@@ -297,6 +337,27 @@ class DashboardService:
         return RecentEventsPanelData(
             events=rows,
         )
+
+    @staticmethod
+    def _attribute_value(
+        attributes,
+        key: str,
+        *,
+        fallback: str = "-",
+    ) -> str:
+        """Return normalized dashboard text from record attributes."""
+
+        if attributes is None:
+            return fallback
+
+        value = attributes.get(key)
+
+        if value is None:
+            return fallback
+
+        normalized = str(value).strip()
+
+        return normalized or fallback
 
     def build_node_health_panel(
         self,

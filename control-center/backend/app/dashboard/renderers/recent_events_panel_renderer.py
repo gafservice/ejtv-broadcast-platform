@@ -50,11 +50,31 @@ class RecentEventsPanelRenderer:
             no_wrap=True,
         )
         table.add_column(
+            "REMOTE",
+            no_wrap=True,
+        )
+        table.add_column(
+            "PATH",
+            no_wrap=True,
+        )
+        table.add_column(
+            "PROTO",
+            no_wrap=True,
+        )
+        table.add_column(
+            "ROLE",
+            no_wrap=True,
+        )
+        table.add_column(
             "TITLE",
         )
 
         if not data.events:
             table.add_row(
+                "-",
+                "-",
+                "-",
+                "-",
                 "-",
                 "-",
                 "-",
@@ -69,6 +89,10 @@ class RecentEventsPanelRenderer:
                     self._format_time(event),
                     self._format_severity(event),
                     event.event_type,
+                    event.remote_address,
+                    event.path,
+                    event.protocol,
+                    event.role,
                     event.title,
                 )
 
