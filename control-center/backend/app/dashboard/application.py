@@ -311,6 +311,7 @@ class DashboardApplication:
                 )
             )
 
+        if self._history_query_service is not None:
             event_history_records = (
                 self._history_query_service.recent_events(
                     node_id=self._node_id,
@@ -566,33 +567,51 @@ class DashboardApplication:
         )
 
     def _validate_noc_dependencies(self) -> None:
-        """Evita configurar parcialmente el runtime NOC."""
+        """Valida por separado lectura NOC y mutación operacional."""
 
-        dependencies = (
-            self._telemetry_refresh_service,
-            self._session_transition_event_service,
-            self._event_service,
-            self._alarm_service,
+        reader_dependencies = (
             self._history_query_service,
             self._node_id,
             self._instance_id,
         )
 
-        configured_count = sum(
+        reader_count = sum(
             dependency is not None
-            for dependency in dependencies
+            for dependency in reader_dependencies
         )
 
-        if configured_count not in (
+        if reader_count not in (0, len(reader_dependencies)):
+            raise ValueError(
+                "history_query_service, node_id e instance_id deben "
+                "configurarse juntos."
+            )
+
+        operational_dependencies = (
+            self._telemetry_refresh_service,
+            self._session_transition_event_service,
+            self._event_service,
+            self._alarm_service,
+        )
+
+        operational_count = sum(
+            dependency is not None
+            for dependency in operational_dependencies
+        )
+
+        if operational_count not in (
             0,
-            len(dependencies),
+            len(operational_dependencies),
         ):
             raise ValueError(
                 "telemetry_refresh_service, "
-                "session_transition_event_service, event_service, "
-                "alarm_service, history_query_service, node_id e "
-                "instance_id deben "
-                "configurarse juntos."
+                "session_transition_event_service, event_service y "
+                "alarm_service deben configurarse juntos."
+            )
+
+        if operational_count and not reader_count:
+            raise ValueError(
+                "el runtime NOC requiere history_query_service, "
+                "node_id e instance_id."
             )
 
     def _validate_health_dependencies(self) -> None:

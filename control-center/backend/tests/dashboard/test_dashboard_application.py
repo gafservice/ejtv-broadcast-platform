@@ -1057,6 +1057,184 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
     )
 
 
+
+def test_application_reads_durable_history_without_noc_runtime() -> None:
+    """El dashboard puede leer historia durable sin poseer el runtime NOC."""
+    from app.noc.domain.node_id import NodeId
+    from app.noc.domain.node_instance import NodeInstanceId
+
+    captured_at = datetime(
+        2026,
+        8,
+        18,
+        23,
+        59,
+        tzinfo=timezone.utc,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=0,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=None,
+        interval_seconds=None,
+        paths=(),
+        total_inbound_bitrate_bps=None,
+        total_outbound_bitrate_bps=None,
+        quality=MeasurementQuality.NOT_AVAILABLE,
+    )
+
+    session_snapshot = Mock()
+    session_measurement = Mock()
+
+    mediamtx_adapter = Mock()
+    mediamtx_adapter.health.return_value = True
+    mediamtx_adapter.get_snapshot.return_value = snapshot
+
+    session_adapter = Mock()
+    session_adapter.get_snapshot.return_value = session_snapshot
+
+    streaming_service = Mock()
+    streaming_service.compare.return_value = measurement
+
+    session_service = Mock()
+    session_service.measure.return_value = session_measurement
+
+    system_service = Mock()
+
+    system_info = Mock()
+    system_info.hostname = "ejtv-01"
+
+    system_resources = Mock()
+    interface_infos = Mock()
+
+    system_service.get_system_info.return_value = system_info
+    system_service.get_system_resources.return_value = system_resources
+    system_service.get_network_interface_infos.return_value = interface_infos
+
+    network_telemetry_service = Mock()
+    network_telemetry_service.build.return_value = Mock()
+
+    dashboard_service = Mock()
+    dashboard_service.build_network_interfaces_panel.return_value = Mock()
+
+    event_records = (
+        Mock(),
+        Mock(),
+    )
+
+    event_history_records = tuple(
+        Mock(event=event)
+        for event in event_records
+    )
+
+    alarm_records = (
+        Mock(),
+        Mock(),
+    )
+
+    history_query_service = Mock()
+    history_query_service.recent_events.return_value = (
+        event_history_records
+    )
+    history_query_service.active_alarms.return_value = alarm_records
+
+    recent_events_panel = Mock()
+    active_alarms_panel = Mock()
+
+    dashboard_service.build_recent_events_panel.return_value = (
+        recent_events_panel
+    )
+    dashboard_service.build_active_alarms_panel.return_value = (
+        active_alarms_panel
+    )
+
+    dashboard_data = Mock(spec=DashboardData)
+
+    dashboard_data.active_connections = Mock()
+    dashboard_data.active_connections.total_items = 0
+
+    dashboard_data.active_alarms = Mock()
+    dashboard_data.active_alarms.total_items = 2
+
+    dashboard_data.recent_events = Mock()
+    dashboard_data.recent_events.total_items = 2
+
+    dashboard_snapshot_service = Mock()
+    dashboard_snapshot_service.build_snapshot.return_value = dashboard_data
+
+    node_id = NodeId.create(
+        id="streaming-core",
+        name="streaming",
+        display_name="Streaming Core",
+    )
+
+    instance_id = NodeInstanceId(
+        "streaming-primary"
+    )
+
+    application = DashboardApplication(
+        mediamtx_adapter=mediamtx_adapter,
+        session_adapter=session_adapter,
+        streaming_service=streaming_service,
+        session_service=session_service,
+        dashboard_service=dashboard_service,
+        dashboard_renderer=Mock(),
+        system_service=system_service,
+        dashboard_snapshot_service=dashboard_snapshot_service,
+        network_telemetry_service=network_telemetry_service,
+        history_query_service=history_query_service,
+        node_id=node_id,
+        instance_id=instance_id,
+    )
+
+    result = application.build_dashboard()
+
+    assert result is dashboard_data
+
+    history_query_service.recent_events.assert_called_once_with(
+        node_id=node_id,
+        instance_id=instance_id,
+    )
+
+    history_query_service.active_alarms.assert_called_once_with(
+        node_id=node_id,
+        instance_id=instance_id,
+    )
+
+    dashboard_service.build_recent_events_panel.assert_called_once_with(
+        events=event_records,
+        viewport=PanelViewport(
+            offset=0,
+            page_size=5,
+        ),
+    )
+
+    dashboard_service.build_active_alarms_panel.assert_called_once_with(
+        alarms=alarm_records,
+        viewport=PanelViewport(
+            offset=0,
+            page_size=5,
+        ),
+    )
+
+    snapshot_input = (
+        dashboard_snapshot_service
+        .build_snapshot
+        .call_args
+        .args[0]
+    )
+
+    assert snapshot_input.node_health is None
+    assert snapshot_input.recent_events is recent_events_panel
+    assert snapshot_input.active_alarms is active_alarms_panel
+
+
 @pytest.mark.parametrize(
     (
         "telemetry_refresh_service",
