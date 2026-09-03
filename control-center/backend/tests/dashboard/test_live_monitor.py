@@ -744,6 +744,7 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
         ),
         event_service=event_service,
         alarm_service=alarm_service,
+        history_query_service=history_query_service,
         node_id=bootstrap_result.node.node_id,
         instance_id=node_instance_id,
     )

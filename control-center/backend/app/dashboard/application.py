@@ -52,6 +52,7 @@ from app.noc.runtime.session_operational_runtime import (
 )
 from app.noc.services.alarm_service import AlarmService
 from app.noc.services.event_service import EventService
+from app.noc.services.history_query_service import HistoryQueryService
 from app.services.network_telemetry_service import (
     NetworkTelemetryService,
 )
@@ -91,6 +92,7 @@ class DashboardApplication:
         ) = None,
         event_service: EventService | None = None,
         alarm_service: AlarmService | None = None,
+        history_query_service: HistoryQueryService | None = None,
         node_id: NodeId | None = None,
         instance_id: NodeInstanceId | None = None,
         navigation_state: DashboardNavigationState | None = None,
@@ -131,6 +133,7 @@ class DashboardApplication:
         )
         self._event_service = event_service
         self._alarm_service = alarm_service
+        self._history_query_service = history_query_service
         self._node_id = node_id
         self._instance_id = instance_id
 
@@ -308,9 +311,16 @@ class DashboardApplication:
                 )
             )
 
-            event_records = self._event_service.list_all(
-                self._node_id,
-                self._instance_id,
+            event_history_records = (
+                self._history_query_service.recent_events(
+                    node_id=self._node_id,
+                    instance_id=self._instance_id,
+                )
+            )
+
+            event_records = tuple(
+                record.event
+                for record in event_history_records
             )
 
             recent_events = (
@@ -320,9 +330,11 @@ class DashboardApplication:
                 )
             )
 
-            alarm_records = self._alarm_service.active(
-                self._node_id,
-                self._instance_id,
+            alarm_records = (
+                self._history_query_service.active_alarms(
+                    node_id=self._node_id,
+                    instance_id=self._instance_id,
+                )
             )
 
             active_alarms = (
@@ -561,6 +573,7 @@ class DashboardApplication:
             self._session_transition_event_service,
             self._event_service,
             self._alarm_service,
+            self._history_query_service,
             self._node_id,
             self._instance_id,
         )
@@ -577,7 +590,8 @@ class DashboardApplication:
             raise ValueError(
                 "telemetry_refresh_service, "
                 "session_transition_event_service, event_service, "
-                "alarm_service, node_id e instance_id deben "
+                "alarm_service, history_query_service, node_id e "
+                "instance_id deben "
                 "configurarse juntos."
             )
 

@@ -431,3 +431,78 @@ def test_last_24_hours_survives_sqlite_repository_reopen(
     assert result.alarm_transitions == (
         inside_transition,
     )
+
+
+def test_recent_events_returns_durable_events_from_last_24_hours():
+    node, instance, events, _, service = make_context()
+
+    inside = persist_event(
+        events,
+        node,
+        instance,
+        event_id="event-recent",
+        timestamp=NOW - timedelta(minutes=30),
+    )
+
+    persist_event(
+        events,
+        node,
+        instance,
+        event_id="event-old-for-recent",
+        timestamp=NOW - timedelta(hours=25),
+    )
+
+    result = service.recent_events(
+        now=NOW,
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    assert tuple(
+        record.event
+        for record in result
+    ) == (inside,)
+
+
+def test_active_alarms_returns_durable_active_alarm_state():
+    node, instance, _, alarms, service = make_context()
+
+    active = AlarmRecord(
+        alarm_id="alarm-active-query",
+        alarm_type="TEST_ALARM",
+        severity=AlarmSeverity.CRITICAL,
+        state=AlarmState.ACTIVE,
+        timestamp=NOW - timedelta(minutes=5),
+        source=instance.instance_id,
+        title="Active alarm",
+        description="Durable active alarm",
+    )
+
+    transition = AlarmTransition(
+        transition_id=make_alarm_transition_id(
+            alarm_id=active.alarm_id,
+            transition_type=AlarmTransitionType.OPENED,
+            timestamp=active.timestamp,
+            source=instance.instance_id,
+            state=active.state,
+        ),
+        alarm_id=active.alarm_id,
+        transition_type=AlarmTransitionType.OPENED,
+        timestamp=active.timestamp,
+        source=instance.instance_id,
+        state=active.state,
+    )
+
+    alarms.record_lifecycle(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        alarm=active,
+        transition=transition,
+    )
+
+    result = service.active_alarms(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    assert result == (active,)

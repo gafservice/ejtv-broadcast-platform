@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+from app.noc.domain.node_alarm import AlarmRecord
 from app.noc.domain.node_id import NodeId
 from app.noc.domain.node_instance import NodeInstanceId
 from app.noc.history.alarm_transition import AlarmTransition
@@ -107,6 +108,34 @@ class HistoryQueryService:
             end=end,
             events=events,
             alarm_transitions=alarm_transitions,
+        )
+
+    def recent_events(
+        self,
+        *,
+        now: datetime | None = None,
+        node_id: NodeId | None = None,
+        instance_id: NodeInstanceId | None = None,
+    ) -> tuple[EventHistoryRecord, ...]:
+        """Return durable events from the previous 24 hours."""
+
+        return self.last_24_hours(
+            now=now,
+            node_id=node_id,
+            instance_id=instance_id,
+        ).events
+
+    def active_alarms(
+        self,
+        *,
+        node_id: NodeId | None = None,
+        instance_id: NodeInstanceId | None = None,
+    ) -> tuple[AlarmRecord, ...]:
+        """Return the durable currently active alarms."""
+
+        return self._alarm_repository.list_active(
+            node_id=node_id,
+            instance_id=instance_id,
         )
 
     @staticmethod

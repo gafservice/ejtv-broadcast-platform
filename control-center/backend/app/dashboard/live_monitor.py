@@ -398,6 +398,7 @@ def build_dashboard_application() -> DashboardApplication:
         ),
         event_service=event_service,
         alarm_service=alarm_service,
+        history_query_service=history_query_service,
         node_id=bootstrap_result.node.node_id,
         instance_id=node_instance_id,
     )

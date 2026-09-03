@@ -761,18 +761,30 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
     session_operational_runtime = Mock()
 
     event_service = Mock()
+    alarm_service = Mock()
+
     event_records = (
         Mock(),
         Mock(),
     )
-    event_service.list_all.return_value = event_records
 
-    alarm_service = Mock()
+    event_history_records = tuple(
+        Mock(event=event)
+        for event in event_records
+    )
+
     alarm_records = (
         Mock(),
         Mock(),
     )
-    alarm_service.active.return_value = alarm_records
+
+    history_query_service = Mock()
+    history_query_service.recent_events.return_value = (
+        event_history_records
+    )
+    history_query_service.active_alarms.return_value = (
+        alarm_records
+    )
 
     recent_events_panel = Mock()
     dashboard_service.build_recent_events_panel.return_value = (
@@ -846,6 +858,7 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
         ),
         event_service=event_service,
         alarm_service=alarm_service,
+        history_query_service=history_query_service,
         node_id=node_id,
         instance_id=instance_id,
         navigation_state=navigation_state,
@@ -878,9 +891,11 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
         diagnostic=health_diagnostic,
     )
 
-    event_service.list_all.assert_called_once_with(
-        node_id,
-        instance_id,
+    event_service.list_all.assert_not_called()
+
+    history_query_service.recent_events.assert_called_once_with(
+        node_id=node_id,
+        instance_id=instance_id,
     )
 
     dashboard_service.build_recent_events_panel.assert_called_once_with(
@@ -891,9 +906,11 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
         ),
     )
 
-    alarm_service.active.assert_called_once_with(
-        node_id,
-        instance_id,
+    alarm_service.active.assert_not_called()
+
+    history_query_service.active_alarms.assert_called_once_with(
+        node_id=node_id,
+        instance_id=instance_id,
     )
 
     dashboard_service.build_active_alarms_panel.assert_called_once_with(
