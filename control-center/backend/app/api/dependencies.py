@@ -38,6 +38,9 @@ from app.noc.history.sqlite_database import (
 from app.noc.history.sqlite_event_repository import (
     SQLiteEventHistoryRepository,
 )
+from app.noc.current_state.sqlite_node_health_diagnostic_repository import (
+    SQLiteNodeHealthDiagnosticRepository,
+)
 from app.noc.history.evidence_day_sealer import (
     EvidenceDaySealer,
 )
@@ -111,6 +114,9 @@ from app.noc.services.metric_service import MetricService
 from app.noc.services.snapshot_service import SnapshotService
 from app.noc.runtime.telemetry_refresh import (
     TelemetryRefreshService,
+)
+from app.noc.runtime.telemetry_observation_runtime import (
+    TelemetryObservationRuntime,
 )
 from app.noc.runtime.runtime_owner_lock import (
     RuntimeOwnerLock,
@@ -274,6 +280,16 @@ def get_alarm_history_repository() -> SQLiteAlarmHistoryRepository:
     """Construye el repositorio durable de alarmas NOC."""
 
     return SQLiteAlarmHistoryRepository(
+        get_noc_history_database()
+    )
+
+
+@lru_cache
+def get_node_health_diagnostic_repository(
+) -> SQLiteNodeHealthDiagnosticRepository:
+    """Construye el repositorio compartido de diagnóstico de salud."""
+
+    return SQLiteNodeHealthDiagnosticRepository(
         get_noc_history_database()
     )
 
@@ -455,6 +471,21 @@ def get_telemetry_refresh_service() -> TelemetryRefreshService:
         health_service=get_health_service(),
         network_policies=network_policy.interfaces,
     )
+
+@lru_cache
+def get_telemetry_observation_runtime(
+) -> TelemetryObservationRuntime:
+    """Construye el coordinador propietario de telemetría NOC."""
+
+    return TelemetryObservationRuntime(
+        telemetry_refresh_service=(
+            get_telemetry_refresh_service()
+        ),
+        health_diagnostic_repository=(
+            get_node_health_diagnostic_repository()
+        ),
+    )
+
 
 @lru_cache
 def get_mediamtx_http_client() -> HttpClient:

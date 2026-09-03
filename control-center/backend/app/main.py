@@ -16,7 +16,7 @@ from app.api.dependencies import (
     get_node_registry,
     get_runtime_owner_lock,
     get_system_service,
-    get_telemetry_refresh_service,
+    get_telemetry_observation_runtime,
     get_session_observation_runtime,
 )
 from app.api.router import api_router
@@ -82,7 +82,7 @@ async def _owned_noc_runtime(
     )
 
     telemetry_task = asyncio.create_task(
-        get_telemetry_refresh_service().run_forever(
+        get_telemetry_observation_runtime().run_forever(
             node_id=node_id,
             instance_id=node_instance_id,
             interval_seconds=5.0,

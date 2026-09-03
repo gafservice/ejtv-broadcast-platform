@@ -8,6 +8,7 @@ from app.api.dependencies import (
     get_event_history_repository,
     get_history_query_service,
     get_noc_history_database,
+    get_node_health_diagnostic_repository,
     get_health_service,
     get_capacity_service,
     get_heartbeat_service,
@@ -25,9 +26,14 @@ from app.api.dependencies import (
     get_session_operational_runtime,
     get_streaming_service,
     get_session_observation_runtime,
+    get_telemetry_refresh_service,
+    get_telemetry_observation_runtime,
 )
 from app.noc.infrastructure.memory_repository import (
     InMemoryNodeRepository,
+)
+from app.noc.current_state.sqlite_node_health_diagnostic_repository import (
+    SQLiteNodeHealthDiagnosticRepository,
 )
 from app.noc.registry.registry import NodeRegistry
 from app.noc.runtime.session_alarm_runtime import (
@@ -38,6 +44,9 @@ from app.noc.runtime.session_observation_runtime import (
 )
 from app.noc.runtime.session_operational_runtime import (
     SessionOperationalRuntime,
+)
+from app.noc.runtime.telemetry_observation_runtime import (
+    TelemetryObservationRuntime,
 )
 from app.noc.services.alarm_service import AlarmService
 from app.noc.services.capacity_service import CapacityService
@@ -54,6 +63,9 @@ def clear_noc_dependency_caches() -> None:
     """Reset all NOC dependency factories."""
 
     get_session_observation_runtime.cache_clear()
+    get_telemetry_observation_runtime.cache_clear()
+    get_telemetry_refresh_service.cache_clear()
+    get_node_health_diagnostic_repository.cache_clear()
     get_streaming_service.cache_clear()
     get_session_operational_runtime.cache_clear()
     get_session_alarm_runtime.cache_clear()
@@ -491,4 +503,39 @@ def test_session_observation_runtime_uses_shared_components() -> None:
     assert (
         runtime._operational_runtime
         is get_session_operational_runtime()
+    )
+
+def test_node_health_diagnostic_repository_is_cached() -> None:
+    first = get_node_health_diagnostic_repository()
+    second = get_node_health_diagnostic_repository()
+
+    assert first is second
+
+    assert isinstance(
+        first,
+        SQLiteNodeHealthDiagnosticRepository,
+    )
+
+    assert (
+        first._database
+        is get_noc_history_database()
+    )
+
+
+def test_telemetry_observation_runtime_uses_shared_components() -> None:
+    runtime = get_telemetry_observation_runtime()
+
+    assert isinstance(
+        runtime,
+        TelemetryObservationRuntime,
+    )
+
+    assert (
+        runtime.telemetry_refresh_service
+        is get_telemetry_refresh_service()
+    )
+
+    assert (
+        runtime.health_diagnostic_repository
+        is get_node_health_diagnostic_repository()
     )
