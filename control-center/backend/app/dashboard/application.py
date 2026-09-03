@@ -43,8 +43,8 @@ from app.domain.streaming import MediaMTXSnapshot, StreamingHealth
 from app.domain.system import SystemResources
 from app.noc.domain.node_id import NodeId
 from app.noc.domain.node_instance import NodeInstanceId
-from app.noc.runtime.telemetry_refresh import (
-    TelemetryRefreshService,
+from app.noc.current_state.repository import (
+    NodeHealthDiagnosticRepository,
 )
 from app.noc.services.alarm_service import AlarmService
 from app.noc.services.event_service import EventService
@@ -76,7 +76,7 @@ class DashboardApplication:
         streaming_health_service: StreamingHealthService | None = None,
         dashboard_snapshot_service: DashboardSnapshotService | None = None,
         network_telemetry_service: NetworkTelemetryService | None = None,
-        telemetry_refresh_service: TelemetryRefreshService | None = None,
+        health_diagnostic_repository: NodeHealthDiagnosticRepository | None = None,
         event_service: EventService | None = None,
         alarm_service: AlarmService | None = None,
         history_query_service: HistoryQueryService | None = None,
@@ -111,7 +111,9 @@ class DashboardApplication:
         self._metrics_parser = metrics_parser
         self._streaming_health_service = streaming_health_service
 
-        self._telemetry_refresh_service = telemetry_refresh_service
+        self._health_diagnostic_repository = (
+            health_diagnostic_repository
+        )
         self._event_service = event_service
         self._alarm_service = alarm_service
         self._history_query_service = history_query_service
@@ -256,21 +258,20 @@ class DashboardApplication:
         recent_events = None
         active_alarms = None
 
-        if self._telemetry_refresh_service is not None:
-            telemetry_result = (
-                self._telemetry_refresh_service.refresh_from_capture(
+        if self._health_diagnostic_repository is not None:
+            health_diagnostic = (
+                self._health_diagnostic_repository.latest(
                     node_id=self._node_id,
                     instance_id=self._instance_id,
-                    resources=system_resources,
-                    interface_infos=interface_infos,
                 )
             )
 
-            node_health = (
-                self._dashboard_service.build_node_health_panel(
-                    diagnostic=telemetry_result.health_diagnostic,
+            if health_diagnostic is not None:
+                node_health = (
+                    self._dashboard_service.build_node_health_panel(
+                        diagnostic=health_diagnostic,
+                    )
                 )
-            )
 
         if self._history_query_service is not None:
             event_history_records = (
@@ -527,27 +528,38 @@ class DashboardApplication:
         )
 
     def _validate_noc_dependencies(self) -> None:
-        """Valida por separado lectura NOC y mutación operacional."""
+        """Valida dependencias de lectura y legado operacional NOC."""
 
-        reader_dependencies = (
-            self._history_query_service,
+        identity_dependencies = (
             self._node_id,
             self._instance_id,
         )
 
-        reader_count = sum(
+        identity_count = sum(
             dependency is not None
-            for dependency in reader_dependencies
+            for dependency in identity_dependencies
         )
 
-        if reader_count not in (0, len(reader_dependencies)):
+        if identity_count not in (
+            0,
+            len(identity_dependencies),
+        ):
             raise ValueError(
-                "history_query_service, node_id e instance_id deben "
-                "configurarse juntos."
+                "node_id e instance_id deben configurarse juntos."
+            )
+
+        has_reader = (
+            self._history_query_service is not None
+            or self._health_diagnostic_repository is not None
+        )
+
+        if has_reader and not identity_count:
+            raise ValueError(
+                "las dependencias de lectura NOC requieren "
+                "node_id e instance_id."
             )
 
         operational_dependencies = (
-            self._telemetry_refresh_service,
             self._event_service,
             self._alarm_service,
         )
@@ -562,13 +574,13 @@ class DashboardApplication:
             len(operational_dependencies),
         ):
             raise ValueError(
-                "telemetry_refresh_service, event_service y "
-                "alarm_service deben configurarse juntos."
+                "event_service y alarm_service deben "
+                "configurarse juntos."
             )
 
-        if operational_count and not reader_count:
+        if operational_count and not identity_count:
             raise ValueError(
-                "el runtime NOC requiere history_query_service, "
+                "las dependencias operacionales NOC requieren "
                 "node_id e instance_id."
             )
 

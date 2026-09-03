@@ -749,12 +749,9 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
 
     health_diagnostic = Mock()
 
-    telemetry_result = Mock()
-    telemetry_result.health_diagnostic = health_diagnostic
-
-    telemetry_refresh_service = Mock()
-    telemetry_refresh_service.refresh_from_capture.return_value = (
-        telemetry_result
+    health_diagnostic_repository = Mock()
+    health_diagnostic_repository.latest.return_value = (
+        health_diagnostic
     )
 
     event_service = Mock()
@@ -846,7 +843,7 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
         system_service=system_service,
         dashboard_snapshot_service=dashboard_snapshot_service,
         network_telemetry_service=network_telemetry_service,
-        telemetry_refresh_service=telemetry_refresh_service,
+        health_diagnostic_repository=health_diagnostic_repository,
         event_service=event_service,
         alarm_service=alarm_service,
         history_query_service=history_query_service,
@@ -859,11 +856,9 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
 
     assert result is dashboard_data
 
-    telemetry_refresh_service.refresh_from_capture.assert_called_once_with(
+    health_diagnostic_repository.latest.assert_called_once_with(
         node_id=node_id,
         instance_id=instance_id,
-        resources=system_resources,
-        interface_infos=interface_infos,
     )
 
     dashboard_service.build_node_health_panel.assert_called_once_with(
@@ -1214,32 +1209,145 @@ def test_application_reads_durable_history_without_noc_runtime() -> None:
     assert snapshot_input.active_alarms is active_alarms_panel
 
 
+def test_application_keeps_node_health_empty_when_shared_diagnostic_is_absent() -> None:
+    from app.noc.domain.node_id import NodeId
+    from app.noc.domain.node_instance import NodeInstanceId
+
+    captured_at = datetime(
+        2026,
+        8,
+        18,
+        23,
+        59,
+        tzinfo=timezone.utc,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=0,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=None,
+        interval_seconds=None,
+        paths=(),
+        total_inbound_bitrate_bps=None,
+        total_outbound_bitrate_bps=None,
+        quality=MeasurementQuality.NOT_AVAILABLE,
+    )
+
+    mediamtx_adapter = Mock()
+    mediamtx_adapter.health.return_value = True
+    mediamtx_adapter.get_snapshot.return_value = snapshot
+
+    session_adapter = Mock()
+    session_adapter.get_snapshot.return_value = Mock()
+
+    streaming_service = Mock()
+    streaming_service.compare.return_value = measurement
+
+    session_service = Mock()
+    session_service.measure.return_value = Mock()
+
+    system_service = Mock()
+
+    system_info = Mock()
+    system_info.hostname = "ejtv-01"
+
+    system_resources = Mock()
+    interface_infos = Mock()
+
+    system_service.get_system_info.return_value = system_info
+    system_service.get_system_resources.return_value = system_resources
+    system_service.get_network_interface_infos.return_value = interface_infos
+
+    network_telemetry_service = Mock()
+    network_telemetry_service.build.return_value = Mock()
+
+    dashboard_service = Mock()
+    dashboard_service.build_network_interfaces_panel.return_value = Mock()
+
+    health_diagnostic_repository = Mock()
+    health_diagnostic_repository.latest.return_value = None
+
+    dashboard_data = Mock(spec=DashboardData)
+
+    dashboard_data.active_connections = Mock()
+    dashboard_data.active_connections.total_items = 0
+    dashboard_data.active_alarms = None
+    dashboard_data.recent_events = None
+
+    dashboard_snapshot_service = Mock()
+    dashboard_snapshot_service.build_snapshot.return_value = (
+        dashboard_data
+    )
+
+    node_id = NodeId.create(
+        id="streaming-core",
+        name="streaming",
+        display_name="Streaming Core",
+    )
+
+    instance_id = NodeInstanceId(
+        "streaming-primary"
+    )
+
+    application = DashboardApplication(
+        mediamtx_adapter=mediamtx_adapter,
+        session_adapter=session_adapter,
+        streaming_service=streaming_service,
+        session_service=session_service,
+        dashboard_service=dashboard_service,
+        dashboard_renderer=Mock(),
+        system_service=system_service,
+        dashboard_snapshot_service=dashboard_snapshot_service,
+        network_telemetry_service=network_telemetry_service,
+        health_diagnostic_repository=health_diagnostic_repository,
+        node_id=node_id,
+        instance_id=instance_id,
+    )
+
+    result = application.build_dashboard()
+
+    assert result is dashboard_data
+
+    health_diagnostic_repository.latest.assert_called_once_with(
+        node_id=node_id,
+        instance_id=instance_id,
+    )
+
+    dashboard_service.build_node_health_panel.assert_not_called()
+
+    snapshot_input = (
+        dashboard_snapshot_service
+        .build_snapshot
+        .call_args
+        .args[0]
+    )
+
+    assert snapshot_input.node_health is None
+
+
 @pytest.mark.parametrize(
     (
-        "telemetry_refresh_service",
-        "event_service",
-        "alarm_service",
         "node_id",
         "instance_id",
     ),
     (
-        (Mock(), None, None, None, None),
-        (None, Mock(), None, None, None),
-        (None, None, Mock(), None, None),
-        (None, None, None, Mock(), None),
-        (None, None, None, None, Mock()),
+        (Mock(), None),
+        (None, Mock()),
     ),
 )
-def test_application_rejects_partial_noc_configuration(
-    telemetry_refresh_service,
-    event_service,
-    alarm_service,
+def test_application_rejects_partial_noc_identity(
     node_id,
     instance_id,
 ) -> None:
     with pytest.raises(
         ValueError,
-        match="deben configurarse juntos",
+        match="node_id e instance_id deben configurarse juntos",
     ):
         DashboardApplication(
             mediamtx_adapter=Mock(),
@@ -1249,7 +1357,77 @@ def test_application_rejects_partial_noc_configuration(
             dashboard_service=Mock(),
             dashboard_renderer=Mock(),
             system_service=Mock(),
-            telemetry_refresh_service=telemetry_refresh_service,
+            node_id=node_id,
+            instance_id=instance_id,
+        )
+
+
+@pytest.mark.parametrize(
+    "reader_name",
+    (
+        "history_query_service",
+        "health_diagnostic_repository",
+    ),
+)
+def test_application_rejects_noc_reader_without_identity(
+    reader_name,
+) -> None:
+    kwargs = {
+        reader_name: Mock(),
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="dependencias de lectura NOC requieren",
+    ):
+        DashboardApplication(
+            mediamtx_adapter=Mock(),
+            session_adapter=Mock(),
+            streaming_service=Mock(),
+            session_service=Mock(),
+            dashboard_service=Mock(),
+            dashboard_renderer=Mock(),
+            system_service=Mock(),
+            **kwargs,
+        )
+
+
+@pytest.mark.parametrize(
+    (
+        "event_service",
+        "alarm_service",
+    ),
+    (
+        (Mock(), None),
+        (None, Mock()),
+    ),
+)
+def test_application_rejects_partial_operational_noc_configuration(
+    event_service,
+    alarm_service,
+) -> None:
+    from app.noc.domain.node_id import NodeId
+    from app.noc.domain.node_instance import NodeInstanceId
+
+    node_id = NodeId.create(
+        id="streaming-core",
+        name="streaming",
+        display_name="Streaming Core",
+    )
+    instance_id = NodeInstanceId("streaming-primary")
+
+    with pytest.raises(
+        ValueError,
+        match="event_service y alarm_service deben configurarse juntos",
+    ):
+        DashboardApplication(
+            mediamtx_adapter=Mock(),
+            session_adapter=Mock(),
+            streaming_service=Mock(),
+            session_service=Mock(),
+            dashboard_service=Mock(),
+            dashboard_renderer=Mock(),
+            system_service=Mock(),
             event_service=event_service,
             alarm_service=alarm_service,
             node_id=node_id,

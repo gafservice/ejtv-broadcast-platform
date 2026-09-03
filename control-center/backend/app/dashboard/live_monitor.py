@@ -28,12 +28,12 @@ from app.services.geoip_service import GeoIPService
 
 from app.noc.bootstrap import (
     DEFAULT_INSTANCE_ID,
-    bootstrap_noc_runtime,
+    DEFAULT_NODE_DISPLAY_NAME,
+    DEFAULT_NODE_ID,
+    DEFAULT_NODE_NAME,
 )
+from app.noc.domain.node_id import NodeId
 from app.noc.domain.node_instance import NodeInstanceId
-from app.noc.infrastructure.memory_repository import (
-    InMemoryNodeRepository,
-)
 from app.noc.history.sqlite_alarm_repository import (
     SQLiteAlarmHistoryRepository,
 )
@@ -43,29 +43,12 @@ from app.noc.history.sqlite_database import (
 from app.noc.history.sqlite_event_repository import (
     SQLiteEventHistoryRepository,
 )
-from app.noc.history.jsonl_evidence_writer import (
-    JsonlEvidenceWriter,
+from app.noc.current_state.sqlite_node_health_diagnostic_repository import (
+    SQLiteNodeHealthDiagnosticRepository,
 )
-from app.noc.infrastructure.node_network_policy_loader import (
-    NodeNetworkPolicyLoader,
-)
-from app.noc.registry.registry import NodeRegistry
-from app.noc.runtime.telemetry_refresh import (
-    TelemetryRefreshService,
-)
-from app.noc.services.alarm_service import AlarmService
-from app.noc.services.event_service import EventService
-from app.noc.services.health_service import HealthService
 from app.noc.services.history_query_service import (
     HistoryQueryService,
 )
-from app.noc.services.health_transition_alarm_service import (
-    HealthTransitionAlarmService,
-)
-from app.noc.services.health_transition_event_service import (
-    HealthTransitionEventService,
-)
-from app.noc.services.metric_service import MetricService
 
 
 def build_dashboard_application() -> DashboardApplication:
@@ -124,14 +107,13 @@ def build_dashboard_application() -> DashboardApplication:
     network_telemetry_service = NetworkTelemetryService()
 
     #
-    # NOC Node Runtime
+    # Shared NOC Read Model
     #
-    node_registry = NodeRegistry(
-        InMemoryNodeRepository()
-    )
 
-    bootstrap_result = bootstrap_noc_runtime(
-        node_registry
+    node_id = NodeId.create(
+        id=DEFAULT_NODE_ID,
+        name=DEFAULT_NODE_NAME,
+        display_name=DEFAULT_NODE_DISPLAY_NAME,
     )
 
     node_instance_id = NodeInstanceId(
@@ -154,65 +136,14 @@ def build_dashboard_application() -> DashboardApplication:
         )
     )
 
-    evidence_writer = JsonlEvidenceWriter(
-        settings.noc_evidence_path
-    )
-
-    metric_service = MetricService(
-        node_registry
-    )
-
-    node_health_service = HealthService(
-        node_registry
-    )
-
-    event_service = EventService(
-        node_registry,
-        history_repository=event_history_repository,
-        evidence_writer=evidence_writer,
-    )
-
-    alarm_service = AlarmService(
-        node_registry,
-        history_repository=alarm_history_repository,
-        evidence_writer=evidence_writer,
-    )
-
     history_query_service = HistoryQueryService(
         event_repository=event_history_repository,
         alarm_repository=alarm_history_repository,
     )
 
-    health_transition_event_service = (
-        HealthTransitionEventService(
-            event_service=event_service,
-        )
-    )
-
-    health_transition_alarm_service = (
-        HealthTransitionAlarmService(
-            alarm_service=alarm_service,
-        )
-    )
-
-    network_policy = (
-        NodeNetworkPolicyLoader().load(
-            settings.node_network_policy_path
-        )
-    )
-
-    telemetry_refresh_service = (
-        TelemetryRefreshService(
-            system_service=system_service,
-            metric_service=metric_service,
-            health_service=node_health_service,
-            health_transition_event_service=(
-                health_transition_event_service
-            ),
-            health_transition_alarm_service=(
-                health_transition_alarm_service
-            ),
-            network_policies=network_policy.interfaces,
+    health_diagnostic_repository = (
+        SQLiteNodeHealthDiagnosticRepository(
+            history_database
         )
     )
 
@@ -238,11 +169,9 @@ def build_dashboard_application() -> DashboardApplication:
         metrics_parser=metrics_parser,
         streaming_health_service=streaming_health_service,
         dashboard_snapshot_service=dashboard_snapshot_service,
-        telemetry_refresh_service=telemetry_refresh_service,
-        event_service=event_service,
-        alarm_service=alarm_service,
+        health_diagnostic_repository=health_diagnostic_repository,
         history_query_service=history_query_service,
-        node_id=bootstrap_result.node.node_id,
+        node_id=node_id,
         instance_id=node_instance_id,
     )
 
