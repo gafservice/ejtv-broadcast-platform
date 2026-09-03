@@ -54,6 +54,7 @@ class AlarmState(str, Enum):
     ACKNOWLEDGED = "ACKNOWLEDGED"
     RESOLVED = "RESOLVED"
     CLOSED = "CLOSED"
+    INVALIDATED = "INVALIDATED"
 
     def __str__(self) -> str:
         return self.value
@@ -244,6 +245,10 @@ class AlarmRecord:
     @property
     def is_closed(self) -> bool:
         return self.state is AlarmState.CLOSED
+
+    @property
+    def is_invalidated(self) -> bool:
+        return self.state is AlarmState.INVALIDATED
 
     @property
     def requires_attention(self) -> bool:

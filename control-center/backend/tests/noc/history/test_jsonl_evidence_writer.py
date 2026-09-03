@@ -957,3 +957,73 @@ def test_multiprocess_seal_and_append_are_serialized(
     assert sealer.verify_day(
         date(2026, 9, 1)
     ) is True
+
+
+def test_append_invalidated_alarm_transition(
+    tmp_path,
+) -> None:
+    writer = JsonlEvidenceWriter(tmp_path)
+
+    timestamp = datetime(
+        2026,
+        9,
+        1,
+        12,
+        30,
+        tzinfo=timezone.utc,
+    )
+
+    transition = AlarmTransition(
+        transition_id="transition-invalidated",
+        alarm_id="alarm-duplicate",
+        transition_type=AlarmTransitionType.INVALIDATED,
+        timestamp=timestamp,
+        source=INSTANCE_ID,
+        state=AlarmState.INVALIDATED,
+        actor="noc-maintenance",
+        metadata={
+            "invalidation_reason": (
+                "Duplicate alarm created by test contamination."
+            ),
+            "canonical_alarm_id": "alarm-canonical",
+        },
+    )
+
+    writer.append_alarm_transition(
+        transition
+    )
+
+    path = (
+        tmp_path
+        / "2026"
+        / "09"
+        / "01"
+        / "alarm_transitions.jsonl"
+    )
+
+    payloads = [
+        json.loads(line)
+        for line in path.read_text(
+            encoding="utf-8"
+        ).splitlines()
+    ]
+
+    assert len(payloads) == 1
+
+    payload = payloads[0]
+
+    assert payload["transition_id"] == (
+        "transition-invalidated"
+    )
+    assert payload["alarm_id"] == "alarm-duplicate"
+    assert payload["transition_type"] == "INVALIDATED"
+    assert payload["state"] == "INVALIDATED"
+    assert payload["actor"] == "noc-maintenance"
+    assert (
+        payload["metadata"]["invalidation_reason"]
+        == "Duplicate alarm created by test contamination."
+    )
+    assert (
+        payload["metadata"]["canonical_alarm_id"]
+        == "alarm-canonical"
+    )

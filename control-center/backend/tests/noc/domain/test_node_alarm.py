@@ -74,6 +74,7 @@ def test_alarm_state_contains_canonical_values() -> None:
         "ACKNOWLEDGED",
         "RESOLVED",
         "CLOSED",
+        "INVALIDATED",
     }
 
     assert {
@@ -432,3 +433,21 @@ def test_node_alarm_rejects_invalid_entry() -> None:
                 "CPU_HIGH",  # type: ignore[arg-type]
             )
         )
+
+
+def test_alarm_state_from_value_supports_invalidated() -> None:
+    assert (
+        AlarmState.from_value(" invalidated ")
+        is AlarmState.INVALIDATED
+    )
+
+
+def test_valid_invalidated_alarm() -> None:
+    alarm = make_alarm(
+        state=AlarmState.INVALIDATED,
+    )
+
+    assert alarm.is_invalidated is True
+    assert alarm.requires_attention is False
+    assert alarm.resolved_at is None
+    assert alarm.closed_at is None

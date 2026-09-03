@@ -69,6 +69,7 @@ class AlarmDisposition(str, Enum):
     ACKNOWLEDGED = "ACKNOWLEDGED"
     RESOLVED = "RESOLVED"
     CLOSED = "CLOSED"
+    INVALIDATED = "INVALIDATED"
 
     def __str__(self) -> str:
         return self.value
@@ -390,6 +391,113 @@ class AlarmService:
 
         return AlarmReceipt(
             disposition=AlarmDisposition.CLOSED,
+            alarm=updated,
+        )
+
+    def invalidate(
+        self,
+        node_id: NodeId,
+        instance_id: NodeInstanceId,
+        alarm_id: str,
+        *,
+        invalidated_by: str,
+        reason: str,
+        canonical_alarm_id: str | None = None,
+        timestamp: datetime | None = None,
+    ) -> AlarmReceipt:
+        """Administratively invalidate an ACTIVE/ACKNOWLEDGED alarm."""
+
+        instance, node = self._resolve_instance(
+            node_id,
+            instance_id,
+        )
+
+        records = self._records(instance)
+        current = self._require_alarm(
+            records,
+            alarm_id,
+        )
+
+        if current.state not in {
+            AlarmState.ACTIVE,
+            AlarmState.ACKNOWLEDGED,
+        }:
+            raise InvalidAlarmTransitionError(
+                "only ACTIVE or ACKNOWLEDGED alarms "
+                "can be invalidated"
+            )
+
+        actor = self._normalize_actor(
+            invalidated_by
+        )
+
+        if not isinstance(reason, str):
+            raise TypeError("reason must be a string")
+
+        normalized_reason = reason.strip()
+
+        if not normalized_reason:
+            raise ValueError(
+                "reason must not be empty"
+            )
+
+        canonical_id = None
+
+        if canonical_alarm_id is not None:
+            canonical_id = self._normalize_alarm_id(
+                canonical_alarm_id
+            )
+
+            if canonical_id == current.alarm_id:
+                raise ValueError(
+                    "canonical_alarm_id must reference "
+                    "another alarm"
+                )
+
+            if self._find(records, canonical_id) is None:
+                raise AlarmNotFoundError(
+                    f"canonical alarm {canonical_id!r} "
+                    "was not found"
+                )
+
+        when = self._utc_timestamp(timestamp)
+
+        if when < current.timestamp:
+            raise InvalidAlarmTransitionError(
+                "invalidation timestamp must not precede "
+                "alarm timestamp"
+            )
+
+        attributes = dict(current.attributes or ())
+        attributes["invalidation_reason"] = normalized_reason
+
+        if canonical_id is not None:
+            attributes["canonical_alarm_id"] = canonical_id
+
+        updated = replace(
+            current,
+            state=AlarmState.INVALIDATED,
+            attributes=attributes,
+        )
+
+        self._record_history(
+            node_id=node_id,
+            instance_id=instance_id,
+            alarm=updated,
+            transition_type=AlarmTransitionType.INVALIDATED,
+            timestamp=when,
+            actor=actor,
+        )
+
+        instance.alarms = self._replace(
+            records,
+            updated,
+        )
+
+        self._registry.repository.save(node)
+
+        return AlarmReceipt(
+            disposition=AlarmDisposition.INVALIDATED,
             alarm=updated,
         )
 

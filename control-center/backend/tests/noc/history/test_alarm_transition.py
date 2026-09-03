@@ -317,3 +317,10 @@ def test_deterministic_transition_id_normalizes_alarm_id() -> None:
     )
 
     assert padded == clean
+
+
+def test_invalidated_transition_type_is_supported() -> None:
+    assert (
+        AlarmTransitionType.INVALIDATED.value
+        == "INVALIDATED"
+    )

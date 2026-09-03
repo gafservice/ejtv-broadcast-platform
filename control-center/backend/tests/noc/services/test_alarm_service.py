@@ -1143,3 +1143,375 @@ def test_alarm_lifecycle_writes_all_evidence_transitions() -> None:
     ) == history.list_transitions(
         alarm.alarm_id
     )
+
+
+def test_invalidate_active_alarm_records_history() -> None:
+    (
+        _,
+        _,
+        node,
+        instance,
+        history,
+        service,
+    ) = make_context_with_history()
+
+    canonical = make_alarm(
+        alarm_id="alarm-canonical",
+    )
+    duplicate = make_alarm(
+        alarm_id="alarm-duplicate",
+    )
+
+    service.raise_alarm(
+        node.node_id,
+        instance.instance_id,
+        canonical,
+    )
+    service.raise_alarm(
+        node.node_id,
+        instance.instance_id,
+        duplicate,
+    )
+
+    receipt = service.invalidate(
+        node.node_id,
+        instance.instance_id,
+        duplicate.alarm_id,
+        invalidated_by="noc-maintenance",
+        reason="Duplicate alarm created by test contamination.",
+        canonical_alarm_id=canonical.alarm_id,
+        timestamp=BASE_TIME + timedelta(seconds=30),
+    )
+
+    assert receipt.disposition is AlarmDisposition.INVALIDATED
+    assert receipt.alarm.state is AlarmState.INVALIDATED
+    assert receipt.alarm.is_invalidated is True
+    assert receipt.alarm.requires_attention is False
+    assert receipt.alarm.resolved_at is None
+    assert receipt.alarm.closed_at is None
+
+    assert (
+        receipt.alarm.attributes["invalidation_reason"]
+        == "Duplicate alarm created by test contamination."
+    )
+    assert (
+        receipt.alarm.attributes["canonical_alarm_id"]
+        == canonical.alarm_id
+    )
+
+    transitions = history.list_transitions(
+        duplicate.alarm_id
+    )
+
+    assert [
+        transition.transition_type
+        for transition in transitions
+    ] == [
+        AlarmTransitionType.OPENED,
+        AlarmTransitionType.INVALIDATED,
+    ]
+
+    invalidated = transitions[-1]
+
+    assert invalidated.state is AlarmState.INVALIDATED
+    assert invalidated.actor == "noc-maintenance"
+    assert (
+        invalidated.metadata["invalidation_reason"]
+        == "Duplicate alarm created by test contamination."
+    )
+    assert (
+        invalidated.metadata["canonical_alarm_id"]
+        == canonical.alarm_id
+    )
+
+
+def test_invalidate_acknowledged_alarm() -> None:
+    (
+        _,
+        _,
+        node,
+        instance,
+        _,
+        service,
+    ) = make_context_with_history()
+
+    alarm = make_alarm(
+        alarm_id="alarm-ack-invalidated",
+    )
+
+    service.raise_alarm(
+        node.node_id,
+        instance.instance_id,
+        alarm,
+    )
+
+    service.acknowledge(
+        node.node_id,
+        instance.instance_id,
+        alarm.alarm_id,
+        acknowledged_by="operator",
+        timestamp=BASE_TIME + timedelta(seconds=10),
+    )
+
+    receipt = service.invalidate(
+        node.node_id,
+        instance.instance_id,
+        alarm.alarm_id,
+        invalidated_by="noc-maintenance",
+        reason="Administrative invalidation.",
+        timestamp=BASE_TIME + timedelta(seconds=20),
+    )
+
+    assert receipt.alarm.state is AlarmState.INVALIDATED
+    assert receipt.alarm.requires_attention is False
+    assert receipt.alarm.resolved_at is None
+    assert receipt.alarm.closed_at is None
+
+
+def test_invalidate_rejects_resolved_alarm() -> None:
+    (
+        _,
+        _,
+        node,
+        instance,
+        _,
+        service,
+    ) = make_context_with_history()
+
+    alarm = make_alarm(
+        alarm_id="alarm-resolved-invalid",
+    )
+
+    service.raise_alarm(
+        node.node_id,
+        instance.instance_id,
+        alarm,
+    )
+
+    service.resolve(
+        node.node_id,
+        instance.instance_id,
+        alarm.alarm_id,
+        timestamp=BASE_TIME + timedelta(seconds=10),
+    )
+
+    with pytest.raises(InvalidAlarmTransitionError):
+        service.invalidate(
+            node.node_id,
+            instance.instance_id,
+            alarm.alarm_id,
+            invalidated_by="noc-maintenance",
+            reason="Must fail.",
+            timestamp=BASE_TIME + timedelta(seconds=20),
+        )
+
+
+def test_invalidate_rejects_closed_alarm() -> None:
+    (
+        _,
+        _,
+        node,
+        instance,
+        _,
+        service,
+    ) = make_context_with_history()
+
+    alarm = make_alarm(
+        alarm_id="alarm-closed-invalid",
+    )
+
+    service.raise_alarm(
+        node.node_id,
+        instance.instance_id,
+        alarm,
+    )
+
+    service.resolve(
+        node.node_id,
+        instance.instance_id,
+        alarm.alarm_id,
+        timestamp=BASE_TIME + timedelta(seconds=10),
+    )
+
+    service.close(
+        node.node_id,
+        instance.instance_id,
+        alarm.alarm_id,
+        timestamp=BASE_TIME + timedelta(seconds=20),
+    )
+
+    with pytest.raises(InvalidAlarmTransitionError):
+        service.invalidate(
+            node.node_id,
+            instance.instance_id,
+            alarm.alarm_id,
+            invalidated_by="noc-maintenance",
+            reason="Must fail.",
+            timestamp=BASE_TIME + timedelta(seconds=30),
+        )
+
+
+def test_invalidate_rejects_already_invalidated_alarm() -> None:
+    (
+        _,
+        _,
+        node,
+        instance,
+        _,
+        service,
+    ) = make_context_with_history()
+
+    alarm = make_alarm(
+        alarm_id="alarm-double-invalidated",
+    )
+
+    service.raise_alarm(
+        node.node_id,
+        instance.instance_id,
+        alarm,
+    )
+
+    service.invalidate(
+        node.node_id,
+        instance.instance_id,
+        alarm.alarm_id,
+        invalidated_by="noc-maintenance",
+        reason="First invalidation.",
+        timestamp=BASE_TIME + timedelta(seconds=10),
+    )
+
+    with pytest.raises(InvalidAlarmTransitionError):
+        service.invalidate(
+            node.node_id,
+            instance.instance_id,
+            alarm.alarm_id,
+            invalidated_by="noc-maintenance",
+            reason="Second invalidation.",
+            timestamp=BASE_TIME + timedelta(seconds=20),
+        )
+
+
+def test_invalidate_requires_non_empty_reason() -> None:
+    (
+        _,
+        _,
+        node,
+        instance,
+        _,
+        service,
+    ) = make_context_with_history()
+
+    alarm = make_alarm(
+        alarm_id="alarm-empty-reason",
+    )
+
+    service.raise_alarm(
+        node.node_id,
+        instance.instance_id,
+        alarm,
+    )
+
+    with pytest.raises(ValueError):
+        service.invalidate(
+            node.node_id,
+            instance.instance_id,
+            alarm.alarm_id,
+            invalidated_by="noc-maintenance",
+            reason="   ",
+            timestamp=BASE_TIME + timedelta(seconds=10),
+        )
+
+
+def test_invalidate_rejects_self_as_canonical_alarm() -> None:
+    (
+        _,
+        _,
+        node,
+        instance,
+        _,
+        service,
+    ) = make_context_with_history()
+
+    alarm = make_alarm(
+        alarm_id="alarm-self-canonical",
+    )
+
+    service.raise_alarm(
+        node.node_id,
+        instance.instance_id,
+        alarm,
+    )
+
+    with pytest.raises(ValueError):
+        service.invalidate(
+            node.node_id,
+            instance.instance_id,
+            alarm.alarm_id,
+            invalidated_by="noc-maintenance",
+            reason="Invalid canonical reference.",
+            canonical_alarm_id=alarm.alarm_id,
+            timestamp=BASE_TIME + timedelta(seconds=10),
+        )
+
+
+def test_invalidate_rejects_missing_canonical_alarm() -> None:
+    (
+        _,
+        _,
+        node,
+        instance,
+        _,
+        service,
+    ) = make_context_with_history()
+
+    alarm = make_alarm(
+        alarm_id="alarm-missing-canonical",
+    )
+
+    service.raise_alarm(
+        node.node_id,
+        instance.instance_id,
+        alarm,
+    )
+
+    with pytest.raises(AlarmNotFoundError):
+        service.invalidate(
+            node.node_id,
+            instance.instance_id,
+            alarm.alarm_id,
+            invalidated_by="noc-maintenance",
+            reason="Missing canonical alarm.",
+            canonical_alarm_id="alarm-does-not-exist",
+            timestamp=BASE_TIME + timedelta(seconds=10),
+        )
+
+
+def test_invalidate_rejects_timestamp_before_alarm() -> None:
+    (
+        _,
+        _,
+        node,
+        instance,
+        _,
+        service,
+    ) = make_context_with_history()
+
+    alarm = make_alarm(
+        alarm_id="alarm-invalid-time",
+    )
+
+    service.raise_alarm(
+        node.node_id,
+        instance.instance_id,
+        alarm,
+    )
+
+    with pytest.raises(InvalidAlarmTransitionError):
+        service.invalidate(
+            node.node_id,
+            instance.instance_id,
+            alarm.alarm_id,
+            invalidated_by="noc-maintenance",
+            reason="Invalid timestamp.",
+            timestamp=BASE_TIME - timedelta(seconds=1),
+        )

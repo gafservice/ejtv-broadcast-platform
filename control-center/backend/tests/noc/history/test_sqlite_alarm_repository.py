@@ -891,3 +891,109 @@ def test_record_lifecycle_conflicting_retry_is_rejected(
     assert repository.list_transitions(
         alarm.alarm_id
     ) == (transition,)
+
+
+def test_invalidated_alarm_survives_repository_recreation(
+    tmp_path,
+) -> None:
+    path = tmp_path / "history.sqlite3"
+
+    repository = SQLiteAlarmHistoryRepository(
+        SQLiteHistoryDatabase(path)
+    )
+
+    active = make_alarm()
+
+    repository.record_lifecycle(
+        node_id=NODE,
+        instance_id=INSTANCE,
+        alarm=active,
+        transition=make_transition(
+            "transition-opened",
+            AlarmTransitionType.OPENED,
+            T0,
+            AlarmState.ACTIVE,
+        ),
+    )
+
+    invalidated = replace(
+        active,
+        state=AlarmState.INVALIDATED,
+        attributes={
+            **dict(active.attributes),
+            "invalidation_reason": (
+                "Duplicate alarm created by test contamination."
+            ),
+            "canonical_alarm_id": "alarm-canonical",
+        },
+    )
+
+    repository.record_lifecycle(
+        node_id=NODE,
+        instance_id=INSTANCE,
+        alarm=invalidated,
+        transition=AlarmTransition(
+            transition_id="transition-invalidated",
+            alarm_id=invalidated.alarm_id,
+            transition_type=AlarmTransitionType.INVALIDATED,
+            timestamp=T1,
+            source=INSTANCE,
+            state=AlarmState.INVALIDATED,
+            actor="noc-maintenance",
+            metadata=invalidated.attributes,
+        ),
+    )
+
+    del repository
+
+    reopened = SQLiteAlarmHistoryRepository(
+        SQLiteHistoryDatabase(path)
+    )
+
+    loaded = reopened.get_current(
+        "alarm-001"
+    )
+
+    assert loaded is not None
+    assert loaded.state is AlarmState.INVALIDATED
+    assert loaded.requires_attention is False
+    assert loaded.resolved_at is None
+    assert loaded.closed_at is None
+    assert (
+        loaded.attributes["invalidation_reason"]
+        == "Duplicate alarm created by test contamination."
+    )
+    assert (
+        loaded.attributes["canonical_alarm_id"]
+        == "alarm-canonical"
+    )
+
+    assert reopened.list_active(
+        node_id=NODE,
+        instance_id=INSTANCE,
+    ) == ()
+
+    transitions = reopened.list_transitions(
+        "alarm-001"
+    )
+
+    assert [
+        transition.transition_type
+        for transition in transitions
+    ] == [
+        AlarmTransitionType.OPENED,
+        AlarmTransitionType.INVALIDATED,
+    ]
+
+    transition = transitions[-1]
+
+    assert transition.state is AlarmState.INVALIDATED
+    assert transition.actor == "noc-maintenance"
+    assert (
+        transition.metadata["invalidation_reason"]
+        == "Duplicate alarm created by test contamination."
+    )
+    assert (
+        transition.metadata["canonical_alarm_id"]
+        == "alarm-canonical"
+    )
