@@ -16,7 +16,7 @@ import sqlite3
 from pathlib import Path
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 class SQLiteHistoryDatabase:
@@ -92,6 +92,14 @@ class SQLiteHistoryDatabase:
                     2,
                 )
                 current_version = 2
+
+            if current_version == 2:
+                self._migrate_v3(connection)
+                self._set_version(
+                    connection,
+                    3,
+                )
+                current_version = 3
 
             if current_version != SCHEMA_VERSION:
                 raise RuntimeError(
@@ -284,5 +292,28 @@ class SQLiteHistoryDatabase:
 
             CREATE INDEX idx_node_health_diagnostics_captured_at
                 ON node_health_diagnostics(captured_at);
+            """
+        )
+
+    @staticmethod
+    def _migrate_v3(
+        connection: sqlite3.Connection,
+    ) -> None:
+        """Add durable managed-history lower bounds per NodeInstance."""
+
+        connection.executescript(
+            """
+            CREATE TABLE managed_history_scopes (
+                node_id TEXT NOT NULL,
+                instance_id TEXT NOT NULL,
+
+                managed_since_day TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+
+                PRIMARY KEY (
+                    node_id,
+                    instance_id
+                )
+            );
             """
         )

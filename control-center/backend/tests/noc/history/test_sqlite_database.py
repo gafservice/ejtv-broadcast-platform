@@ -215,7 +215,7 @@ def test_v2_schema_contains_node_health_diagnostics(
     assert "diagnostic_json" in row["sql"]
 
 
-def test_existing_v1_database_migrates_to_v2(
+def test_existing_v1_database_migrates_to_current_schema(
     tmp_path,
 ) -> None:
     path = tmp_path / "history.sqlite3"
@@ -303,7 +303,107 @@ def test_existing_v1_database_migrates_to_v2(
         ).fetchone()
 
     assert version is not None
-    assert version["version"] == 2
+    assert version["version"] == SCHEMA_VERSION
     assert table is not None
     assert event is not None
     assert event["event_id"] == "event-before-v2"
+
+
+def test_existing_v2_database_migrates_to_v3_preserving_history(
+    tmp_path,
+) -> None:
+    path = tmp_path / "history.sqlite3"
+
+    database = SQLiteHistoryDatabase(path)
+
+    with database.connect() as connection:
+        database._create_schema_version_table(
+            connection
+        )
+        database._migrate_v1(
+            connection
+        )
+        database._migrate_v2(
+            connection
+        )
+        database._set_version(
+            connection,
+            2,
+        )
+
+        connection.execute(
+            """
+            INSERT INTO events (
+                event_id,
+                node_id,
+                node_name,
+                node_display_name,
+                node_created_at,
+                instance_id,
+                event_type,
+                severity,
+                event_timestamp,
+                recorded_at,
+                source,
+                title,
+                description,
+                correlation_id,
+                attributes_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "event-before-v3",
+                "node-001",
+                "node-001",
+                "Node 001",
+                "2026-09-03T12:00:00+00:00",
+                "instance-001",
+                "TEST_EVENT",
+                "INFO",
+                "2026-09-03T12:01:00+00:00",
+                "2026-09-03T12:01:00+00:00",
+                "instance-001",
+                "Before v3 migration",
+                "Existing v2 event",
+                None,
+                None,
+            ),
+        )
+
+    database.initialize()
+
+    with database.connect() as connection:
+        version = connection.execute(
+            """
+            SELECT version
+            FROM schema_version
+            """
+        ).fetchone()
+
+        managed_table = connection.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name = 'managed_history_scopes'
+            """
+        ).fetchone()
+
+        event = connection.execute(
+            """
+            SELECT event_id
+            FROM events
+            WHERE event_id = ?
+            """,
+            ("event-before-v3",),
+        ).fetchone()
+
+    assert version is not None
+    assert version["version"] == SCHEMA_VERSION
+
+    assert managed_table is not None
+    assert managed_table["name"] == "managed_history_scopes"
+
+    assert event is not None
+    assert event["event_id"] == "event-before-v3"
