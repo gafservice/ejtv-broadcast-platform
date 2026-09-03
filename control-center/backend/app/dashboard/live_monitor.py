@@ -49,38 +49,11 @@ from app.noc.history.jsonl_evidence_writer import (
 from app.noc.infrastructure.node_network_policy_loader import (
     NodeNetworkPolicyLoader,
 )
-from app.noc.infrastructure.node_session_policy_loader import (
-    NodeSessionPolicyLoader,
-)
 from app.noc.registry.registry import NodeRegistry
 from app.noc.runtime.telemetry_refresh import (
     TelemetryRefreshService,
 )
-from app.noc.runtime.session_alarm_runtime import (
-    SessionAlarmRuntime,
-)
-from app.noc.runtime.session_operational_runtime import (
-    SessionOperationalRuntime,
-)
 from app.noc.services.alarm_service import AlarmService
-from app.noc.services.critical_path_no_readers_alarm_service import (
-    CriticalPathNoReadersAlarmService,
-)
-from app.noc.services.critical_path_unavailable_alarm_service import (
-    CriticalPathUnavailableAlarmService,
-)
-from app.noc.services.critical_path_traffic_stalled_alarm_service import (
-    CriticalPathTrafficStalledAlarmService,
-)
-from app.noc.services.expected_session_alarm_service import (
-    ExpectedSessionAlarmService,
-)
-from app.noc.services.reconnect_flapping_alarm_service import (
-    ReconnectFlappingAlarmService,
-)
-from app.noc.services.reconnect_flapping_evaluator import (
-    ReconnectFlappingEvaluator,
-)
 from app.noc.services.event_service import EventService
 from app.noc.services.health_service import HealthService
 from app.noc.services.history_query_service import (
@@ -91,9 +64,6 @@ from app.noc.services.health_transition_alarm_service import (
 )
 from app.noc.services.health_transition_event_service import (
     HealthTransitionEventService,
-)
-from app.noc.services.session_transition_event_service import (
-    SessionTransitionEventService,
 )
 from app.noc.services.metric_service import MetricService
 
@@ -219,12 +189,6 @@ def build_dashboard_application() -> DashboardApplication:
         )
     )
 
-    session_transition_event_service = (
-        SessionTransitionEventService(
-            event_service=event_service,
-        )
-    )
-
     health_transition_alarm_service = (
         HealthTransitionAlarmService(
             alarm_service=alarm_service,
@@ -234,69 +198,6 @@ def build_dashboard_application() -> DashboardApplication:
     network_policy = (
         NodeNetworkPolicyLoader().load(
             settings.node_network_policy_path
-        )
-    )
-
-    session_policy = (
-        NodeSessionPolicyLoader().load(
-            settings.node_network_policy_path
-        )
-    )
-
-    reconnect_flapping_evaluator = (
-        ReconnectFlappingEvaluator(
-            policy=session_policy.reconnect_flapping
-        )
-        if session_policy.reconnect_flapping is not None
-        else ReconnectFlappingEvaluator()
-    )
-
-    session_alarm_runtime = SessionAlarmRuntime(
-        expected_session_alarm_service=(
-            ExpectedSessionAlarmService(
-                alarm_service=alarm_service,
-            )
-        ),
-        reconnect_flapping_alarm_service=(
-            ReconnectFlappingAlarmService(
-                alarm_service=alarm_service,
-            )
-        ),
-        critical_path_alarm_service=(
-            CriticalPathNoReadersAlarmService(
-                alarm_service=alarm_service,
-            )
-        ),
-        critical_path_unavailable_alarm_service=(
-            CriticalPathUnavailableAlarmService(
-                alarm_service=alarm_service,
-            )
-        ),
-        critical_path_traffic_stalled_alarm_service=(
-            CriticalPathTrafficStalledAlarmService(
-                alarm_service=alarm_service,
-            )
-        ),
-        expected_session_policies=(
-            session_policy.expected_sessions
-        ),
-        critical_path_policies=(
-            session_policy.critical_paths
-        ),
-        reconnect_flapping_evaluator=(
-            reconnect_flapping_evaluator
-        ),
-        reconnect_flapping_enabled=(
-            session_policy.has_reconnect_flapping
-        ),
-    )
-
-    session_operational_runtime = (
-        SessionOperationalRuntime(
-            transition_event_service=(
-                session_transition_event_service
-            ),
-            alarm_runtime=session_alarm_runtime,
         )
     )
 
@@ -338,12 +239,6 @@ def build_dashboard_application() -> DashboardApplication:
         streaming_health_service=streaming_health_service,
         dashboard_snapshot_service=dashboard_snapshot_service,
         telemetry_refresh_service=telemetry_refresh_service,
-        session_transition_event_service=(
-            session_transition_event_service
-        ),
-        session_operational_runtime=(
-            session_operational_runtime
-        ),
         event_service=event_service,
         alarm_service=alarm_service,
         history_query_service=history_query_service,

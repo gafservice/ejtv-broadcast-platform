@@ -4,6 +4,7 @@ from app.api.dependencies import (
     get_alarm_history_repository,
     get_alarm_recovery_service,
     get_alarm_service,
+    get_event_service,
     get_event_history_repository,
     get_history_query_service,
     get_noc_history_database,
@@ -14,11 +15,30 @@ from app.api.dependencies import (
     get_noc_repository,
     get_node_registry,
     get_snapshot_service,
+    get_mediamtx_http_client,
+    get_mediamtx_adapter,
+    get_geoip_service,
+    get_mediamtx_session_adapter,
+    get_node_session_policy_config,
+    get_session_transition_event_service,
+    get_session_alarm_runtime,
+    get_session_operational_runtime,
+    get_streaming_service,
+    get_session_observation_runtime,
 )
 from app.noc.infrastructure.memory_repository import (
     InMemoryNodeRepository,
 )
 from app.noc.registry.registry import NodeRegistry
+from app.noc.runtime.session_alarm_runtime import (
+    SessionAlarmRuntime,
+)
+from app.noc.runtime.session_observation_runtime import (
+    SessionObservationRuntime,
+)
+from app.noc.runtime.session_operational_runtime import (
+    SessionOperationalRuntime,
+)
 from app.noc.services.alarm_service import AlarmService
 from app.noc.services.capacity_service import CapacityService
 from app.noc.services.health_service import HealthService
@@ -33,6 +53,17 @@ from app.noc.services.snapshot_service import SnapshotService
 def clear_noc_dependency_caches() -> None:
     """Reset all NOC dependency factories."""
 
+    get_session_observation_runtime.cache_clear()
+    get_streaming_service.cache_clear()
+    get_session_operational_runtime.cache_clear()
+    get_session_alarm_runtime.cache_clear()
+    get_session_transition_event_service.cache_clear()
+    get_node_session_policy_config.cache_clear()
+    get_mediamtx_session_adapter.cache_clear()
+    get_geoip_service.cache_clear()
+    get_mediamtx_adapter.cache_clear()
+    get_mediamtx_http_client.cache_clear()
+    get_event_service.cache_clear()
     get_snapshot_service.cache_clear()
     get_alarm_recovery_service.cache_clear()
     get_history_query_service.cache_clear()
@@ -360,4 +391,104 @@ def test_history_query_service_uses_shared_history_repositories() -> None:
     assert (
         service.alarm_repository
         is get_alarm_history_repository()
+    )
+
+
+def test_event_service_is_cached() -> None:
+    first = get_event_service()
+    second = get_event_service()
+
+    assert first is second
+
+
+def test_event_service_uses_shared_noc_dependencies() -> None:
+    service = get_event_service()
+
+    assert service.registry is get_node_registry()
+    assert (
+        service.history_repository
+        is get_event_history_repository()
+    )
+    assert (
+        service.evidence_writer
+        is get_alarm_service().evidence_writer
+    )
+
+
+def test_mediamtx_runtime_dependencies_are_cached() -> None:
+    assert (
+        get_mediamtx_http_client()
+        is get_mediamtx_http_client()
+    )
+    assert (
+        get_mediamtx_adapter()
+        is get_mediamtx_adapter()
+    )
+    assert (
+        get_geoip_service()
+        is get_geoip_service()
+    )
+    assert (
+        get_mediamtx_session_adapter()
+        is get_mediamtx_session_adapter()
+    )
+    assert (
+        get_streaming_service()
+        is get_streaming_service()
+    )
+
+
+def test_session_transition_service_uses_shared_event_service() -> None:
+    service = get_session_transition_event_service()
+
+    assert service.event_service is get_event_service()
+
+
+def test_session_alarm_runtime_is_cached() -> None:
+    first = get_session_alarm_runtime()
+    second = get_session_alarm_runtime()
+
+    assert first is second
+    assert isinstance(first, SessionAlarmRuntime)
+
+
+def test_session_operational_runtime_uses_shared_components() -> None:
+    runtime = get_session_operational_runtime()
+
+    assert isinstance(
+        runtime,
+        SessionOperationalRuntime,
+    )
+    assert (
+        runtime._transition_event_service
+        is get_session_transition_event_service()
+    )
+    assert (
+        runtime._alarm_runtime
+        is get_session_alarm_runtime()
+    )
+
+
+def test_session_observation_runtime_uses_shared_components() -> None:
+    runtime = get_session_observation_runtime()
+
+    assert isinstance(
+        runtime,
+        SessionObservationRuntime,
+    )
+    assert (
+        runtime._mediamtx_adapter
+        is get_mediamtx_adapter()
+    )
+    assert (
+        runtime._session_adapter
+        is get_mediamtx_session_adapter()
+    )
+    assert (
+        runtime._streaming_service
+        is get_streaming_service()
+    )
+    assert (
+        runtime._operational_runtime
+        is get_session_operational_runtime()
     )

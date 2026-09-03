@@ -6,6 +6,11 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.adapters.linux.linux_system_adapter import LinuxSystemAdapter
+from app.adapters.mediamtx.adapter import MediaMTXAdapter
+from app.adapters.mediamtx.client import MediaMTXClient
+from app.adapters.mediamtx.session_adapter import MediaMTXSessionAdapter
+from app.adapters.mediamtx.session_client import MediaMTXSessionClient
+from app.core.http import HttpClient
 from app.core.config import get_settings
 from app.infrastructure.persistence.audit.sqlalchemy_audit_repository import (
     SQLAlchemyAuditRepository,
@@ -42,11 +47,48 @@ from app.noc.history.jsonl_evidence_writer import (
 from app.noc.domain.node_network_policy_config import (
     NodeNetworkPolicyConfig,
 )
+from app.noc.domain.node_session_policy_config import (
+    NodeSessionPolicyConfig,
+)
 from app.noc.infrastructure.node_network_policy_loader import (
     NodeNetworkPolicyLoader,
 )
+from app.noc.infrastructure.node_session_policy_loader import (
+    NodeSessionPolicyLoader,
+)
+from app.noc.runtime.session_alarm_runtime import (
+    SessionAlarmRuntime,
+)
+from app.noc.runtime.session_observation_runtime import (
+    SessionObservationRuntime,
+)
+from app.noc.runtime.session_operational_runtime import (
+    SessionOperationalRuntime,
+)
 from app.noc.registry.registry import NodeRegistry
 from app.noc.services.alarm_service import AlarmService
+from app.noc.services.critical_path_no_readers_alarm_service import (
+    CriticalPathNoReadersAlarmService,
+)
+from app.noc.services.critical_path_unavailable_alarm_service import (
+    CriticalPathUnavailableAlarmService,
+)
+from app.noc.services.critical_path_traffic_stalled_alarm_service import (
+    CriticalPathTrafficStalledAlarmService,
+)
+from app.noc.services.event_service import EventService
+from app.noc.services.expected_session_alarm_service import (
+    ExpectedSessionAlarmService,
+)
+from app.noc.services.reconnect_flapping_alarm_service import (
+    ReconnectFlappingAlarmService,
+)
+from app.noc.services.reconnect_flapping_evaluator import (
+    ReconnectFlappingEvaluator,
+)
+from app.noc.services.session_transition_event_service import (
+    SessionTransitionEventService,
+)
 from app.noc.services.alarm_recovery_service import (
     AlarmRecoveryService,
 )
@@ -78,6 +120,8 @@ from app.services.identity_administration_service import (
     IdentityAdministrationService,
 )
 from app.services.authorization_service import AuthorizationService
+from app.services.geoip_service import GeoIPService
+from app.services.streaming_service import StreamingService
 from app.services.system_service import SystemService
 
 
@@ -287,6 +331,17 @@ def get_metric_service() -> MetricService:
 
 
 @lru_cache
+def get_event_service() -> EventService:
+    """Construye el servicio compartido de eventos."""
+
+    return EventService(
+        get_node_registry(),
+        history_repository=get_event_history_repository(),
+        evidence_writer=get_noc_evidence_writer(),
+    )
+
+
+@lru_cache
 def get_alarm_service() -> AlarmService:
     """Construye el servicio compartido de alarmas."""
 
@@ -399,4 +454,156 @@ def get_telemetry_refresh_service() -> TelemetryRefreshService:
         metric_service=get_metric_service(),
         health_service=get_health_service(),
         network_policies=network_policy.interfaces,
+    )
+
+@lru_cache
+def get_mediamtx_http_client() -> HttpClient:
+    """Construye el cliente HTTP compartido de MediaMTX."""
+
+    settings = get_settings()
+
+    return HttpClient(
+        base_url=settings.mediamtx_api_url,
+        timeout=settings.mediamtx_api_timeout_seconds,
+    )
+
+
+@lru_cache
+def get_mediamtx_adapter() -> MediaMTXAdapter:
+    """Construye el adaptador compartido de paths MediaMTX."""
+
+    return MediaMTXAdapter(
+        MediaMTXClient(
+            get_mediamtx_http_client()
+        )
+    )
+
+
+@lru_cache
+def get_geoip_service() -> GeoIPService:
+    """Construye el servicio GeoIP compartido."""
+
+    settings = get_settings()
+
+    return GeoIPService(
+        settings.geoip_database_path
+    )
+
+
+@lru_cache
+def get_mediamtx_session_adapter() -> MediaMTXSessionAdapter:
+    """Construye el adaptador compartido de sesiones MediaMTX."""
+
+    return MediaMTXSessionAdapter(
+        MediaMTXSessionClient(
+            get_mediamtx_http_client()
+        ),
+        get_geoip_service(),
+    )
+
+
+@lru_cache
+def get_node_session_policy_config() -> NodeSessionPolicyConfig:
+    """Carga la política declarativa de sesiones del Node actual."""
+
+    settings = get_settings()
+
+    return NodeSessionPolicyLoader().load(
+        settings.node_network_policy_path
+    )
+
+
+@lru_cache
+def get_session_transition_event_service(
+) -> SessionTransitionEventService:
+    """Construye el servicio de eventos de transición de sesiones."""
+
+    return SessionTransitionEventService(
+        event_service=get_event_service()
+    )
+
+
+@lru_cache
+def get_session_alarm_runtime() -> SessionAlarmRuntime:
+    """Construye las políticas operacionales de alarmas de sesión."""
+
+    session_policy = get_node_session_policy_config()
+
+    reconnect_flapping_evaluator = (
+        ReconnectFlappingEvaluator(
+            policy=session_policy.reconnect_flapping
+        )
+        if session_policy.reconnect_flapping is not None
+        else ReconnectFlappingEvaluator()
+    )
+
+    return SessionAlarmRuntime(
+        expected_session_alarm_service=(
+            ExpectedSessionAlarmService(
+                alarm_service=get_alarm_service()
+            )
+        ),
+        reconnect_flapping_alarm_service=(
+            ReconnectFlappingAlarmService(
+                alarm_service=get_alarm_service()
+            )
+        ),
+        critical_path_alarm_service=(
+            CriticalPathNoReadersAlarmService(
+                alarm_service=get_alarm_service()
+            )
+        ),
+        critical_path_unavailable_alarm_service=(
+            CriticalPathUnavailableAlarmService(
+                alarm_service=get_alarm_service()
+            )
+        ),
+        critical_path_traffic_stalled_alarm_service=(
+            CriticalPathTrafficStalledAlarmService(
+                alarm_service=get_alarm_service()
+            )
+        ),
+        expected_session_policies=(
+            session_policy.expected_sessions
+        ),
+        critical_path_policies=(
+            session_policy.critical_paths
+        ),
+        reconnect_flapping_evaluator=(
+            reconnect_flapping_evaluator
+        ),
+        reconnect_flapping_enabled=(
+            session_policy.has_reconnect_flapping
+        ),
+    )
+
+
+@lru_cache
+def get_session_operational_runtime() -> SessionOperationalRuntime:
+    """Construye el coordinador operacional de sesiones."""
+
+    return SessionOperationalRuntime(
+        transition_event_service=(
+            get_session_transition_event_service()
+        ),
+        alarm_runtime=get_session_alarm_runtime(),
+    )
+
+
+@lru_cache
+def get_streaming_service() -> StreamingService:
+    """Construye el servicio compartido de medición multimedia."""
+
+    return StreamingService()
+
+
+@lru_cache
+def get_session_observation_runtime() -> SessionObservationRuntime:
+    """Construye el observador periódico propiedad del Runtime Owner."""
+
+    return SessionObservationRuntime(
+        mediamtx_adapter=get_mediamtx_adapter(),
+        session_adapter=get_mediamtx_session_adapter(),
+        streaming_service=get_streaming_service(),
+        operational_runtime=get_session_operational_runtime(),
     )

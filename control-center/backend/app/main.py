@@ -17,6 +17,7 @@ from app.api.dependencies import (
     get_runtime_owner_lock,
     get_system_service,
     get_telemetry_refresh_service,
+    get_session_observation_runtime,
 )
 from app.api.router import api_router
 from app.core.config import get_settings
@@ -89,6 +90,15 @@ async def _owned_noc_runtime(
         name="noc-telemetry-refresh",
     )
 
+    session_observation_task = asyncio.create_task(
+        get_session_observation_runtime().run_forever(
+            node_id=node_id,
+            instance_id=node_instance_id,
+            interval_seconds=5.0,
+        ),
+        name="noc-session-observation",
+    )
+
     daily_history_task = asyncio.create_task(
         get_daily_history_maintenance_runtime().run_forever(
             node_id=node_id,
@@ -101,10 +111,14 @@ async def _owned_noc_runtime(
         yield
     finally:
         telemetry_task.cancel()
+        session_observation_task.cancel()
         daily_history_task.cancel()
 
         with suppress(asyncio.CancelledError):
             await telemetry_task
+
+        with suppress(asyncio.CancelledError):
+            await session_observation_task
 
         with suppress(asyncio.CancelledError):
             await daily_history_task

@@ -39,16 +39,12 @@ from app.dashboard.services.dashboard_snapshot_service import (
     DashboardSnapshotInput,
     DashboardSnapshotService,
 )
-from app.domain.sessions import SessionSnapshot
 from app.domain.streaming import MediaMTXSnapshot, StreamingHealth
 from app.domain.system import SystemResources
 from app.noc.domain.node_id import NodeId
 from app.noc.domain.node_instance import NodeInstanceId
 from app.noc.runtime.telemetry_refresh import (
     TelemetryRefreshService,
-)
-from app.noc.runtime.session_operational_runtime import (
-    SessionOperationalRuntime,
 )
 from app.noc.services.alarm_service import AlarmService
 from app.noc.services.event_service import EventService
@@ -60,9 +56,6 @@ from app.services.session_service import SessionService
 from app.services.streaming_health_service import StreamingHealthService
 from app.services.streaming_service import StreamingService
 from app.services.system_service import SystemService
-from app.noc.services.session_transition_event_service import (
-    SessionTransitionEventService,
-)
 
 
 class DashboardApplication:
@@ -84,12 +77,6 @@ class DashboardApplication:
         dashboard_snapshot_service: DashboardSnapshotService | None = None,
         network_telemetry_service: NetworkTelemetryService | None = None,
         telemetry_refresh_service: TelemetryRefreshService | None = None,
-        session_transition_event_service: (
-            SessionTransitionEventService | None
-        ) = None,
-        session_operational_runtime: (
-            SessionOperationalRuntime | None
-        ) = None,
         event_service: EventService | None = None,
         alarm_service: AlarmService | None = None,
         history_query_service: HistoryQueryService | None = None,
@@ -125,12 +112,6 @@ class DashboardApplication:
         self._streaming_health_service = streaming_health_service
 
         self._telemetry_refresh_service = telemetry_refresh_service
-        self._session_transition_event_service = (
-            session_transition_event_service
-        )
-        self._session_operational_runtime = (
-            session_operational_runtime
-        )
         self._event_service = event_service
         self._alarm_service = alarm_service
         self._history_query_service = history_query_service
@@ -164,7 +145,6 @@ class DashboardApplication:
         )
 
         self._previous_snapshot: MediaMTXSnapshot | None = None
-        self._previous_session_snapshot: SessionSnapshot | None = None
         self._previous_system_resources: SystemResources | None = None
         self._latest_health: StreamingHealth | None = None
 
@@ -277,25 +257,6 @@ class DashboardApplication:
         active_alarms = None
 
         if self._telemetry_refresh_service is not None:
-            if self._session_operational_runtime is not None:
-                self._session_operational_runtime.process(
-                    node_id=self._node_id,
-                    instance_id=self._instance_id,
-                    previous=self._previous_session_snapshot,
-                    current=session_snapshot,
-                    media_snapshot=snapshot,
-                    streaming_measurement=measurement,
-                    timestamp=session_snapshot.captured_at,
-                )
-            elif self._session_transition_event_service is not None:
-                self._session_transition_event_service.process(
-                    node_id=self._node_id,
-                    instance_id=self._instance_id,
-                    previous=self._previous_session_snapshot,
-                    current=session_snapshot,
-                    timestamp=session_snapshot.captured_at,
-                )
-
             telemetry_result = (
                 self._telemetry_refresh_service.refresh_from_capture(
                     node_id=self._node_id,
@@ -391,7 +352,6 @@ class DashboardApplication:
         )
 
         self._previous_snapshot = snapshot
-        self._previous_session_snapshot = session_snapshot
         self._previous_system_resources = system_resources
         self._latest_health = streaming_health
 
@@ -588,7 +548,6 @@ class DashboardApplication:
 
         operational_dependencies = (
             self._telemetry_refresh_service,
-            self._session_transition_event_service,
             self._event_service,
             self._alarm_service,
         )
@@ -603,8 +562,7 @@ class DashboardApplication:
             len(operational_dependencies),
         ):
             raise ValueError(
-                "telemetry_refresh_service, "
-                "session_transition_event_service, event_service y "
+                "telemetry_refresh_service, event_service y "
                 "alarm_service deben configurarse juntos."
             )
 

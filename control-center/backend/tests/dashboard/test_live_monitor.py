@@ -71,28 +71,6 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
     policy_loader = Mock()
     policy_loader.load.return_value = network_policy
 
-    session_policy = Mock()
-    session_policy.expected_sessions = ()
-    session_policy.critical_paths = ()
-    session_policy.reconnect_flapping = None
-    session_policy.has_reconnect_flapping = False
-
-    session_policy_loader = Mock()
-    session_policy_loader.load.return_value = (
-        session_policy
-    )
-
-    reconnect_flapping_evaluator = Mock()
-
-    expected_session_alarm_service = Mock()
-    reconnect_flapping_alarm_service = Mock()
-    critical_path_alarm_service = Mock()
-    critical_path_unavailable_alarm_service = Mock()
-    critical_path_traffic_stalled_alarm_service = Mock()
-
-    session_alarm_runtime = Mock()
-    session_operational_runtime = Mock()
-
     telemetry_refresh_service = Mock()
 
     streaming_service = Mock()
@@ -288,14 +266,6 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
             )
         )
 
-        session_transition_event_service = object()
-        session_transition_event_service_class = stack.enter_context(
-            patch(
-                "app.dashboard.live_monitor.SessionTransitionEventService",
-                return_value=session_transition_event_service,
-            )
-        )
-
         alarm_service = object()
         alarm_service_class = stack.enter_context(
             patch(
@@ -317,79 +287,6 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
                         "app.dashboard.live_monitor.NodeNetworkPolicyLoader",
                         return_value=policy_loader,
                     )
-        )
-
-        session_policy_loader_class = stack.enter_context(
-            patch(
-                "app.dashboard.live_monitor.NodeSessionPolicyLoader",
-                return_value=session_policy_loader,
-            )
-        )
-
-        reconnect_flapping_evaluator_class = stack.enter_context(
-            patch(
-                "app.dashboard.live_monitor.ReconnectFlappingEvaluator",
-                return_value=reconnect_flapping_evaluator,
-            )
-        )
-
-        expected_session_alarm_service_class = stack.enter_context(
-            patch(
-                "app.dashboard.live_monitor.ExpectedSessionAlarmService",
-                return_value=expected_session_alarm_service,
-            )
-        )
-
-        reconnect_flapping_alarm_service_class = stack.enter_context(
-            patch(
-                "app.dashboard.live_monitor.ReconnectFlappingAlarmService",
-                return_value=reconnect_flapping_alarm_service,
-            )
-        )
-
-        critical_path_alarm_service_class = stack.enter_context(
-            patch(
-                "app.dashboard.live_monitor.CriticalPathNoReadersAlarmService",
-                return_value=critical_path_alarm_service,
-            )
-        )
-
-        critical_path_unavailable_alarm_service_class = (
-            stack.enter_context(
-                patch(
-                    "app.dashboard.live_monitor."
-                    "CriticalPathUnavailableAlarmService",
-                    return_value=(
-                        critical_path_unavailable_alarm_service
-                    ),
-                )
-            )
-        )
-
-        critical_path_traffic_stalled_alarm_service_class = (
-            stack.enter_context(
-                patch(
-                    "app.dashboard.live_monitor."
-                    "CriticalPathTrafficStalledAlarmService",
-                    return_value=(
-                        critical_path_traffic_stalled_alarm_service
-                    ),
-                )
-            )
-        )
-
-        session_alarm_runtime_class = stack.enter_context(
-            patch(
-                "app.dashboard.live_monitor.SessionAlarmRuntime",
-                return_value=session_alarm_runtime,
-            )
-        )
-
-        session_operational_runtime_class = stack.enter_context(
-            patch(
-                "app.dashboard.live_monitor.SessionOperationalRuntime",
-                return_value=session_operational_runtime,
-            )
         )
 
         telemetry_refresh_service_class = stack.enter_context(
@@ -534,10 +431,6 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
         event_service=event_service,
     )
 
-    session_transition_event_service_class.assert_called_once_with(
-        event_service=event_service,
-    )
-
     alarm_service_class.assert_called_once_with(
         node_registry,
         history_repository=alarm_history_repository,
@@ -552,71 +445,6 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
 
     policy_loader.load.assert_called_once_with(
         "/tmp/ejtv-01.yaml"
-    )
-
-    session_policy_loader_class.assert_called_once_with()
-
-    session_policy_loader.load.assert_called_once_with(
-        "/tmp/ejtv-01.yaml"
-    )
-
-    reconnect_flapping_evaluator_class.assert_called_once_with()
-
-    expected_session_alarm_service_class.assert_called_once_with(
-        alarm_service=alarm_service,
-    )
-
-    reconnect_flapping_alarm_service_class.assert_called_once_with(
-        alarm_service=alarm_service,
-    )
-
-    critical_path_alarm_service_class.assert_called_once_with(
-        alarm_service=alarm_service,
-    )
-
-    critical_path_unavailable_alarm_service_class.assert_called_once_with(
-        alarm_service=alarm_service,
-    )
-
-    critical_path_traffic_stalled_alarm_service_class.assert_called_once_with(
-        alarm_service=alarm_service,
-    )
-
-    session_alarm_runtime_class.assert_called_once_with(
-        expected_session_alarm_service=(
-            expected_session_alarm_service
-        ),
-        reconnect_flapping_alarm_service=(
-            reconnect_flapping_alarm_service
-        ),
-        critical_path_alarm_service=(
-            critical_path_alarm_service
-        ),
-        critical_path_unavailable_alarm_service=(
-            critical_path_unavailable_alarm_service
-        ),
-        critical_path_traffic_stalled_alarm_service=(
-            critical_path_traffic_stalled_alarm_service
-        ),
-        expected_session_policies=(
-            session_policy.expected_sessions
-        ),
-        critical_path_policies=(
-            session_policy.critical_paths
-        ),
-        reconnect_flapping_evaluator=(
-            reconnect_flapping_evaluator
-        ),
-        reconnect_flapping_enabled=(
-            session_policy.has_reconnect_flapping
-        ),
-    )
-
-    session_operational_runtime_class.assert_called_once_with(
-        transition_event_service=(
-            session_transition_event_service
-        ),
-        alarm_runtime=session_alarm_runtime,
     )
 
     telemetry_refresh_service_class.assert_called_once_with(
@@ -649,12 +477,6 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
         streaming_health_service=streaming_health_service,
         dashboard_snapshot_service=ANY,
         telemetry_refresh_service=telemetry_refresh_service,
-        session_transition_event_service=(
-            session_transition_event_service
-        ),
-        session_operational_runtime=(
-            session_operational_runtime
-        ),
         event_service=event_service,
         alarm_service=alarm_service,
         history_query_service=history_query_service,

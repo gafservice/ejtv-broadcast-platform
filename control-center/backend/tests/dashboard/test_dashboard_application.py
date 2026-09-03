@@ -757,9 +757,6 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
         telemetry_result
     )
 
-    session_transition_event_service = Mock()
-    session_operational_runtime = Mock()
-
     event_service = Mock()
     alarm_service = Mock()
 
@@ -850,12 +847,6 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
         dashboard_snapshot_service=dashboard_snapshot_service,
         network_telemetry_service=network_telemetry_service,
         telemetry_refresh_service=telemetry_refresh_service,
-        session_transition_event_service=(
-            session_transition_event_service
-        ),
-        session_operational_runtime=(
-            session_operational_runtime
-        ),
         event_service=event_service,
         alarm_service=alarm_service,
         history_query_service=history_query_service,
@@ -867,18 +858,6 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
     result = application.build_dashboard()
 
     assert result is dashboard_data
-
-    session_operational_runtime.process.assert_called_once_with(
-        node_id=node_id,
-        instance_id=instance_id,
-        previous=None,
-        current=session_snapshot,
-        media_snapshot=snapshot,
-        streaming_measurement=measurement,
-        timestamp=session_snapshot.captured_at,
-    )
-
-    session_transition_event_service.process.assert_not_called()
 
     telemetry_refresh_service.refresh_from_capture.assert_called_once_with(
         node_id=node_id,
@@ -1238,24 +1217,21 @@ def test_application_reads_durable_history_without_noc_runtime() -> None:
 @pytest.mark.parametrize(
     (
         "telemetry_refresh_service",
-        "session_transition_event_service",
         "event_service",
         "alarm_service",
         "node_id",
         "instance_id",
     ),
     (
-        (Mock(), None, None, None, None, None),
-        (None, Mock(), None, None, None, None),
-        (None, None, Mock(), None, None, None),
-        (None, None, None, Mock(), None, None),
-        (None, None, None, None, Mock(), None),
-        (None, None, None, None, None, Mock()),
+        (Mock(), None, None, None, None),
+        (None, Mock(), None, None, None),
+        (None, None, Mock(), None, None),
+        (None, None, None, Mock(), None),
+        (None, None, None, None, Mock()),
     ),
 )
 def test_application_rejects_partial_noc_configuration(
     telemetry_refresh_service,
-    session_transition_event_service,
     event_service,
     alarm_service,
     node_id,
@@ -1274,9 +1250,6 @@ def test_application_rejects_partial_noc_configuration(
             dashboard_renderer=Mock(),
             system_service=Mock(),
             telemetry_refresh_service=telemetry_refresh_service,
-            session_transition_event_service=(
-                session_transition_event_service
-            ),
             event_service=event_service,
             alarm_service=alarm_service,
             node_id=node_id,
