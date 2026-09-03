@@ -7,8 +7,6 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.adapters.linux.linux_system_adapter import LinuxSystemAdapter
 from app.core.config import get_settings
-from app.dashboard.application import DashboardApplication
-from app.dashboard.live_monitor import build_dashboard_application
 from app.infrastructure.persistence.audit.sqlalchemy_audit_repository import (
     SQLAlchemyAuditRepository,
 )
@@ -89,13 +87,6 @@ def get_system_service() -> SystemService:
 
     adapter = LinuxSystemAdapter()
     return SystemService(adapter)
-
-
-@lru_cache
-def get_dashboard_application() -> DashboardApplication:
-    """Construye la aplicación coordinadora del dashboard."""
-
-    return build_dashboard_application()
 
 
 @lru_cache
