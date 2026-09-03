@@ -25,3 +25,7 @@ engineering-noc-project.tar.gz
 **/*.db
 **/*.sqlite
 **/*.sqlite3
+
+# NOC runtime history/evidence and ownership coordination
+control-center/backend/data/noc-evidence/
+control-center/backend/data/noc-runtime-locks/

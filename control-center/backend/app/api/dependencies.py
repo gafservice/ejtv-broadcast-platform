@@ -72,6 +72,9 @@ from app.noc.services.snapshot_service import SnapshotService
 from app.noc.runtime.telemetry_refresh import (
     TelemetryRefreshService,
 )
+from app.noc.runtime.runtime_owner_lock import (
+    RuntimeOwnerLock,
+)
 from app.services.authentication_service import AuthenticationService
 from app.services.identity_administration_service import (
     IdentityAdministrationService,
@@ -186,6 +189,17 @@ def get_authentication_service() -> AuthenticationService:
         password_hasher=password_hasher,
         token_provider=get_token_provider(),
         audit_repository=get_audit_repository(),
+    )
+
+
+@lru_cache
+def get_runtime_owner_lock() -> RuntimeOwnerLock:
+    """Construye el lock interproceso del Runtime Owner NOC."""
+
+    settings = get_settings()
+
+    return RuntimeOwnerLock(
+        settings.noc_runtime_lock_path
     )
 
 

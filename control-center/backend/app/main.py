@@ -14,6 +14,7 @@ from app.api.dependencies import (
     get_evidence_reconciliation_service,
     get_capacity_service,
     get_node_registry,
+    get_runtime_owner_lock,
     get_system_service,
     get_telemetry_refresh_service,
 )
@@ -39,29 +40,24 @@ configure_logging(settings)
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    await application_startup(settings)
-
-    registry = get_node_registry()
-
-    bootstrap_result = bootstrap_noc_runtime(
-        registry
-    )
-
-    node_instance_id = NodeInstanceId(
-        DEFAULT_INSTANCE_ID
-    )
+async def _owned_noc_runtime(
+    *,
+    node_id,
+    node_instance_id: NodeInstanceId,
+    registry,
+) -> AsyncIterator[None]:
+    """Run operational NOC work while ownership is held."""
 
     continuity_through = datetime.now(timezone.utc)
 
     get_daily_alarm_continuity_service().catch_up(
-        node_id=bootstrap_result.node.node_id,
+        node_id=node_id,
         instance_id=node_instance_id,
         through=continuity_through,
     )
 
     get_alarm_recovery_service().recover(
-        node_id=bootstrap_result.node.node_id,
+        node_id=node_id,
         instance_id=node_instance_id,
     )
 
@@ -70,7 +66,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     get_evidence_reconciliation_service().reconcile_between(
         start=reconciliation_end - timedelta(hours=48),
         end=reconciliation_end,
-        node_id=bootstrap_result.node.node_id,
+        node_id=node_id,
         instance_id=node_instance_id,
     )
 
@@ -86,7 +82,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
     telemetry_task = asyncio.create_task(
         get_telemetry_refresh_service().run_forever(
-            node_id=bootstrap_result.node.node_id,
+            node_id=node_id,
             instance_id=node_instance_id,
             interval_seconds=5.0,
         ),
@@ -95,7 +91,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
     daily_history_task = asyncio.create_task(
         get_daily_history_maintenance_runtime().run_forever(
-            node_id=bootstrap_result.node.node_id,
+            node_id=node_id,
             instance_id=node_instance_id,
         ),
         name="noc-daily-history-maintenance",
@@ -113,6 +109,35 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         with suppress(asyncio.CancelledError):
             await daily_history_task
 
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    await application_startup(settings)
+
+    try:
+        registry = get_node_registry()
+
+        bootstrap_result = bootstrap_noc_runtime(
+            registry
+        )
+
+        node_instance_id = NodeInstanceId(
+            DEFAULT_INSTANCE_ID
+        )
+
+        runtime_owner_lock = get_runtime_owner_lock()
+
+        with runtime_owner_lock.exclusive(
+            node_id=bootstrap_result.node.node_id,
+            instance_id=node_instance_id,
+        ):
+            async with _owned_noc_runtime(
+                node_id=bootstrap_result.node.node_id,
+                node_instance_id=node_instance_id,
+                registry=registry,
+            ):
+                yield
+    finally:
         await application_shutdown()
 
 
