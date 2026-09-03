@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-
 from app.adapters.linux.linux_system_adapter import LinuxSystemAdapter
 from app.adapters.mediamtx.adapter import MediaMTXAdapter
 from app.adapters.mediamtx.client import MediaMTXClient
@@ -65,12 +63,6 @@ from app.noc.runtime.session_operational_runtime import (
     SessionOperationalRuntime,
 )
 from app.noc.services.alarm_service import AlarmService
-from app.noc.services.alarm_recovery_service import (
-    AlarmRecoveryService,
-)
-from app.noc.services.daily_alarm_continuity_service import (
-    DailyAlarmContinuityService,
-)
 from app.noc.services.critical_path_no_readers_alarm_service import (
     CriticalPathNoReadersAlarmService,
 )
@@ -93,9 +85,6 @@ from app.noc.services.event_service import EventService
 from app.noc.services.health_service import HealthService
 from app.noc.services.history_query_service import (
     HistoryQueryService,
-)
-from app.noc.services.evidence_reconciliation_service import (
-    EvidenceReconciliationService,
 )
 from app.noc.services.health_transition_alarm_service import (
     HealthTransitionAlarmService,
@@ -219,50 +208,9 @@ def build_dashboard_application() -> DashboardApplication:
         evidence_writer=evidence_writer,
     )
 
-    daily_alarm_continuity_service = (
-        DailyAlarmContinuityService(
-            alarm_history_repository,
-        )
-    )
-
-    alarm_recovery_service = AlarmRecoveryService(
-        registry=node_registry,
-        history_repository=alarm_history_repository,
-    )
-
     history_query_service = HistoryQueryService(
         event_repository=event_history_repository,
         alarm_repository=alarm_history_repository,
-    )
-
-    evidence_reconciliation_service = (
-        EvidenceReconciliationService(
-            event_repository=event_history_repository,
-            alarm_repository=alarm_history_repository,
-            evidence_writer=evidence_writer,
-        )
-    )
-
-    continuity_through = datetime.now(timezone.utc)
-
-    daily_alarm_continuity_service.catch_up(
-        node_id=bootstrap_result.node.node_id,
-        instance_id=node_instance_id,
-        through=continuity_through,
-    )
-
-    alarm_recovery_service.recover(
-        node_id=bootstrap_result.node.node_id,
-        instance_id=node_instance_id,
-    )
-
-    reconciliation_end = datetime.now(timezone.utc)
-
-    evidence_reconciliation_service.reconcile_between(
-        start=reconciliation_end - timedelta(hours=48),
-        end=reconciliation_end,
-        node_id=bootstrap_result.node.node_id,
-        instance_id=node_instance_id,
     )
 
     health_transition_event_service = (

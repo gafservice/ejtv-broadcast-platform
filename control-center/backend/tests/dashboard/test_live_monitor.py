@@ -1,7 +1,5 @@
 """Pruebas del punto de entrada del monitor NOC."""
 
-from datetime import timedelta
-
 from contextlib import ExitStack
 from unittest.mock import ANY, Mock, call, patch
 
@@ -53,12 +51,9 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
     history_database = Mock()
     event_history_repository = Mock()
     alarm_history_repository = Mock()
-    alarm_recovery_service = Mock()
     history_query_service = Mock()
 
     evidence_writer = Mock()
-    evidence_reconciliation_service = Mock()
-    daily_alarm_continuity_service = Mock()
 
     bootstrap_result = Mock()
     bootstrap_result.node.node_id = Mock()
@@ -249,13 +244,6 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
             )
         )
 
-        alarm_recovery_service_class = stack.enter_context(
-            patch(
-                "app.dashboard.live_monitor.AlarmRecoveryService",
-                return_value=alarm_recovery_service,
-            )
-        )
-
         history_query_service_class = stack.enter_context(
             patch(
                 "app.dashboard.live_monitor.HistoryQueryService",
@@ -267,30 +255,6 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
             patch(
                 "app.dashboard.live_monitor.JsonlEvidenceWriter",
                 return_value=evidence_writer,
-            )
-        )
-
-        evidence_reconciliation_service_class = (
-            stack.enter_context(
-                patch(
-                    "app.dashboard.live_monitor."
-                    "EvidenceReconciliationService",
-                    return_value=(
-                        evidence_reconciliation_service
-                    ),
-                )
-            )
-        )
-
-        daily_alarm_continuity_service_class = (
-            stack.enter_context(
-                patch(
-                    "app.dashboard.live_monitor."
-                    "DailyAlarmContinuityService",
-                    return_value=(
-                        daily_alarm_continuity_service
-                    ),
-                )
             )
         )
 
@@ -552,47 +516,6 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
         "/tmp/noc-evidence"
     )
 
-    daily_alarm_continuity_service_class.assert_called_once_with(
-        alarm_history_repository,
-    )
-
-    daily_alarm_continuity_service.catch_up.assert_called_once_with(
-        node_id=bootstrap_result.node.node_id,
-        instance_id=node_instance_id,
-        through=ANY,
-    )
-
-    evidence_reconciliation_service_class.assert_called_once_with(
-        event_repository=event_history_repository,
-        alarm_repository=alarm_history_repository,
-        evidence_writer=evidence_writer,
-    )
-
-    evidence_reconciliation_service.reconcile_between.assert_called_once_with(
-        start=ANY,
-        end=ANY,
-        node_id=bootstrap_result.node.node_id,
-        instance_id=node_instance_id,
-    )
-
-    reconciliation_call = (
-        evidence_reconciliation_service
-        .reconcile_between
-        .call_args
-    )
-    reconciliation_start = (
-        reconciliation_call.kwargs["start"]
-    )
-    reconciliation_end = (
-        reconciliation_call.kwargs["end"]
-    )
-
-    assert (
-        reconciliation_end
-        - reconciliation_start
-        == timedelta(hours=48)
-    )
-
     metric_service_class.assert_called_once_with(
         node_registry
     )
@@ -619,16 +542,6 @@ def test_build_dashboard_application_composes_real_dependencies() -> None:
         node_registry,
         history_repository=alarm_history_repository,
         evidence_writer=evidence_writer,
-    )
-
-    alarm_recovery_service_class.assert_called_once_with(
-        registry=node_registry,
-        history_repository=alarm_history_repository,
-    )
-
-    alarm_recovery_service.recover.assert_called_once_with(
-        node_id=bootstrap_result.node.node_id,
-        instance_id=node_instance_id,
     )
 
     health_transition_alarm_service_class.assert_called_once_with(
