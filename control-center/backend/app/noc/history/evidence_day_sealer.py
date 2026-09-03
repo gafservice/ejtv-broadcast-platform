@@ -45,6 +45,41 @@ class EvidenceDaySealer:
             self._root_path
         )
 
+    def assert_day_can_be_finalized(
+        self,
+        day: date,
+    ) -> None:
+        """Reject an existing invalid seal before finalization.
+
+        An unsealed day is eligible for reconciliation and sealing.
+        An already sealed day is eligible only when its manifest still
+        matches the current primary evidence.
+        """
+
+        with self._daily_lock.exclusive(day) as directory:
+            manifest_path = (
+                directory
+                / self.MANIFEST_FILENAME
+            )
+
+            if not manifest_path.exists():
+                return
+
+            current = manifest_path.read_text(
+                encoding="utf-8"
+            )
+
+            expected = self._build_manifest(
+                directory,
+                require_existing=True,
+            )
+
+            if current != expected:
+                raise EvidenceSealConflictError(
+                    "existing manifest does not "
+                    "match current evidence"
+                )
+
     def seal_day(
         self,
         day: date,

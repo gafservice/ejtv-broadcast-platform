@@ -7,6 +7,8 @@ from app.api.dependencies import (
     get_event_service,
     get_event_history_repository,
     get_history_query_service,
+    get_historical_range_repository,
+    get_daily_history_maintenance_runtime,
     get_noc_history_database,
     get_node_health_diagnostic_repository,
     get_health_service,
@@ -31,6 +33,12 @@ from app.api.dependencies import (
 )
 from app.noc.infrastructure.memory_repository import (
     InMemoryNodeRepository,
+)
+from app.noc.history.sqlite_historical_range_repository import (
+    SQLiteHistoricalRangeRepository,
+)
+from app.noc.runtime.daily_history_maintenance import (
+    DailyHistoryMaintenanceRuntime,
 )
 from app.noc.current_state.sqlite_node_health_diagnostic_repository import (
     SQLiteNodeHealthDiagnosticRepository,
@@ -78,6 +86,8 @@ def clear_noc_dependency_caches() -> None:
     get_event_service.cache_clear()
     get_snapshot_service.cache_clear()
     get_alarm_recovery_service.cache_clear()
+    get_daily_history_maintenance_runtime.cache_clear()
+    get_historical_range_repository.cache_clear()
     get_history_query_service.cache_clear()
     get_alarm_service.cache_clear()
     get_alarm_history_repository.cache_clear()
@@ -538,4 +548,36 @@ def test_telemetry_observation_runtime_uses_shared_components() -> None:
     assert (
         runtime.health_diagnostic_repository
         is get_node_health_diagnostic_repository()
+    )
+
+
+
+def test_historical_range_repository_is_cached_and_uses_shared_database(
+) -> None:
+    database = get_noc_history_database()
+
+    first = get_historical_range_repository()
+    second = get_historical_range_repository()
+
+    assert first is second
+    assert isinstance(
+        first,
+        SQLiteHistoricalRangeRepository,
+    )
+    assert first._database is database
+
+
+def test_daily_history_maintenance_runtime_is_cached_and_uses_shared_range(
+) -> None:
+    first = get_daily_history_maintenance_runtime()
+    second = get_daily_history_maintenance_runtime()
+
+    assert first is second
+    assert isinstance(
+        first,
+        DailyHistoryMaintenanceRuntime,
+    )
+    assert (
+        first._historical_range_repository
+        is get_historical_range_repository()
     )

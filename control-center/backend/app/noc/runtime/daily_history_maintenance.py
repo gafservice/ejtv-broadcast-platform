@@ -12,6 +12,9 @@ from app.noc.domain.node_instance import NodeInstanceId
 from app.noc.history.evidence_day_sealer import (
     EvidenceDaySealer,
 )
+from app.noc.history.historical_range_repository import (
+    HistoricalRangeRepository,
+)
 from app.noc.services.daily_alarm_continuity_service import (
     DailyAlarmContinuityService,
 )
@@ -32,6 +35,7 @@ class DailyHistoryMaintenanceRuntime:
         continuity_service: DailyAlarmContinuityService,
         reconciliation_service: EvidenceReconciliationService,
         evidence_day_sealer: EvidenceDaySealer,
+        historical_range_repository: HistoricalRangeRepository | None = None,
         clock: Callable[[], datetime] | None = None,
         retry_delay_seconds: float = 60.0,
     ) -> None:
@@ -63,6 +67,18 @@ class DailyHistoryMaintenanceRuntime:
             )
 
         if (
+            historical_range_repository is not None
+            and not isinstance(
+                historical_range_repository,
+                HistoricalRangeRepository,
+            )
+        ):
+            raise TypeError(
+                "historical_range_repository must satisfy "
+                "HistoricalRangeRepository"
+            )
+
+        if (
             not isinstance(
                 retry_delay_seconds,
                 (int, float),
@@ -84,6 +100,7 @@ class DailyHistoryMaintenanceRuntime:
         self._continuity_service = continuity_service
         self._reconciliation_service = reconciliation_service
         self._evidence_day_sealer = evidence_day_sealer
+        self._historical_range_repository = historical_range_repository
         self._clock = clock or (
             lambda: datetime.now(timezone.utc)
         )
@@ -145,34 +162,120 @@ class DailyHistoryMaintenanceRuntime:
             instance_id=instance_id,
         )
 
+        self.catch_up_mature_days(
+            node_id=node_id,
+            instance_id=instance_id,
+            through=effective_through,
+        )
+
+    def catch_up_mature_days(
+        self,
+        *,
+        node_id: NodeId,
+        instance_id: NodeInstanceId,
+        through: datetime,
+    ) -> None:
+        """Reconcile and seal every pending mature UTC day."""
+
+        if not isinstance(through, datetime):
+            raise TypeError(
+                "through must be a datetime"
+            )
+
+        if (
+            through.tzinfo is None
+            or through.utcoffset() is None
+        ):
+            raise ValueError(
+                "through must be timezone-aware"
+            )
+
         mature_day = (
-            effective_through.astimezone(
+            through.astimezone(
                 timezone.utc
             ).date()
             - timedelta(days=2)
         )
 
-        mature_day_start = datetime.combine(
-            mature_day,
-            time.min,
-            tzinfo=timezone.utc,
+        if self._historical_range_repository is None:
+            mature_day_start = datetime.combine(
+                mature_day,
+                time.min,
+                tzinfo=timezone.utc,
+            )
+
+            mature_day_end = (
+                mature_day_start
+                + timedelta(days=1)
+            )
+
+            self._reconciliation_service.reconcile_between(
+                start=mature_day_start,
+                end=mature_day_end,
+                node_id=node_id,
+                instance_id=instance_id,
+            )
+
+            self._evidence_day_sealer.seal_day(
+                mature_day
+            )
+
+            return
+
+        first_timestamp = (
+            self._historical_range_repository
+            .first_historical_timestamp(
+                node_id=node_id,
+                instance_id=instance_id,
+            )
         )
 
-        mature_day_end = (
-            mature_day_start
-            + timedelta(days=1)
-        )
+        if first_timestamp is None:
+            return
 
-        self._reconciliation_service.reconcile_between(
-            start=mature_day_start,
-            end=mature_day_end,
-            node_id=node_id,
-            instance_id=instance_id,
-        )
+        first_day = first_timestamp.astimezone(
+            timezone.utc
+        ).date()
 
-        self._evidence_day_sealer.seal_day(
-            mature_day
-        )
+        if first_day > mature_day:
+            return
+
+        day = first_day
+
+        while day <= mature_day:
+            if self._evidence_day_sealer.verify_day(
+                day
+            ):
+                day += timedelta(days=1)
+                continue
+
+            self._evidence_day_sealer.assert_day_can_be_finalized(
+                day
+            )
+
+            day_start = datetime.combine(
+                day,
+                time.min,
+                tzinfo=timezone.utc,
+            )
+
+            day_end = (
+                day_start
+                + timedelta(days=1)
+            )
+
+            self._reconciliation_service.reconcile_between(
+                start=day_start,
+                end=day_end,
+                node_id=node_id,
+                instance_id=instance_id,
+            )
+
+            self._evidence_day_sealer.seal_day(
+                day
+            )
+
+            day += timedelta(days=1)
 
     async def run_forever(
         self,

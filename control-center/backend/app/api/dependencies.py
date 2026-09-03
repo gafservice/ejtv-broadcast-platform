@@ -38,6 +38,9 @@ from app.noc.history.sqlite_database import (
 from app.noc.history.sqlite_event_repository import (
     SQLiteEventHistoryRepository,
 )
+from app.noc.history.sqlite_historical_range_repository import (
+    SQLiteHistoricalRangeRepository,
+)
 from app.noc.current_state.sqlite_node_health_diagnostic_repository import (
     SQLiteNodeHealthDiagnosticRepository,
 )
@@ -285,6 +288,16 @@ def get_alarm_history_repository() -> SQLiteAlarmHistoryRepository:
 
 
 @lru_cache
+def get_historical_range_repository(
+) -> SQLiteHistoricalRangeRepository:
+    """Construye el descubridor del rango histórico durable NOC."""
+
+    return SQLiteHistoricalRangeRepository(
+        get_noc_history_database()
+    )
+
+
+@lru_cache
 def get_node_health_diagnostic_repository(
 ) -> SQLiteNodeHealthDiagnosticRepository:
     """Construye el repositorio compartido de diagnóstico de salud."""
@@ -423,6 +436,9 @@ def get_daily_history_maintenance_runtime(
         ),
         evidence_day_sealer=(
             get_evidence_day_sealer()
+        ),
+        historical_range_repository=(
+            get_historical_range_repository()
         ),
     )
 

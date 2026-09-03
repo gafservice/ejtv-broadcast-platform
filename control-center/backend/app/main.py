@@ -71,6 +71,12 @@ async def _owned_noc_runtime(
         instance_id=node_instance_id,
     )
 
+    get_daily_history_maintenance_runtime().catch_up_mature_days(
+        node_id=node_id,
+        instance_id=node_instance_id,
+        through=reconciliation_end,
+    )
+
     initialize_noc_runtime_info(
         registry
     )

@@ -226,3 +226,79 @@ def test_reseal_rejects_missing_evidence_file(
         sealer.seal_day(day)
 
     assert not events_path.exists()
+
+
+def test_assert_day_can_be_finalized_allows_unsealed_day(
+    tmp_path,
+) -> None:
+    sealer = EvidenceDaySealer(tmp_path)
+
+    day = date(
+        2026,
+        9,
+        1,
+    )
+
+    sealer.assert_day_can_be_finalized(
+        day
+    )
+
+
+def test_assert_day_can_be_finalized_allows_valid_sealed_day(
+    tmp_path,
+) -> None:
+    sealer = EvidenceDaySealer(tmp_path)
+
+    day = date(
+        2026,
+        9,
+        1,
+    )
+
+    sealer.seal_day(day)
+
+    sealer.assert_day_can_be_finalized(
+        day
+    )
+
+
+def test_assert_day_can_be_finalized_rejects_invalid_sealed_day(
+    tmp_path,
+) -> None:
+    import pytest
+
+    from app.noc.history.evidence_day_sealer import (
+        EvidenceSealConflictError,
+    )
+
+    sealer = EvidenceDaySealer(tmp_path)
+
+    day = date(
+        2026,
+        9,
+        1,
+    )
+
+    sealer.seal_day(day)
+
+    directory = _day_directory(
+        tmp_path
+    )
+
+    with (
+        directory
+        / "events.jsonl"
+    ).open(
+        "a",
+        encoding="utf-8",
+    ) as handle:
+        handle.write(
+            '{"tampered":true}\n'
+        )
+
+    with pytest.raises(
+        EvidenceSealConflictError
+    ):
+        sealer.assert_day_can_be_finalized(
+            day
+        )

@@ -1,10 +1,13 @@
 from datetime import datetime, timedelta, timezone
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 from app.noc.domain.node_id import NodeId
 from app.noc.domain.node_instance import NodeInstanceId
 from app.noc.history.evidence_day_sealer import (
     EvidenceDaySealer,
+)
+from app.noc.history.historical_range_repository import (
+    HistoricalRangeRepository,
 )
 from app.noc.runtime.daily_history_maintenance import (
     DailyHistoryMaintenanceRuntime,
@@ -667,3 +670,226 @@ def test_run_forever_retries_same_boundary_after_failure(
         boundary,
         boundary,
     ]
+
+
+def test_run_once_catches_up_all_missing_mature_days_chronologically() -> None:
+    continuity = Mock(
+        spec=DailyAlarmContinuityService
+    )
+    reconciliation = Mock(
+        spec=EvidenceReconciliationService
+    )
+    sealer = Mock(
+        spec=EvidenceDaySealer
+    )
+
+    historical_range = Mock(
+        spec=HistoricalRangeRepository
+    )
+    historical_range.first_historical_timestamp.return_value = datetime(
+        2026,
+        9,
+        1,
+        12,
+        30,
+        tzinfo=timezone.utc,
+    )
+
+    sealed_days = {
+        # Deliberately leave 2026-09-02 missing.
+        # This proves that an interior gap is repaired even though
+        # a later day is already sealed.
+        datetime(
+            2026,
+            9,
+            3,
+            tzinfo=timezone.utc,
+        ).date(),
+    }
+
+    sealer.verify_day.side_effect = (
+        lambda day: day in sealed_days
+    )
+
+    runtime = DailyHistoryMaintenanceRuntime(
+        continuity_service=continuity,
+        reconciliation_service=reconciliation,
+        evidence_day_sealer=sealer,
+        historical_range_repository=historical_range,
+    )
+
+    node_id = NodeId(
+        id="streaming-core",
+        name="streaming-core",
+        display_name="Streaming Core",
+        created_at=datetime(
+            2026,
+            9,
+            1,
+            0,
+            0,
+            tzinfo=timezone.utc,
+        ),
+    )
+
+    instance_id = NodeInstanceId(
+        "streaming-primary"
+    )
+
+    through = datetime(
+        2026,
+        9,
+        7,
+        10,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    runtime.run_once(
+        node_id=node_id,
+        instance_id=instance_id,
+        through=through,
+    )
+
+    historical_range.first_historical_timestamp.assert_called_once_with(
+        node_id=node_id,
+        instance_id=instance_id,
+    )
+
+    expected_missing_days = [
+        datetime(2026, 9, 1, tzinfo=timezone.utc).date(),
+        datetime(2026, 9, 2, tzinfo=timezone.utc).date(),
+        datetime(2026, 9, 4, tzinfo=timezone.utc).date(),
+        datetime(2026, 9, 5, tzinfo=timezone.utc).date(),
+    ]
+
+    assert sealer.seal_day.call_args_list == [
+        call(day)
+        for day in expected_missing_days
+    ]
+
+    exact_day_calls = (
+        reconciliation.reconcile_between.call_args_list[1:]
+    )
+
+    assert [
+        (
+            item.kwargs["start"],
+            item.kwargs["end"],
+        )
+        for item in exact_day_calls
+    ] == [
+        (
+            datetime(
+                2026,
+                9,
+                day,
+                0,
+                0,
+                tzinfo=timezone.utc,
+            ),
+            datetime(
+                2026,
+                9,
+                day + 1,
+                0,
+                0,
+                tzinfo=timezone.utc,
+            ),
+        )
+        for day in (1, 2, 4, 5)
+    ]
+
+
+def test_mature_day_conflict_stops_before_reconciliation() -> None:
+    from app.noc.history.evidence_day_sealer import (
+        EvidenceSealConflictError,
+    )
+
+    continuity = Mock(
+        spec=DailyAlarmContinuityService
+    )
+    reconciliation = Mock(
+        spec=EvidenceReconciliationService
+    )
+    sealer = Mock(
+        spec=EvidenceDaySealer
+    )
+    historical_range = Mock(
+        spec=HistoricalRangeRepository
+    )
+
+    first_timestamp = datetime(
+        2026,
+        9,
+        1,
+        12,
+        30,
+        tzinfo=timezone.utc,
+    )
+
+    historical_range.first_historical_timestamp.return_value = (
+        first_timestamp
+    )
+
+    sealer.verify_day.return_value = False
+
+    sealer.assert_day_can_be_finalized.side_effect = (
+        EvidenceSealConflictError(
+            "existing manifest does not match current evidence"
+        )
+    )
+
+    runtime = DailyHistoryMaintenanceRuntime(
+        continuity_service=continuity,
+        reconciliation_service=reconciliation,
+        evidence_day_sealer=sealer,
+        historical_range_repository=historical_range,
+    )
+
+    node_id = NodeId(
+        id="streaming-core",
+        name="streaming-core",
+        display_name="Streaming Core",
+        created_at=datetime(
+            2026,
+            9,
+            1,
+            tzinfo=timezone.utc,
+        ),
+    )
+
+    instance_id = NodeInstanceId(
+        "streaming-primary"
+    )
+
+    through = datetime(
+        2026,
+        9,
+        7,
+        10,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    import pytest
+
+    with pytest.raises(
+        EvidenceSealConflictError
+    ):
+        runtime.catch_up_mature_days(
+            node_id=node_id,
+            instance_id=instance_id,
+            through=through,
+        )
+
+    sealer.verify_day.assert_called_once_with(
+        first_timestamp.date()
+    )
+
+    sealer.assert_day_can_be_finalized.assert_called_once_with(
+        first_timestamp.date()
+    )
+
+    reconciliation.reconcile_between.assert_not_called()
+    sealer.seal_day.assert_not_called()
