@@ -16,7 +16,7 @@ import sqlite3
 from pathlib import Path
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class SQLiteHistoryDatabase:
@@ -81,9 +81,17 @@ class SQLiteHistoryDatabase:
                 self._migrate_v1(connection)
                 self._set_version(
                     connection,
-                    SCHEMA_VERSION,
+                    1,
                 )
-                current_version = SCHEMA_VERSION
+                current_version = 1
+
+            if current_version == 1:
+                self._migrate_v2(connection)
+                self._set_version(
+                    connection,
+                    2,
+                )
+                current_version = 2
 
             if current_version != SCHEMA_VERSION:
                 raise RuntimeError(
@@ -250,5 +258,31 @@ class SQLiteHistoryDatabase:
                 ON alarm_transitions(
                     transition_timestamp
                 );
+            """
+        )
+
+    @staticmethod
+    def _migrate_v2(
+        connection: sqlite3.Connection,
+    ) -> None:
+        """Add shared current-state storage for Node health diagnostics."""
+
+        connection.executescript(
+            """
+            CREATE TABLE node_health_diagnostics (
+                node_id TEXT NOT NULL,
+                instance_id TEXT NOT NULL,
+
+                captured_at TEXT NOT NULL,
+                diagnostic_json TEXT NOT NULL,
+
+                PRIMARY KEY (
+                    node_id,
+                    instance_id
+                )
+            );
+
+            CREATE INDEX idx_node_health_diagnostics_captured_at
+                ON node_health_diagnostics(captured_at);
             """
         )
