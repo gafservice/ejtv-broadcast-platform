@@ -152,6 +152,24 @@ class DailyHistoryMaintenanceRuntime:
             - timedelta(days=2)
         )
 
+        mature_day_start = datetime.combine(
+            mature_day,
+            time.min,
+            tzinfo=timezone.utc,
+        )
+
+        mature_day_end = (
+            mature_day_start
+            + timedelta(days=1)
+        )
+
+        self._reconciliation_service.reconcile_between(
+            start=mature_day_start,
+            end=mature_day_end,
+            node_id=node_id,
+            instance_id=instance_id,
+        )
+
         self._evidence_day_sealer.seal_day(
             mature_day
         )

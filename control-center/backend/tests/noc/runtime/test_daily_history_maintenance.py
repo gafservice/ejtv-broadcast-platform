@@ -137,6 +137,7 @@ def test_run_once_executes_continuity_before_reconciliation() -> None:
     assert calls == [
         "continuity",
         "reconciliation",
+        "reconciliation",
         "sealing",
     ]
 
@@ -146,15 +147,47 @@ def test_run_once_executes_continuity_before_reconciliation() -> None:
         through=boundary,
     )
 
-    reconciliation.reconcile_between.assert_called_once_with(
-        start=boundary - timedelta(hours=48),
-        end=boundary + timedelta(microseconds=1),
-        node_id=node_id,
-        instance_id=instance_id,
+    mature_day = (
+        boundary.date()
+        - timedelta(days=2)
     )
 
+    mature_day_start = datetime.combine(
+        mature_day,
+        datetime.min.time(),
+        tzinfo=timezone.utc,
+    )
+
+    mature_day_end = (
+        mature_day_start
+        + timedelta(days=1)
+    )
+
+    assert reconciliation.reconcile_between.call_count == 2
+
+    recent_call = (
+        reconciliation.reconcile_between.call_args_list[0]
+    )
+    exact_day_call = (
+        reconciliation.reconcile_between.call_args_list[1]
+    )
+
+    assert recent_call.kwargs == {
+        "start": boundary - timedelta(hours=48),
+        "end": boundary + timedelta(microseconds=1),
+        "node_id": node_id,
+        "instance_id": instance_id,
+    }
+
+    assert exact_day_call.kwargs == {
+        "start": mature_day_start,
+        "end": mature_day_end,
+        "node_id": node_id,
+        "instance_id": instance_id,
+    }
+
     sealer.seal_day.assert_called_once_with(
-        boundary.date() - timedelta(days=2)
+        mature_day
     )
 
 
@@ -279,6 +312,17 @@ def test_run_forever_executes_at_next_utc_boundary(
 
     assert sleep_calls[0] == 1.0
 
+    mature_day = (
+        boundary.date()
+        - timedelta(days=2)
+    )
+
+    mature_day_end = datetime.combine(
+        mature_day + timedelta(days=1),
+        datetime.min.time(),
+        tzinfo=timezone.utc,
+    )
+
     assert calls == [
         (
             "continuity",
@@ -287,6 +331,10 @@ def test_run_forever_executes_at_next_utc_boundary(
         (
             "reconciliation",
             boundary + timedelta(microseconds=1),
+        ),
+        (
+            "reconciliation",
+            mature_day_end,
         ),
     ]
 
