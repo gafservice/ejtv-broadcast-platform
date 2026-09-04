@@ -2,11 +2,15 @@
 
 from datetime import datetime, timezone
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class HistoryCsvExportRequest(BaseModel):
     """Requested UTC interval for one derived CSV history export."""
+
+    model_config = ConfigDict(
+        extra="forbid"
+    )
 
     start: datetime = Field(
         description=(

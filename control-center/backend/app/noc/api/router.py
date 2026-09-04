@@ -2,21 +2,29 @@
 
 ENG-013B — Node SDK API
 
-This first API surface is intentionally read-only. It exposes the
-logical Node inventory and current NodeInstance snapshots without
-placing domain or operational policy inside the HTTP layer.
+This API surface exposes the logical Node inventory, current
+NodeInstance snapshots, durable history queries, and derived history
+exports without placing domain or operational policy inside the HTTP layer.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+from uuid import uuid4
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.api.dependencies import (
+    get_history_csv_export_service,
     get_history_query_service,
     get_node_registry,
     get_snapshot_service,
 )
+from app.api.schemas.noc_history import (
+    HistoryCsvExportRequest,
+)
 from app.api.security import require_permission
+from app.core.config import Settings, get_settings
 from app.core.responses import success_response
 from app.noc.domain.node import Node
 from app.noc.domain.node_instance import NodeInstance
@@ -24,6 +32,9 @@ from app.noc.registry.registry import NodeRegistry
 from app.noc.serializers.snapshot_serializer import SnapshotSerializer
 from app.noc.history.alarm_transition import AlarmTransition
 from app.noc.history.event_history_record import EventHistoryRecord
+from app.noc.services.history_csv_export_service import (
+    HistoryCsvExportService,
+)
 from app.noc.services.history_query_service import (
     HistoryQueryService,
 )
@@ -296,6 +307,74 @@ def get_node_instance_snapshot(
     return success_response(
         data=payload,
         message="Snapshot del Node obtenido correctamente.",
+        request_id=request.state.request_id,
+    )
+
+
+@router.post(
+    "/nodes/{node_id}/instances/{instance_id}/history/exports/csv",
+)
+def export_instance_history_csv(
+    node_id: str,
+    instance_id: str,
+    payload: HistoryCsvExportRequest,
+    request: Request,
+    registry: NodeRegistry = Depends(get_node_registry),
+    history_csv_export_service: HistoryCsvExportService = Depends(
+        get_history_csv_export_service
+    ),
+    settings: Settings = Depends(get_settings),
+):
+    """Generate one derived CSV export for a NodeInstance history range."""
+
+    node = _require_node(
+        registry,
+        node_id,
+    )
+
+    instance = _require_instance(
+        node,
+        instance_id,
+    )
+
+    export_id = uuid4().hex
+    destination = (
+        Path(settings.noc_csv_export_path)
+        / export_id
+    )
+
+    result = history_csv_export_service.export_range(
+        start=payload.start,
+        end=payload.end,
+        destination=destination,
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    return success_response(
+        data={
+            "export_id": export_id,
+            "format": "csv",
+            "node_id": node.node_id.id,
+            "instance_id": str(
+                instance.instance_id
+            ),
+            "window": {
+                "start": _serialize_utc_timestamp(
+                    payload.start
+                ),
+                "end": _serialize_utc_timestamp(
+                    payload.end
+                ),
+            },
+            "files": [
+                result.events_file.name,
+                result.alarm_transitions_file.name,
+            ],
+        },
+        message=(
+            "Exportación CSV histórica generada correctamente."
+        ),
         request_id=request.state.request_id,
     )
 

@@ -145,3 +145,17 @@ def test_history_csv_export_request_rejects_invalid_datetime() -> None:
                 "end": "2026-09-02T00:00:00Z",
             }
         )
+
+
+def test_history_csv_export_request_rejects_unknown_fields() -> None:
+    with pytest.raises(
+        ValidationError,
+        match="Extra inputs are not permitted",
+    ):
+        HistoryCsvExportRequest.model_validate(
+            {
+                "start": "2026-09-01T00:00:00Z",
+                "end": "2026-09-02T00:00:00Z",
+                "destination": "../../outside",
+            }
+        )
