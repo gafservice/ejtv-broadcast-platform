@@ -6,6 +6,8 @@ from app.api.dependencies import (
     get_alarm_service,
     get_event_service,
     get_event_history_repository,
+    get_csv_export_repository,
+    get_history_csv_export_service,
     get_history_query_service,
     get_historical_range_repository,
     get_managed_history_repository,
@@ -36,6 +38,9 @@ from app.api.dependencies import (
 from app.noc.infrastructure.memory_repository import (
     InMemoryNodeRepository,
 )
+from app.noc.history.filesystem_csv_export_repository import (
+    FilesystemCsvExportRepository,
+)
 from app.noc.history.sqlite_historical_range_repository import (
     SQLiteHistoricalRangeRepository,
 )
@@ -65,6 +70,9 @@ from app.noc.services.alarm_service import AlarmService
 from app.noc.services.capacity_service import CapacityService
 from app.noc.services.health_service import HealthService
 from app.noc.services.heartbeat_service import HeartbeatService
+from app.noc.services.history_csv_export_service import (
+    HistoryCsvExportService,
+)
 from app.noc.services.history_query_service import (
     HistoryQueryService,
 )
@@ -98,6 +106,8 @@ def clear_noc_dependency_caches() -> None:
     get_managed_history_bootstrap_service.cache_clear()
     get_managed_history_repository.cache_clear()
     get_historical_range_repository.cache_clear()
+    get_history_csv_export_service.cache_clear()
+    get_csv_export_repository.cache_clear()
     get_history_query_service.cache_clear()
     get_alarm_service.cache_clear()
     get_alarm_history_repository.cache_clear()
@@ -423,6 +433,45 @@ def test_history_query_service_uses_shared_history_repositories() -> None:
     assert (
         service.alarm_repository
         is get_alarm_history_repository()
+    )
+
+
+def test_csv_export_repository_is_cached() -> None:
+    first = get_csv_export_repository()
+    second = get_csv_export_repository()
+
+    assert first is second
+    assert isinstance(
+        first,
+        FilesystemCsvExportRepository,
+    )
+
+
+def test_history_csv_export_service_is_cached() -> None:
+    first = get_history_csv_export_service()
+    second = get_history_csv_export_service()
+
+    assert first is second
+    assert isinstance(
+        first,
+        HistoryCsvExportService,
+    )
+
+
+def test_history_csv_export_service_uses_shared_components() -> None:
+    service = get_history_csv_export_service()
+
+    assert (
+        service._event_repository
+        is get_event_history_repository()
+    )
+    assert (
+        service._alarm_repository
+        is get_alarm_history_repository()
+    )
+    assert (
+        service._export_repository
+        is get_csv_export_repository()
     )
 
 

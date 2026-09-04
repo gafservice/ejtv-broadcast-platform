@@ -38,6 +38,9 @@ from app.noc.history.sqlite_database import (
 from app.noc.history.sqlite_event_repository import (
     SQLiteEventHistoryRepository,
 )
+from app.noc.history.filesystem_csv_export_repository import (
+    FilesystemCsvExportRepository,
+)
 from app.noc.history.sqlite_historical_range_repository import (
     SQLiteHistoricalRangeRepository,
 )
@@ -110,6 +113,9 @@ from app.noc.runtime.daily_history_maintenance import (
 from app.noc.services.health_service import HealthService
 from app.noc.services.history_query_service import (
     HistoryQueryService,
+)
+from app.noc.services.history_csv_export_service import (
+    HistoryCsvExportService,
 )
 from app.noc.services.evidence_reconciliation_service import (
     EvidenceReconciliationService,
@@ -420,6 +426,24 @@ def get_history_query_service() -> HistoryQueryService:
     return HistoryQueryService(
         event_repository=get_event_history_repository(),
         alarm_repository=get_alarm_history_repository(),
+    )
+
+
+@lru_cache
+def get_csv_export_repository() -> FilesystemCsvExportRepository:
+    """Construye el publicador filesystem de exportaciones CSV NOC."""
+
+    return FilesystemCsvExportRepository()
+
+
+@lru_cache
+def get_history_csv_export_service() -> HistoryCsvExportService:
+    """Construye el servicio compartido de exportación CSV histórica."""
+
+    return HistoryCsvExportService(
+        event_repository=get_event_history_repository(),
+        alarm_repository=get_alarm_history_repository(),
+        export_repository=get_csv_export_repository(),
     )
 
 

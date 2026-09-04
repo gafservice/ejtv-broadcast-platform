@@ -73,6 +73,10 @@ class Settings(BaseSettings):
         "data/noc-evidence"
     )
 
+    noc_csv_export_path: str = (
+        "data/noc-exports/csv"
+    )
+
     noc_runtime_lock_path: str = (
         "data/noc-runtime-locks"
     )
