@@ -27,14 +27,19 @@ def _utc_timestamp(value: datetime) -> str:
     return value.isoformat().replace("+00:00", "Z")
 
 
-def serialize_event_evidence(
+def event_evidence_payload(
     record: EventHistoryRecord,
-) -> str:
-    """Serialize one EventHistoryRecord as canonical JSONL payload."""
+) -> dict[str, object]:
+    """Return the canonical evidence payload for one historical event."""
+
+    if not isinstance(record, EventHistoryRecord):
+        raise TypeError(
+            "record must be an EventHistoryRecord"
+        )
 
     event = record.event
 
-    payload = {
+    return {
         "schema_version": EVIDENCE_SCHEMA_VERSION,
         "record_type": "event",
         "event_id": event.event_id,
@@ -55,20 +60,31 @@ def serialize_event_evidence(
         "recorded_at": _utc_timestamp(record.recorded_at),
     }
 
+
+def serialize_event_evidence(
+    record: EventHistoryRecord,
+) -> str:
+    """Serialize one EventHistoryRecord as canonical JSONL payload."""
+
     return json.dumps(
-        payload,
+        event_evidence_payload(record),
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
     )
 
 
-def serialize_alarm_transition_evidence(
+def alarm_transition_evidence_payload(
     transition: AlarmTransition,
-) -> str:
-    """Serialize one AlarmTransition as canonical JSONL payload."""
+) -> dict[str, object]:
+    """Return the canonical evidence payload for one alarm transition."""
 
-    payload = {
+    if not isinstance(transition, AlarmTransition):
+        raise TypeError(
+            "transition must be an AlarmTransition"
+        )
+
+    return {
         "schema_version": EVIDENCE_SCHEMA_VERSION,
         "record_type": "alarm_transition",
         "transition_id": transition.transition_id,
@@ -85,8 +101,14 @@ def serialize_alarm_transition_evidence(
         ),
     }
 
+
+def serialize_alarm_transition_evidence(
+    transition: AlarmTransition,
+) -> str:
+    """Serialize one AlarmTransition as canonical JSONL payload."""
+
     return json.dumps(
-        payload,
+        alarm_transition_evidence_payload(transition),
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),

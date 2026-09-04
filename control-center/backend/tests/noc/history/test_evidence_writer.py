@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
+import pytest
+
 from app.noc.domain.node_alarm import (
     AlarmState,
 )
@@ -24,6 +26,8 @@ from app.noc.history.event_history_record import (
 from app.noc.history.evidence_writer import (
     EVIDENCE_SCHEMA_VERSION,
     EvidenceWriter,
+    alarm_transition_evidence_payload,
+    event_evidence_payload,
     serialize_alarm_transition_evidence,
     serialize_event_evidence,
 )
@@ -204,3 +208,100 @@ def test_evidence_writer_is_runtime_protocol() -> None:
         Writer(),
         EvidenceWriter,
     )
+
+def test_event_evidence_payload_matches_serialized_payload() -> None:
+    timestamp = datetime(
+        2026,
+        9,
+        1,
+        17,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    record = EventHistoryRecord(
+        event=EventRecord(
+            event_id="event-payload-001",
+            event_type="SESSION_CONNECTED",
+            severity=EventSeverity.INFO,
+            timestamp=timestamp,
+            source=INSTANCE_ID,
+            title="Connected",
+            description="Reader connected.",
+            attributes={
+                "z": "last",
+                "a": "first",
+            },
+            correlation_id="corr-payload-001",
+        ),
+        node_id=NODE_ID,
+        instance_id=INSTANCE_ID,
+        recorded_at=timestamp,
+    )
+
+    payload = event_evidence_payload(record)
+
+    assert payload == json.loads(
+        serialize_event_evidence(record)
+    )
+    assert payload["attributes"] == {
+        "z": "last",
+        "a": "first",
+    }
+
+
+def test_alarm_transition_evidence_payload_matches_serialized_payload() -> None:
+    timestamp = datetime(
+        2026,
+        9,
+        1,
+        17,
+        5,
+        tzinfo=timezone.utc,
+    )
+
+    transition = AlarmTransition(
+        transition_id="alarm-transition-payload-001",
+        alarm_id="CRITICAL_PATH_TRAFFIC_STALLED:ejtv",
+        transition_type=AlarmTransitionType.OPENED,
+        timestamp=timestamp,
+        source=INSTANCE_ID,
+        state=AlarmState.ACTIVE,
+        actor="noc-runtime",
+        metadata={
+            "z": "last",
+            "a": "first",
+        },
+    )
+
+    payload = alarm_transition_evidence_payload(
+        transition
+    )
+
+    assert payload == json.loads(
+        serialize_alarm_transition_evidence(
+            transition
+        )
+    )
+    assert payload["metadata"] == {
+        "z": "last",
+        "a": "first",
+    }
+
+
+def test_event_evidence_payload_rejects_invalid_record() -> None:
+    with pytest.raises(
+        TypeError,
+        match="EventHistoryRecord",
+    ):
+        event_evidence_payload(object())
+
+
+def test_alarm_transition_evidence_payload_rejects_invalid_transition() -> None:
+    with pytest.raises(
+        TypeError,
+        match="AlarmTransition",
+    ):
+        alarm_transition_evidence_payload(
+            object()
+        )
