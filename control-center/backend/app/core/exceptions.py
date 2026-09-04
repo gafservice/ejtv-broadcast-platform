@@ -5,6 +5,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -328,7 +329,9 @@ async def validation_error_handler(
         content=error_response(
             message="La solicitud contiene datos inválidos.",
             error_code="VALIDATION_ERROR",
-            details=exc.errors(),
+            details=jsonable_encoder(
+                exc.errors()
+            ),
             request_id=_request_id(request),
         ),
     )
