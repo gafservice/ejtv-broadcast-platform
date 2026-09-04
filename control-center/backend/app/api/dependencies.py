@@ -41,6 +41,9 @@ from app.noc.history.sqlite_event_repository import (
 from app.noc.history.sqlite_historical_range_repository import (
     SQLiteHistoricalRangeRepository,
 )
+from app.noc.history.sqlite_managed_history_repository import (
+    SQLiteManagedHistoryRepository,
+)
 from app.noc.current_state.sqlite_node_health_diagnostic_repository import (
     SQLiteNodeHealthDiagnosticRepository,
 )
@@ -110,6 +113,9 @@ from app.noc.services.history_query_service import (
 )
 from app.noc.services.evidence_reconciliation_service import (
     EvidenceReconciliationService,
+)
+from app.noc.services.managed_history_bootstrap_service import (
+    ManagedHistoryBootstrapService,
 )
 from app.noc.services.heartbeat_service import HeartbeatService
 from app.noc.services.capacity_service import CapacityService
@@ -297,6 +303,32 @@ def get_historical_range_repository(
     )
 
 
+
+@lru_cache
+def get_managed_history_repository(
+) -> SQLiteManagedHistoryRepository:
+    """Construye la autoridad durable del inicio histórico administrado."""
+
+    return SQLiteManagedHistoryRepository(
+        get_noc_history_database()
+    )
+
+
+@lru_cache
+def get_managed_history_bootstrap_service(
+) -> ManagedHistoryBootstrapService:
+    """Construye el bootstrap durable del histórico administrado."""
+
+    return ManagedHistoryBootstrapService(
+        managed_history_repository=(
+            get_managed_history_repository()
+        ),
+        historical_range_repository=(
+            get_historical_range_repository()
+        ),
+    )
+
+
 @lru_cache
 def get_node_health_diagnostic_repository(
 ) -> SQLiteNodeHealthDiagnosticRepository:
@@ -437,8 +469,8 @@ def get_daily_history_maintenance_runtime(
         evidence_day_sealer=(
             get_evidence_day_sealer()
         ),
-        historical_range_repository=(
-            get_historical_range_repository()
+        managed_history_repository=(
+            get_managed_history_repository()
         ),
     )
 

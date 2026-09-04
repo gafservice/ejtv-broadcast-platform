@@ -30,6 +30,7 @@ async def _exercise_owned_runtime_startup() -> None:
     )
     registry = Mock()
 
+    managed_history_bootstrap = Mock()
     continuity = Mock()
     alarm_recovery = Mock()
     reconciliation = Mock()
@@ -45,6 +46,12 @@ async def _exercise_owned_runtime_startup() -> None:
     session_observation.run_forever = AsyncMock()
 
     call_order: list[str] = []
+
+    managed_history_bootstrap.ensure_anchor.side_effect = (
+        lambda **_: call_order.append(
+            "managed-history-anchor"
+        )
+    )
 
     continuity.catch_up.side_effect = (
         lambda **_: call_order.append(
@@ -80,6 +87,10 @@ async def _exercise_owned_runtime_startup() -> None:
     )
 
     with (
+        patch(
+            "app.main.get_managed_history_bootstrap_service",
+            return_value=managed_history_bootstrap,
+        ),
         patch(
             "app.main.get_daily_alarm_continuity_service",
             return_value=continuity,
@@ -128,6 +139,11 @@ async def _exercise_owned_runtime_startup() -> None:
             )
 
     assert (
+        call_order.index("managed-history-anchor")
+        < call_order.index("continuity")
+    )
+
+    assert (
         call_order.index("continuity")
         < call_order.index("alarm-recovery")
     )
@@ -140,6 +156,11 @@ async def _exercise_owned_runtime_startup() -> None:
     assert (
         call_order.index("recent-reconciliation")
         < call_order.index("mature-catch-up")
+    )
+
+    managed_history_bootstrap.ensure_anchor.assert_called_once_with(
+        node_id=node_id,
+        instance_id=instance_id,
     )
 
     daily_history.catch_up_mature_days.assert_called_once()

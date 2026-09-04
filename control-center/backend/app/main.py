@@ -11,6 +11,7 @@ from app.api.dependencies import (
     get_alarm_recovery_service,
     get_daily_alarm_continuity_service,
     get_daily_history_maintenance_runtime,
+    get_managed_history_bootstrap_service,
     get_evidence_reconciliation_service,
     get_capacity_service,
     get_node_registry,
@@ -48,6 +49,11 @@ async def _owned_noc_runtime(
     registry,
 ) -> AsyncIterator[None]:
     """Run operational NOC work while ownership is held."""
+
+    get_managed_history_bootstrap_service().ensure_anchor(
+        node_id=node_id,
+        instance_id=node_instance_id,
+    )
 
     continuity_through = datetime.now(timezone.utc)
 

@@ -8,6 +8,8 @@ from app.api.dependencies import (
     get_event_history_repository,
     get_history_query_service,
     get_historical_range_repository,
+    get_managed_history_repository,
+    get_managed_history_bootstrap_service,
     get_daily_history_maintenance_runtime,
     get_noc_history_database,
     get_node_health_diagnostic_repository,
@@ -37,6 +39,9 @@ from app.noc.infrastructure.memory_repository import (
 from app.noc.history.sqlite_historical_range_repository import (
     SQLiteHistoricalRangeRepository,
 )
+from app.noc.history.sqlite_managed_history_repository import (
+    SQLiteManagedHistoryRepository,
+)
 from app.noc.runtime.daily_history_maintenance import (
     DailyHistoryMaintenanceRuntime,
 )
@@ -63,6 +68,9 @@ from app.noc.services.heartbeat_service import HeartbeatService
 from app.noc.services.history_query_service import (
     HistoryQueryService,
 )
+from app.noc.services.managed_history_bootstrap_service import (
+    ManagedHistoryBootstrapService,
+)
 from app.noc.services.metric_service import MetricService
 from app.noc.services.snapshot_service import SnapshotService
 
@@ -87,6 +95,8 @@ def clear_noc_dependency_caches() -> None:
     get_snapshot_service.cache_clear()
     get_alarm_recovery_service.cache_clear()
     get_daily_history_maintenance_runtime.cache_clear()
+    get_managed_history_bootstrap_service.cache_clear()
+    get_managed_history_repository.cache_clear()
     get_historical_range_repository.cache_clear()
     get_history_query_service.cache_clear()
     get_alarm_service.cache_clear()
@@ -567,7 +577,7 @@ def test_historical_range_repository_is_cached_and_uses_shared_database(
     assert first._database is database
 
 
-def test_daily_history_maintenance_runtime_is_cached_and_uses_shared_range(
+def test_daily_history_maintenance_runtime_is_cached_and_uses_managed_history(
 ) -> None:
     first = get_daily_history_maintenance_runtime()
     second = get_daily_history_maintenance_runtime()
@@ -578,6 +588,53 @@ def test_daily_history_maintenance_runtime_is_cached_and_uses_shared_range(
         DailyHistoryMaintenanceRuntime,
     )
     assert (
+        first._managed_history_repository
+        is get_managed_history_repository()
+    )
+
+
+def test_managed_history_repository_is_cached_and_uses_shared_database(
+) -> None:
+    database = get_noc_history_database()
+
+    first = get_managed_history_repository()
+    second = get_managed_history_repository()
+
+    assert first is second
+    assert isinstance(
+        first,
+        SQLiteManagedHistoryRepository,
+    )
+    assert first._database is database
+
+
+def test_managed_history_bootstrap_service_is_cached_and_uses_shared_components(
+) -> None:
+    first = get_managed_history_bootstrap_service()
+    second = get_managed_history_bootstrap_service()
+
+    assert first is second
+    assert isinstance(
+        first,
+        ManagedHistoryBootstrapService,
+    )
+
+    assert (
+        first._managed_history_repository
+        is get_managed_history_repository()
+    )
+
+    assert (
         first._historical_range_repository
         is get_historical_range_repository()
     )
+
+
+def test_managed_history_dependencies_share_history_database() -> None:
+    database = get_noc_history_database()
+
+    managed = get_managed_history_repository()
+    historical = get_historical_range_repository()
+
+    assert managed._database is database
+    assert historical._database is database

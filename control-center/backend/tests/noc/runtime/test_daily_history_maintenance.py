@@ -6,8 +6,8 @@ from app.noc.domain.node_instance import NodeInstanceId
 from app.noc.history.evidence_day_sealer import (
     EvidenceDaySealer,
 )
-from app.noc.history.historical_range_repository import (
-    HistoricalRangeRepository,
+from app.noc.history.managed_history_repository import (
+    ManagedHistoryRepository,
 )
 from app.noc.runtime.daily_history_maintenance import (
     DailyHistoryMaintenanceRuntime,
@@ -683,16 +683,16 @@ def test_run_once_catches_up_all_missing_mature_days_chronologically() -> None:
         spec=EvidenceDaySealer
     )
 
-    historical_range = Mock(
-        spec=HistoricalRangeRepository
+    managed_history = Mock(
+        spec=ManagedHistoryRepository
     )
-    historical_range.first_historical_timestamp.return_value = datetime(
-        2026,
-        9,
-        1,
-        12,
-        30,
-        tzinfo=timezone.utc,
+    managed_history.get_managed_since_day.return_value = (
+        datetime(
+            2026,
+            9,
+            1,
+            tzinfo=timezone.utc,
+        ).date()
     )
 
     sealed_days = {
@@ -715,7 +715,7 @@ def test_run_once_catches_up_all_missing_mature_days_chronologically() -> None:
         continuity_service=continuity,
         reconciliation_service=reconciliation,
         evidence_day_sealer=sealer,
-        historical_range_repository=historical_range,
+        managed_history_repository=managed_history,
     )
 
     node_id = NodeId(
@@ -751,7 +751,7 @@ def test_run_once_catches_up_all_missing_mature_days_chronologically() -> None:
         through=through,
     )
 
-    historical_range.first_historical_timestamp.assert_called_once_with(
+    managed_history.get_managed_since_day.assert_called_once_with(
         node_id=node_id,
         instance_id=instance_id,
     )
@@ -815,21 +815,19 @@ def test_mature_day_conflict_stops_before_reconciliation() -> None:
     sealer = Mock(
         spec=EvidenceDaySealer
     )
-    historical_range = Mock(
-        spec=HistoricalRangeRepository
+    managed_history = Mock(
+        spec=ManagedHistoryRepository
     )
 
-    first_timestamp = datetime(
+    first_day = datetime(
         2026,
         9,
         1,
-        12,
-        30,
         tzinfo=timezone.utc,
-    )
+    ).date()
 
-    historical_range.first_historical_timestamp.return_value = (
-        first_timestamp
+    managed_history.get_managed_since_day.return_value = (
+        first_day
     )
 
     sealer.verify_day.return_value = False
@@ -844,7 +842,7 @@ def test_mature_day_conflict_stops_before_reconciliation() -> None:
         continuity_service=continuity,
         reconciliation_service=reconciliation,
         evidence_day_sealer=sealer,
-        historical_range_repository=historical_range,
+        managed_history_repository=managed_history,
     )
 
     node_id = NodeId(
@@ -884,12 +882,226 @@ def test_mature_day_conflict_stops_before_reconciliation() -> None:
         )
 
     sealer.verify_day.assert_called_once_with(
-        first_timestamp.date()
+        first_day
     )
 
     sealer.assert_day_can_be_finalized.assert_called_once_with(
-        first_timestamp.date()
+        first_day
     )
 
     reconciliation.reconcile_between.assert_not_called()
     sealer.seal_day.assert_not_called()
+
+
+def test_mature_catch_up_uses_managed_anchor_after_old_rows_are_deleted(
+    tmp_path,
+) -> None:
+    """Retention must not move the lower bound used by mature catch-up."""
+
+    from app.noc.history.sqlite_database import (
+        SQLiteHistoryDatabase,
+    )
+    from app.noc.history.sqlite_historical_range_repository import (
+        SQLiteHistoricalRangeRepository,
+    )
+    from app.noc.history.sqlite_managed_history_repository import (
+        SQLiteManagedHistoryRepository,
+    )
+
+    database = SQLiteHistoryDatabase(
+        tmp_path / "history.sqlite3"
+    )
+
+    managed_history = SQLiteManagedHistoryRepository(
+        database
+    )
+
+    historical_range = SQLiteHistoricalRangeRepository(
+        database
+    )
+
+    node_id = NodeId(
+        id="streaming-core",
+        name="streaming-core",
+        display_name="Streaming Core",
+        created_at=datetime(
+            2026,
+            9,
+            1,
+            tzinfo=timezone.utc,
+        ),
+    )
+
+    instance_id = NodeInstanceId(
+        "streaming-primary"
+    )
+
+    managed_day = datetime(
+        2026,
+        9,
+        1,
+        tzinfo=timezone.utc,
+    ).date()
+
+    managed_history.ensure_managed_since_day(
+        node_id=node_id,
+        instance_id=instance_id,
+        day=managed_day,
+        created_at=datetime(
+            2026,
+            9,
+            1,
+            12,
+            0,
+            tzinfo=timezone.utc,
+        ),
+    )
+
+    with database.connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO events (
+                event_id,
+                node_id,
+                node_name,
+                node_display_name,
+                node_created_at,
+                instance_id,
+                event_type,
+                severity,
+                event_timestamp,
+                recorded_at,
+                source,
+                title,
+                description,
+                correlation_id,
+                attributes_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "retention-old-event",
+                node_id.id,
+                node_id.name,
+                node_id.display_name,
+                node_id.created_at.isoformat(),
+                instance_id.value,
+                "TEST_EVENT",
+                "INFO",
+                "2026-09-01T12:00:00+00:00",
+                "2026-09-01T12:00:00+00:00",
+                instance_id.value,
+                "Old event",
+                "Retention lower-bound test",
+                None,
+                None,
+            ),
+        )
+
+    assert (
+        historical_range.first_historical_timestamp(
+            node_id=node_id,
+            instance_id=instance_id,
+        )
+        is not None
+    )
+
+    with database.connect() as connection:
+        connection.execute(
+            """
+            DELETE FROM events
+            WHERE event_id = ?
+            """,
+            ("retention-old-event",),
+        )
+
+    assert (
+        historical_range.first_historical_timestamp(
+            node_id=node_id,
+            instance_id=instance_id,
+        )
+        is None
+    )
+
+    assert managed_history.get_managed_since_day(
+        node_id=node_id,
+        instance_id=instance_id,
+    ) == managed_day
+
+    continuity = Mock(
+        spec=DailyAlarmContinuityService
+    )
+    reconciliation = Mock(
+        spec=EvidenceReconciliationService
+    )
+    sealer = Mock(
+        spec=EvidenceDaySealer
+    )
+
+    sealer.verify_day.return_value = False
+
+    runtime = DailyHistoryMaintenanceRuntime(
+        continuity_service=continuity,
+        reconciliation_service=reconciliation,
+        evidence_day_sealer=sealer,
+        managed_history_repository=managed_history,
+    )
+
+    through = datetime(
+        2026,
+        9,
+        7,
+        10,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    runtime.catch_up_mature_days(
+        node_id=node_id,
+        instance_id=instance_id,
+        through=through,
+    )
+
+    expected_days = [
+        datetime(
+            2026,
+            9,
+            day,
+            tzinfo=timezone.utc,
+        ).date()
+        for day in range(1, 6)
+    ]
+
+    assert sealer.verify_day.call_args_list == [
+        call(day)
+        for day in expected_days
+    ]
+
+    assert sealer.seal_day.call_args_list == [
+        call(day)
+        for day in expected_days
+    ]
+
+    assert [
+        (
+            item.kwargs["start"],
+            item.kwargs["end"],
+        )
+        for item in reconciliation.reconcile_between.call_args_list
+    ] == [
+        (
+            datetime(
+                2026,
+                9,
+                day,
+                tzinfo=timezone.utc,
+            ),
+            datetime(
+                2026,
+                9,
+                day + 1,
+                tzinfo=timezone.utc,
+            ),
+        )
+        for day in range(1, 6)
+    ]

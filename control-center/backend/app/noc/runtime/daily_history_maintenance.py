@@ -12,8 +12,8 @@ from app.noc.domain.node_instance import NodeInstanceId
 from app.noc.history.evidence_day_sealer import (
     EvidenceDaySealer,
 )
-from app.noc.history.historical_range_repository import (
-    HistoricalRangeRepository,
+from app.noc.history.managed_history_repository import (
+    ManagedHistoryRepository,
 )
 from app.noc.services.daily_alarm_continuity_service import (
     DailyAlarmContinuityService,
@@ -35,7 +35,7 @@ class DailyHistoryMaintenanceRuntime:
         continuity_service: DailyAlarmContinuityService,
         reconciliation_service: EvidenceReconciliationService,
         evidence_day_sealer: EvidenceDaySealer,
-        historical_range_repository: HistoricalRangeRepository | None = None,
+        managed_history_repository: ManagedHistoryRepository | None = None,
         clock: Callable[[], datetime] | None = None,
         retry_delay_seconds: float = 60.0,
     ) -> None:
@@ -67,15 +67,15 @@ class DailyHistoryMaintenanceRuntime:
             )
 
         if (
-            historical_range_repository is not None
+            managed_history_repository is not None
             and not isinstance(
-                historical_range_repository,
-                HistoricalRangeRepository,
+                managed_history_repository,
+                ManagedHistoryRepository,
             )
         ):
             raise TypeError(
-                "historical_range_repository must satisfy "
-                "HistoricalRangeRepository"
+                "managed_history_repository must satisfy "
+                "ManagedHistoryRepository"
             )
 
         if (
@@ -100,7 +100,7 @@ class DailyHistoryMaintenanceRuntime:
         self._continuity_service = continuity_service
         self._reconciliation_service = reconciliation_service
         self._evidence_day_sealer = evidence_day_sealer
-        self._historical_range_repository = historical_range_repository
+        self._managed_history_repository = managed_history_repository
         self._clock = clock or (
             lambda: datetime.now(timezone.utc)
         )
@@ -197,7 +197,7 @@ class DailyHistoryMaintenanceRuntime:
             - timedelta(days=2)
         )
 
-        if self._historical_range_repository is None:
+        if self._managed_history_repository is None:
             mature_day_start = datetime.combine(
                 mature_day,
                 time.min,
@@ -222,20 +222,16 @@ class DailyHistoryMaintenanceRuntime:
 
             return
 
-        first_timestamp = (
-            self._historical_range_repository
-            .first_historical_timestamp(
+        first_day = (
+            self._managed_history_repository
+            .get_managed_since_day(
                 node_id=node_id,
                 instance_id=instance_id,
             )
         )
 
-        if first_timestamp is None:
+        if first_day is None:
             return
-
-        first_day = first_timestamp.astimezone(
-            timezone.utc
-        ).date()
 
         if first_day > mature_day:
             return
