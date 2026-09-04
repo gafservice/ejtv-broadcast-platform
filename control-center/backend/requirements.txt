@@ -11,3 +11,5 @@ geoip2
 bcrypt>=5.0,<6.0
 PyJWT>=2.13,<3.0
 SQLAlchemy>=2.0.51,<3.0
+
+reportlab>=4.0,<5.0
