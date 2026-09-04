@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.api.dependencies import (
     get_history_csv_export_service,
+    get_history_pdf_export_service,
     get_history_query_service,
     get_node_registry,
     get_snapshot_service,
@@ -34,6 +35,9 @@ from app.noc.history.alarm_transition import AlarmTransition
 from app.noc.history.event_history_record import EventHistoryRecord
 from app.noc.services.history_csv_export_service import (
     HistoryCsvExportService,
+)
+from app.noc.services.history_pdf_export_service import (
+    HistoryPdfExportService,
 )
 from app.noc.services.history_query_service import (
     HistoryQueryService,
@@ -374,6 +378,73 @@ def export_instance_history_csv(
         },
         message=(
             "Exportación CSV histórica generada correctamente."
+        ),
+        request_id=request.state.request_id,
+    )
+
+
+@router.post(
+    "/nodes/{node_id}/instances/{instance_id}/history/exports/pdf",
+)
+def export_instance_history_pdf(
+    node_id: str,
+    instance_id: str,
+    payload: HistoryCsvExportRequest,
+    request: Request,
+    registry: NodeRegistry = Depends(get_node_registry),
+    history_pdf_export_service: HistoryPdfExportService = Depends(
+        get_history_pdf_export_service
+    ),
+    settings: Settings = Depends(get_settings),
+):
+    """Generate one derived PDF export for a NodeInstance history range."""
+
+    node = _require_node(
+        registry,
+        node_id,
+    )
+
+    instance = _require_instance(
+        node,
+        instance_id,
+    )
+
+    export_id = uuid4().hex
+    destination = (
+        Path(settings.noc_pdf_export_path)
+        / export_id
+    )
+
+    result = history_pdf_export_service.export_range(
+        start=payload.start,
+        end=payload.end,
+        destination=destination,
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+    )
+
+    return success_response(
+        data={
+            "export_id": export_id,
+            "format": "pdf",
+            "node_id": node.node_id.id,
+            "instance_id": str(
+                instance.instance_id
+            ),
+            "window": {
+                "start": _serialize_utc_timestamp(
+                    payload.start
+                ),
+                "end": _serialize_utc_timestamp(
+                    payload.end
+                ),
+            },
+            "files": [
+                result.report_file.name,
+            ],
+        },
+        message=(
+            "Exportación PDF histórica generada correctamente."
         ),
         request_id=request.state.request_id,
     )

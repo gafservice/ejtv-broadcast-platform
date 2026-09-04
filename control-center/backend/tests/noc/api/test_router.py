@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from app.api.dependencies import (
     get_authorization_service,
     get_history_csv_export_service,
+    get_history_pdf_export_service,
     get_history_query_service,
     get_node_registry,
     get_snapshot_service,
@@ -114,6 +115,7 @@ def make_client(
     snapshot_service: SnapshotService,
     history_query_service=None,
     history_csv_export_service=None,
+    history_pdf_export_service=None,
     settings=None,
 ) -> TestClient:
     application = create_application()
@@ -123,6 +125,9 @@ def make_client(
 
     if history_csv_export_service is None:
         history_csv_export_service = Mock()
+
+    if history_pdf_export_service is None:
+        history_pdf_export_service = Mock()
 
     if settings is None:
         settings = Settings()
@@ -150,6 +155,10 @@ def make_client(
     application.dependency_overrides[
         get_history_csv_export_service
     ] = lambda: history_csv_export_service
+
+    application.dependency_overrides[
+        get_history_pdf_export_service
+    ] = lambda: history_pdf_export_service
 
     application.dependency_overrides[
         get_settings
@@ -895,6 +904,238 @@ def test_csv_history_export_rejects_client_filesystem_fields(
             "end": "2026-09-02T00:00:00Z",
             "destination": "../../outside",
             "filename": "../../../secret.csv",
+        },
+    )
+
+    assert response.status_code == 422
+    export_service.export_range.assert_not_called()
+
+
+def test_pdf_history_export_returns_public_metadata(
+    tmp_path: Path,
+) -> None:
+    _, registry, snapshots = make_runtime()
+
+    node = make_node()
+    registry.register(node)
+    instance = node.instances[0]
+
+    export_service = Mock()
+
+    from app.noc.history.pdf_export_repository import (
+        PdfExportResult,
+    )
+
+    export_service.export_range.return_value = PdfExportResult(
+        path=tmp_path / "published",
+        report_file=(
+            tmp_path
+            / "published"
+            / "history-report.pdf"
+        ),
+    )
+
+    settings = Settings(
+        noc_pdf_export_path=str(tmp_path / "exports")
+    )
+
+    client = make_client(
+        registry,
+        snapshots,
+        history_pdf_export_service=export_service,
+        settings=settings,
+    )
+
+    response = client.post(
+        "/api/v1/noc/nodes/"
+        "streaming-core/instances/"
+        "streaming-primary/history/exports/pdf",
+        json={
+            "start": "2026-09-01T00:00:00Z",
+            "end": "2026-09-02T00:00:00Z",
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()["data"]
+
+    assert data["format"] == "pdf"
+    assert data["node_id"] == "streaming-core"
+    assert data["instance_id"] == "streaming-primary"
+
+    assert data["window"] == {
+        "start": "2026-09-01T00:00:00Z",
+        "end": "2026-09-02T00:00:00Z",
+    }
+
+    assert data["files"] == [
+        "history-report.pdf",
+    ]
+
+    export_id = data["export_id"]
+
+    assert len(export_id) == 32
+    assert all(
+        character in "0123456789abcdef"
+        for character in export_id
+    )
+
+    call = export_service.export_range.call_args
+
+    assert call.kwargs["start"] == datetime(
+        2026,
+        9,
+        1,
+        tzinfo=timezone.utc,
+    )
+
+    assert call.kwargs["end"] == datetime(
+        2026,
+        9,
+        2,
+        tzinfo=timezone.utc,
+    )
+
+    assert call.kwargs["node_id"] == node.node_id
+    assert (
+        call.kwargs["instance_id"]
+        == instance.instance_id
+    )
+
+    destination = call.kwargs["destination"]
+
+    assert destination.parent == tmp_path / "exports"
+    assert destination.name == export_id
+
+    assert "path" not in data
+    assert str(tmp_path) not in response.text
+
+
+def test_pdf_history_export_unknown_node_returns_404(
+    tmp_path: Path,
+) -> None:
+    _, registry, snapshots = make_runtime()
+
+    export_service = Mock()
+
+    client = make_client(
+        registry,
+        snapshots,
+        history_pdf_export_service=export_service,
+        settings=Settings(
+            noc_pdf_export_path=str(tmp_path / "exports")
+        ),
+    )
+
+    response = client.post(
+        "/api/v1/noc/nodes/"
+        "unknown-node/instances/"
+        "streaming-primary/history/exports/pdf",
+        json={
+            "start": "2026-09-01T00:00:00Z",
+            "end": "2026-09-02T00:00:00Z",
+        },
+    )
+
+    assert response.status_code == 404
+    export_service.export_range.assert_not_called()
+
+
+def test_pdf_history_export_unknown_instance_returns_404(
+    tmp_path: Path,
+) -> None:
+    _, registry, snapshots = make_runtime()
+
+    node = make_node()
+    registry.register(node)
+
+    export_service = Mock()
+
+    client = make_client(
+        registry,
+        snapshots,
+        history_pdf_export_service=export_service,
+        settings=Settings(
+            noc_pdf_export_path=str(tmp_path / "exports")
+        ),
+    )
+
+    response = client.post(
+        "/api/v1/noc/nodes/"
+        "streaming-core/instances/"
+        "missing-instance/history/exports/pdf",
+        json={
+            "start": "2026-09-01T00:00:00Z",
+            "end": "2026-09-02T00:00:00Z",
+        },
+    )
+
+    assert response.status_code == 404
+    export_service.export_range.assert_not_called()
+
+
+def test_pdf_history_export_invalid_range_returns_422(
+    tmp_path: Path,
+) -> None:
+    _, registry, snapshots = make_runtime()
+
+    node = make_node()
+    registry.register(node)
+
+    export_service = Mock()
+
+    client = make_client(
+        registry,
+        snapshots,
+        history_pdf_export_service=export_service,
+        settings=Settings(
+            noc_pdf_export_path=str(tmp_path / "exports")
+        ),
+    )
+
+    response = client.post(
+        "/api/v1/noc/nodes/"
+        "streaming-core/instances/"
+        "streaming-primary/history/exports/pdf",
+        json={
+            "start": "2026-09-02T00:00:00Z",
+            "end": "2026-09-01T00:00:00Z",
+        },
+    )
+
+    assert response.status_code == 422
+    export_service.export_range.assert_not_called()
+
+
+def test_pdf_history_export_rejects_client_filesystem_fields(
+    tmp_path: Path,
+) -> None:
+    _, registry, snapshots = make_runtime()
+
+    node = make_node()
+    registry.register(node)
+
+    export_service = Mock()
+
+    client = make_client(
+        registry,
+        snapshots,
+        history_pdf_export_service=export_service,
+        settings=Settings(
+            noc_pdf_export_path=str(tmp_path / "exports")
+        ),
+    )
+
+    response = client.post(
+        "/api/v1/noc/nodes/"
+        "streaming-core/instances/"
+        "streaming-primary/history/exports/pdf",
+        json={
+            "start": "2026-09-01T00:00:00Z",
+            "end": "2026-09-02T00:00:00Z",
+            "destination": "../../outside",
+            "filename": "../../../secret.pdf",
         },
     )
 

@@ -77,6 +77,10 @@ class Settings(BaseSettings):
         "data/noc-exports/csv"
     )
 
+    noc_pdf_export_path: str = (
+        "data/noc-exports/pdf"
+    )
+
     noc_runtime_lock_path: str = (
         "data/noc-runtime-locks"
     )

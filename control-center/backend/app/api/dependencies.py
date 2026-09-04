@@ -41,6 +41,9 @@ from app.noc.history.sqlite_event_repository import (
 from app.noc.history.filesystem_csv_export_repository import (
     FilesystemCsvExportRepository,
 )
+from app.noc.history.filesystem_pdf_export_repository import (
+    FilesystemPdfExportRepository,
+)
 from app.noc.history.sqlite_historical_range_repository import (
     SQLiteHistoricalRangeRepository,
 )
@@ -116,6 +119,9 @@ from app.noc.services.history_query_service import (
 )
 from app.noc.services.history_csv_export_service import (
     HistoryCsvExportService,
+)
+from app.noc.services.history_pdf_export_service import (
+    HistoryPdfExportService,
 )
 from app.noc.services.evidence_reconciliation_service import (
     EvidenceReconciliationService,
@@ -444,6 +450,24 @@ def get_history_csv_export_service() -> HistoryCsvExportService:
         event_repository=get_event_history_repository(),
         alarm_repository=get_alarm_history_repository(),
         export_repository=get_csv_export_repository(),
+    )
+
+
+@lru_cache
+def get_pdf_export_repository() -> FilesystemPdfExportRepository:
+    """Construye el publicador filesystem de exportaciones PDF NOC."""
+
+    return FilesystemPdfExportRepository()
+
+
+@lru_cache
+def get_history_pdf_export_service() -> HistoryPdfExportService:
+    """Construye el servicio compartido de exportación PDF histórica."""
+
+    return HistoryPdfExportService(
+        event_repository=get_event_history_repository(),
+        alarm_repository=get_alarm_history_repository(),
+        export_repository=get_pdf_export_repository(),
     )
 
 
