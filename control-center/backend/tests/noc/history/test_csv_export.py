@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 from datetime import datetime, timezone
 
@@ -23,6 +25,8 @@ from app.noc.history.csv_export import (
     EVENT_CSV_FIELDS,
     alarm_transition_csv_row,
     event_csv_row,
+    serialize_alarm_transition_csv,
+    serialize_event_csv,
 )
 from app.noc.history.event_history_record import (
     EventHistoryRecord,
@@ -246,3 +250,144 @@ def test_csv_row_helpers_reject_invalid_domain_objects() -> None:
         match="AlarmTransition",
     ):
         alarm_transition_csv_row(object())
+
+
+def test_event_csv_document_includes_header_and_row() -> None:
+    encoded = serialize_event_csv(
+        (
+            make_event_record(
+                attributes={
+                    "path": "ejtv",
+                },
+                correlation_id="corr-001",
+            ),
+        )
+    )
+
+    lines = encoded.splitlines()
+
+    assert lines[0] == ",".join(
+        EVENT_CSV_FIELDS
+    )
+    assert len(lines) == 2
+
+
+def test_alarm_csv_document_includes_header_and_row() -> None:
+    encoded = serialize_alarm_transition_csv(
+        (
+            make_transition(
+                actor="noc-runtime",
+                metadata={
+                    "path": "ejtv",
+                },
+            ),
+        )
+    )
+
+    lines = encoded.splitlines()
+
+    assert lines[0] == ",".join(
+        ALARM_TRANSITION_CSV_FIELDS
+    )
+    assert len(lines) == 2
+
+
+def test_event_csv_document_escapes_special_characters() -> None:
+    record = EventHistoryRecord(
+        event=EventRecord(
+            event_id="event-special",
+            event_type="SESSION_CONNECTED",
+            severity=EventSeverity.INFO,
+            timestamp=TIMESTAMP,
+            source=INSTANCE_ID,
+            title='Reader "primary", connected',
+            description="Line one\nLine two",
+            attributes={
+                "note": 'value, "quoted"',
+            },
+        ),
+        node_id=NODE_ID,
+        instance_id=INSTANCE_ID,
+        recorded_at=TIMESTAMP,
+    )
+
+    encoded = serialize_event_csv(
+        (record,)
+    )
+
+    parsed = list(
+        csv.DictReader(
+            io.StringIO(encoded)
+        )
+    )
+
+    assert len(parsed) == 1
+    assert parsed[0]["title"] == (
+        'Reader "primary", connected'
+    )
+    assert parsed[0]["description"] == (
+        "Line one\nLine two"
+    )
+    assert json.loads(
+        parsed[0]["attributes"]
+    ) == {
+        "note": 'value, "quoted"',
+    }
+
+
+def test_empty_csv_documents_still_include_headers() -> None:
+    events = serialize_event_csv(())
+    alarms = serialize_alarm_transition_csv(())
+
+    assert events == (
+        ",".join(EVENT_CSV_FIELDS) + "\n"
+    )
+    assert alarms == (
+        ",".join(ALARM_TRANSITION_CSV_FIELDS) + "\n"
+    )
+
+
+def test_csv_documents_are_deterministic() -> None:
+    records = (
+        make_event_record(
+            attributes={
+                "z": "last",
+                "a": "first",
+            }
+        ),
+    )
+
+    transitions = (
+        make_transition(
+            metadata={
+                "z": "last",
+                "a": "first",
+            }
+        ),
+    )
+
+    assert serialize_event_csv(
+        records
+    ) == serialize_event_csv(
+        records
+    )
+
+    assert serialize_alarm_transition_csv(
+        transitions
+    ) == serialize_alarm_transition_csv(
+        transitions
+    )
+
+
+def test_csv_document_serializers_require_tuples() -> None:
+    with pytest.raises(
+        TypeError,
+        match="tuple",
+    ):
+        serialize_event_csv([])
+
+    with pytest.raises(
+        TypeError,
+        match="tuple",
+    ):
+        serialize_alarm_transition_csv([])

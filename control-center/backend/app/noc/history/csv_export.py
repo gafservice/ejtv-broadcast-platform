@@ -9,6 +9,8 @@ retention, or backup.
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 
 from app.noc.history.alarm_transition import AlarmTransition
@@ -93,3 +95,73 @@ def alarm_transition_csv_row(
         field: _csv_value(payload[field])
         for field in ALARM_TRANSITION_CSV_FIELDS
     }
+
+
+def _serialize_csv_rows(
+    *,
+    fieldnames: tuple[str, ...],
+    rows: tuple[dict[str, str], ...],
+) -> str:
+    """Serialize canonical rows as one deterministic CSV document."""
+
+    buffer = io.StringIO(
+        newline=""
+    )
+
+    writer = csv.DictWriter(
+        buffer,
+        fieldnames=fieldnames,
+        extrasaction="raise",
+        lineterminator="\n",
+    )
+
+    writer.writeheader()
+
+    for row in rows:
+        writer.writerow(row)
+
+    return buffer.getvalue()
+
+
+def serialize_event_csv(
+    records: tuple[EventHistoryRecord, ...],
+) -> str:
+    """Serialize historical events as one canonical CSV document."""
+
+    if not isinstance(records, tuple):
+        raise TypeError(
+            "records must be a tuple"
+        )
+
+    rows = tuple(
+        event_csv_row(record)
+        for record in records
+    )
+
+    return _serialize_csv_rows(
+        fieldnames=EVENT_CSV_FIELDS,
+        rows=rows,
+    )
+
+
+def serialize_alarm_transition_csv(
+    transitions: tuple[AlarmTransition, ...],
+) -> str:
+    """Serialize alarm transitions as one canonical CSV document."""
+
+    if not isinstance(transitions, tuple):
+        raise TypeError(
+            "transitions must be a tuple"
+        )
+
+    rows = tuple(
+        alarm_transition_csv_row(
+            transition
+        )
+        for transition in transitions
+    )
+
+    return _serialize_csv_rows(
+        fieldnames=ALARM_TRANSITION_CSV_FIELDS,
+        rows=rows,
+    )
