@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import timedelta
 from unittest.mock import AsyncMock, Mock, patch
 
 from app.main import _owned_noc_runtime
@@ -162,6 +163,43 @@ async def _exercise_owned_runtime_startup() -> None:
         node_id=node_id,
         instance_id=instance_id,
     )
+
+    reconciliation.reconcile_between.assert_called_once()
+
+    reconciliation_call = (
+        reconciliation.reconcile_between.call_args
+    )
+
+    reconciliation_start = (
+        reconciliation_call.kwargs["start"]
+    )
+    reconciliation_end = (
+        reconciliation_call.kwargs["end"]
+    )
+
+    expected_open_history_start = (
+        reconciliation_end.replace(
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+        - timedelta(days=1)
+    )
+
+    assert (
+        reconciliation_start
+        == expected_open_history_start
+    )
+
+    # D-2 is mature history and must be owned exclusively
+    # by catch_up_mature_days(), never by startup replay.
+    mature_day = (
+        reconciliation_end.date()
+        - timedelta(days=2)
+    )
+
+    assert reconciliation_start.date() > mature_day
 
     daily_history.catch_up_mature_days.assert_called_once()
 

@@ -70,8 +70,18 @@ async def _owned_noc_runtime(
 
     reconciliation_end = datetime.now(timezone.utc)
 
+    open_history_start = (
+        reconciliation_end.replace(
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+        - timedelta(days=1)
+    )
+
     get_evidence_reconciliation_service().reconcile_between(
-        start=reconciliation_end - timedelta(hours=48),
+        start=open_history_start,
         end=reconciliation_end,
         node_id=node_id,
         instance_id=node_instance_id,
