@@ -79,7 +79,7 @@ srt_conns_ms_rtt{id="conn-1",path="enlace",state="read"} 300
     assert health.status is HealthStatus.CRITICAL
 
 
-def test_classifies_critical_link_utilization() -> None:
+def test_link_utilization_remains_diagnostic_telemetry() -> None:
     health = build_health(
         """
 srt_conns_ms_rtt{id="conn-1",path="enlace",state="read"} 2
@@ -91,8 +91,8 @@ srt_conns_mbps_link_capacity{id="conn-1",path="enlace",state="read"} 100
     connection = health.paths[0].connections[0]
 
     assert connection.link_utilization_percent == pytest.approx(95)
-    assert connection.status is HealthStatus.CRITICAL
-    assert health.status is HealthStatus.CRITICAL
+    assert connection.status is HealthStatus.HEALTHY
+    assert health.status is HealthStatus.HEALTHY
 
 
 def test_aggregates_multiple_connections_by_path() -> None:
@@ -166,3 +166,28 @@ srt_conns_ms_rtt{path="enlace"} 2.5
 
     assert health.paths == ()
     assert health.status is HealthStatus.UNKNOWN
+
+def test_high_estimated_link_utilization_alone_does_not_make_connection_critical() -> None:
+    """Una estimación SRT de capacidad no debe causar CRITICAL por sí sola."""
+
+    health = build_health(
+        """
+srt_conns_ms_rtt{id="impact-1",path="impact",state="read"} 5.420383964336836
+srt_conns_mbps_send_rate{id="impact-1",path="impact",state="read"} 0.41164996472826604
+srt_conns_mbps_link_capacity{id="impact-1",path="impact",state="read"} 0.2777099609375
+srt_conns_packets_retrans{id="impact-1",path="impact",state="read"} 1
+srt_conns_packets_send_loss{id="impact-1",path="impact",state="read"} 1
+"""
+    )
+
+    connection = health.paths[0].connections[0]
+
+    assert connection.link_utilization_percent is not None
+    assert connection.link_utilization_percent > 100.0
+
+    assert connection.rtt_ms == pytest.approx(
+        5.420383964336836
+    )
+
+    assert connection.status is HealthStatus.HEALTHY
+    assert health.status is HealthStatus.HEALTHY

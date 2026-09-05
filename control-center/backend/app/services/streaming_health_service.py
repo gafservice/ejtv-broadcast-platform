@@ -26,9 +26,6 @@ class StreamingHealthService:
     RTT_DEGRADED_MS = 100.0
     RTT_CRITICAL_MS = 250.0
 
-    UTILIZATION_DEGRADED_PERCENT = 70.0
-    UTILIZATION_CRITICAL_PERCENT = 90.0
-
     _SUPPORTED_METRICS = frozenset(
         {
             "srt_conns_ms_rtt",
@@ -175,9 +172,6 @@ class StreamingHealthService:
 
         status = self._classify_connection(
             rtt_ms=rtt_ms,
-            link_utilization_percent=(
-                link_utilization_percent
-            ),
         )
 
         return SRTConnectionHealth(
@@ -269,9 +263,8 @@ class StreamingHealthService:
         self,
         *,
         rtt_ms: float | None,
-        link_utilization_percent: float | None,
     ) -> HealthStatus:
-        """Clasifica una conexión mediante RTT y utilización."""
+        """Clasifica una conexión usando indicadores con semántica fiable."""
 
         statuses: list[HealthStatus] = []
 
@@ -279,20 +272,6 @@ class StreamingHealthService:
             if rtt_ms >= self.RTT_CRITICAL_MS:
                 statuses.append(HealthStatus.CRITICAL)
             elif rtt_ms >= self.RTT_DEGRADED_MS:
-                statuses.append(HealthStatus.DEGRADED)
-            else:
-                statuses.append(HealthStatus.HEALTHY)
-
-        if link_utilization_percent is not None:
-            if (
-                link_utilization_percent
-                >= self.UTILIZATION_CRITICAL_PERCENT
-            ):
-                statuses.append(HealthStatus.CRITICAL)
-            elif (
-                link_utilization_percent
-                >= self.UTILIZATION_DEGRADED_PERCENT
-            ):
                 statuses.append(HealthStatus.DEGRADED)
             else:
                 statuses.append(HealthStatus.HEALTHY)
