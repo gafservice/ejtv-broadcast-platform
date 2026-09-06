@@ -39,6 +39,7 @@ from app.dashboard.services.dashboard_snapshot_service import (
     DashboardSnapshotInput,
     DashboardSnapshotService,
 )
+from app.domain.sessions import SessionSnapshot
 from app.domain.streaming import MediaMTXSnapshot, StreamingHealth
 from app.domain.system import SystemResources
 from app.noc.domain.node_id import NodeId
@@ -231,6 +232,7 @@ class DashboardApplication:
 
         streaming_health = self._build_streaming_health(
             captured_at=snapshot.captured_at,
+            session_snapshot=session_snapshot,
         )
 
         system_info = self._system_service.get_system_info()
@@ -504,6 +506,7 @@ class DashboardApplication:
     self,
     *,
     captured_at: datetime,
+    session_snapshot: SessionSnapshot,
     ) -> StreamingHealth | None:
         """Obtiene y transforma las métricas Prometheus disponibles."""
 
@@ -525,6 +528,7 @@ class DashboardApplication:
         return self._streaming_health_service.build(
             snapshot=metrics_snapshot,
             captured_at=captured_at,
+            session_snapshot=session_snapshot,
         )
 
     def _validate_noc_dependencies(self) -> None:

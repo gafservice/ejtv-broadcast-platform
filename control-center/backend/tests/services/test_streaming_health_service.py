@@ -191,3 +191,133 @@ srt_conns_packets_send_loss{id="impact-1",path="impact",state="read"} 1
 
     assert connection.status is HealthStatus.HEALTHY
     assert health.status is HealthStatus.HEALTHY
+
+
+def test_srt_fair_session_quality_makes_connection_degraded() -> None:
+    """SRT Health debe reutilizar la calidad normalizada de la sesión."""
+    from app.domain.sessions import (
+        ActiveSession,
+        SessionProtocol,
+        SessionQuality,
+        SessionRole,
+        SessionSnapshot,
+    )
+
+    session_snapshot = SessionSnapshot(
+        captured_at=CAPTURED_AT,
+        sessions=(
+            ActiveSession(
+                session_id="conn-1",
+                protocol=SessionProtocol.SRT,
+                role=SessionRole.READER,
+                state="read",
+                remote_ip="203.0.113.10",
+                remote_port=9000,
+                path="enlace",
+                connected_since=CAPTURED_AT,
+                rtt_ms=5.0,
+                packet_loss_rate=1.0,
+                retransmission_rate=0.0,
+                packets_sent=100_000,
+                packets_lost=1_000,
+                quality=SessionQuality.FAIR,
+            ),
+        ),
+    )
+
+    metrics_snapshot = MediaMTXMetricsParser().parse(
+        """
+srt_conns_ms_rtt{id="conn-1",path="enlace",state="read"} 5
+"""
+    )
+
+    health = StreamingHealthService().build(
+        snapshot=metrics_snapshot,
+        captured_at=CAPTURED_AT,
+        session_snapshot=session_snapshot,
+    )
+
+    connection = health.paths[0].connections[0]
+
+    assert connection.status is HealthStatus.DEGRADED
+    assert health.status is HealthStatus.DEGRADED
+
+
+@pytest.mark.parametrize(
+    ("quality", "expected"),
+    (
+        ("EXCELLENT", HealthStatus.HEALTHY),
+        ("GOOD", HealthStatus.HEALTHY),
+        ("FAIR", HealthStatus.DEGRADED),
+        ("POOR", HealthStatus.DEGRADED),
+        ("CRITICAL", HealthStatus.CRITICAL),
+        ("UNKNOWN", HealthStatus.UNKNOWN),
+    ),
+)
+def test_maps_session_quality_to_stream_health(
+    quality: str,
+    expected: HealthStatus,
+) -> None:
+    """La calidad técnica se traduce al estado operacional canónico."""
+    from app.domain.sessions import SessionQuality
+
+    result = StreamingHealthService._health_status_from_session_quality(
+        SessionQuality(quality)
+    )
+
+    assert result is expected
+
+
+def test_without_session_snapshot_preserves_rtt_classification() -> None:
+    """Sin Sessions disponible se conserva el clasificador RTT legado."""
+    health = build_health(
+        """
+srt_conns_ms_rtt{id="conn-1",path="enlace",state="read"} 150
+"""
+    )
+
+    assert health.paths[0].connections[0].status is HealthStatus.DEGRADED
+    assert health.status is HealthStatus.DEGRADED
+
+
+def test_unmatched_session_does_not_override_connection_rtt() -> None:
+    """Una sesión distinta no debe alterar la salud de otra conexión."""
+    from app.domain.sessions import (
+        ActiveSession,
+        SessionProtocol,
+        SessionQuality,
+        SessionRole,
+        SessionSnapshot,
+    )
+
+    session_snapshot = SessionSnapshot(
+        captured_at=CAPTURED_AT,
+        sessions=(
+            ActiveSession(
+                session_id="different-connection",
+                protocol=SessionProtocol.SRT,
+                role=SessionRole.READER,
+                state="read",
+                remote_ip="203.0.113.11",
+                remote_port=9000,
+                path="enlace",
+                connected_since=CAPTURED_AT,
+                quality=SessionQuality.CRITICAL,
+            ),
+        ),
+    )
+
+    metrics_snapshot = MediaMTXMetricsParser().parse(
+        """
+srt_conns_ms_rtt{id="conn-1",path="enlace",state="read"} 5
+"""
+    )
+
+    health = StreamingHealthService().build(
+        snapshot=metrics_snapshot,
+        captured_at=CAPTURED_AT,
+        session_snapshot=session_snapshot,
+    )
+
+    assert health.paths[0].connections[0].status is HealthStatus.HEALTHY
+    assert health.status is HealthStatus.HEALTHY

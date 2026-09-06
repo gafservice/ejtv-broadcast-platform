@@ -606,6 +606,7 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
     streaming_health_service.build.assert_called_once_with(
         snapshot=metrics_snapshot,
         captured_at=captured_at,
+        session_snapshot=session_snapshot,
     )
 
     dashboard_service.build_dashboard_from_measurement.assert_called_once_with(

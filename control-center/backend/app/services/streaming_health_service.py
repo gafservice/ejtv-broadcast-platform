@@ -12,6 +12,11 @@ from app.adapters.mediamtx.metrics_parser import (
     MediaMTXMetricsSnapshot,
     PrometheusSample,
 )
+from app.domain.sessions import (
+    SessionProtocol,
+    SessionQuality,
+    SessionSnapshot,
+)
 from app.domain.streaming.health import (
     HealthStatus,
     SRTConnectionHealth,
@@ -41,6 +46,7 @@ class StreamingHealthService:
         *,
         snapshot: MediaMTXMetricsSnapshot,
         captured_at: datetime,
+        session_snapshot: SessionSnapshot | None = None,
     ) -> StreamingHealth:
         """Construye el estado de salud a partir de un snapshot."""
 
@@ -59,6 +65,10 @@ class StreamingHealthService:
                 path_name=path_name,
                 state=state,
                 metrics=metrics,
+                session_quality=self._find_srt_session_quality(
+                    session_snapshot=session_snapshot,
+                    connection_id=connection_id,
+                ),
             )
             for (
                 connection_id,
@@ -145,6 +155,7 @@ class StreamingHealthService:
         path_name: str,
         state: str,
         metrics: dict[str, float],
+        session_quality: SessionQuality | None = None,
     ) -> SRTConnectionHealth:
         """Construye la salud de una conexión individual."""
 
@@ -170,8 +181,10 @@ class StreamingHealthService:
             link_capacity_mbps=link_capacity_mbps,
         )
 
-        status = self._classify_connection(
-            rtt_ms=rtt_ms,
+        status = (
+            self._health_status_from_session_quality(session_quality)
+            if session_quality is not None
+            else self._classify_connection(rtt_ms=rtt_ms)
         )
 
         return SRTConnectionHealth(
@@ -258,6 +271,45 @@ class StreamingHealthService:
             status=status,
             message=self._build_path_message(status),
         )
+
+    @staticmethod
+    def _find_srt_session_quality(
+        *,
+        session_snapshot: SessionSnapshot | None,
+        connection_id: str,
+    ) -> SessionQuality | None:
+        if session_snapshot is None:
+            return None
+
+        for session in session_snapshot.sessions:
+            if (
+                session.protocol is SessionProtocol.SRT
+                and session.session_id == connection_id
+            ):
+                return session.quality
+
+        return None
+
+    @staticmethod
+    def _health_status_from_session_quality(
+        quality: SessionQuality,
+    ) -> HealthStatus:
+        if quality in (
+            SessionQuality.EXCELLENT,
+            SessionQuality.GOOD,
+        ):
+            return HealthStatus.HEALTHY
+
+        if quality in (
+            SessionQuality.FAIR,
+            SessionQuality.POOR,
+        ):
+            return HealthStatus.DEGRADED
+
+        if quality is SessionQuality.CRITICAL:
+            return HealthStatus.CRITICAL
+
+        return HealthStatus.UNKNOWN
 
     def _classify_connection(
         self,
