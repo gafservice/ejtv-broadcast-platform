@@ -2057,3 +2057,229 @@ def test_run_once_preserves_temporal_stream_health_across_cycles() -> None:
         call.kwargs["captured_at"]
         for call in streaming_health_service.build.call_args_list
     ] == list(captured_times)
+
+
+def test_application_detects_stream_health_transition_once_per_effective_change() -> None:
+    """Block 3 debe detectar una transición por cambio real de Health efectivo."""
+
+    from datetime import timedelta
+
+    from app.domain.streaming.health import (
+        HealthStatus,
+        StreamingHealth,
+    )
+    from app.noc.services.health_transition_detector import (
+        HealthTransitionKind,
+    )
+    from app.services.streaming_health_transition_detector import (
+        StreamingHealthTransitionDetector,
+    )
+
+    base_time = datetime(
+        2026,
+        9,
+        7,
+        12,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    health_sequence = [
+        StreamingHealth(
+            captured_at=base_time,
+            paths=(),
+            status=HealthStatus.HEALTHY,
+            message="Streaming SRT estable.",
+        ),
+        StreamingHealth(
+            captured_at=base_time + timedelta(seconds=1),
+            paths=(),
+            status=HealthStatus.DEGRADED,
+            message="Streaming SRT degradado.",
+        ),
+        StreamingHealth(
+            captured_at=base_time + timedelta(seconds=2),
+            paths=(),
+            status=HealthStatus.DEGRADED,
+            message="Streaming SRT degradado.",
+        ),
+    ]
+
+    application = object.__new__(DashboardApplication)
+
+    application._latest_health = None
+    application._latest_health_transition = None
+    application._streaming_health_transition_detector = (
+        StreamingHealthTransitionDetector()
+    )
+
+    first = application._detect_streaming_health_transition(
+        health_sequence[0]
+    )
+
+    application._latest_health = health_sequence[0]
+
+    second = application._detect_streaming_health_transition(
+        health_sequence[1]
+    )
+
+    application._latest_health = health_sequence[1]
+
+    third = application._detect_streaming_health_transition(
+        health_sequence[2]
+    )
+
+    assert first is None
+
+    assert second is not None
+    assert second.kind is HealthTransitionKind.DEGRADED
+    assert second.previous is health_sequence[0]
+    assert second.current is health_sequence[1]
+
+    assert third is None
+
+
+def test_build_dashboard_detects_stream_health_transition_once_across_cycles() -> None:
+    """Block 3 debe integrar transición semántica en ciclos reales del dashboard."""
+
+    from datetime import timedelta
+
+    from app.domain.streaming.health import (
+        HealthStatus,
+        StreamingHealth,
+    )
+    from app.noc.services.health_transition_detector import (
+        HealthTransitionKind,
+    )
+    from app.services.streaming_health_transition_detector import (
+        StreamingHealthTransitionDetector,
+    )
+
+    base_time = datetime(
+        2026,
+        9,
+        7,
+        13,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    snapshots = [
+        MediaMTXSnapshot(
+            captured_at=base_time,
+            paths=(),
+            reported_item_count=0,
+            reported_page_count=0,
+        ),
+        MediaMTXSnapshot(
+            captured_at=base_time + timedelta(seconds=1),
+            paths=(),
+            reported_item_count=0,
+            reported_page_count=0,
+        ),
+        MediaMTXSnapshot(
+            captured_at=base_time + timedelta(seconds=2),
+            paths=(),
+            reported_item_count=0,
+            reported_page_count=0,
+        ),
+    ]
+
+    health_sequence = [
+        StreamingHealth(
+            captured_at=snapshots[0].captured_at,
+            paths=(),
+            status=HealthStatus.HEALTHY,
+            message="Streaming SRT estable.",
+        ),
+        StreamingHealth(
+            captured_at=snapshots[1].captured_at,
+            paths=(),
+            status=HealthStatus.DEGRADED,
+            message="Streaming SRT degradado.",
+        ),
+        StreamingHealth(
+            captured_at=snapshots[2].captured_at,
+            paths=(),
+            status=HealthStatus.DEGRADED,
+            message="Streaming SRT degradado.",
+        ),
+    ]
+
+    mediamtx_adapter = Mock()
+    mediamtx_adapter.health.return_value = True
+    mediamtx_adapter.get_snapshot.side_effect = snapshots
+
+    session_adapter = Mock()
+    session_adapter.get_snapshot.return_value = Mock()
+
+    streaming_service = Mock()
+    streaming_service.compare.return_value = Mock()
+
+    session_service = Mock()
+    session_service.measure.return_value = Mock()
+
+    dashboard_service = Mock()
+    dashboard_service.build_dashboard_from_measurement.side_effect = [
+        Mock(spec=DashboardData),
+        Mock(spec=DashboardData),
+        Mock(spec=DashboardData),
+    ]
+
+    dashboard_renderer = Mock()
+    system_service = Mock()
+    system_service.get_system_info.return_value = Mock(
+        hostname="ejtv-01"
+    )
+    system_service.get_system_resources.return_value = Mock()
+    system_service.get_network_interface_infos.return_value = Mock()
+
+    network_telemetry_service = Mock()
+    network_telemetry_service.build.return_value = Mock()
+    dashboard_service.build_network_interfaces_panel.return_value = Mock()
+
+    application = DashboardApplication(
+        mediamtx_adapter=mediamtx_adapter,
+        session_adapter=session_adapter,
+        streaming_service=streaming_service,
+        session_service=session_service,
+        dashboard_service=dashboard_service,
+        dashboard_renderer=dashboard_renderer,
+        system_service=system_service,
+        network_telemetry_service=network_telemetry_service,
+    )
+
+    application._streaming_health_transition_detector = (
+        StreamingHealthTransitionDetector()
+    )
+
+    application._build_streaming_health = Mock(
+        side_effect=health_sequence
+    )
+
+    application.build_dashboard()
+
+    assert application.latest_health is health_sequence[0]
+    assert application.latest_health_transition is None
+
+    application.build_dashboard()
+
+    assert application.latest_health is health_sequence[1]
+    assert application.latest_health_transition is not None
+    assert (
+        application.latest_health_transition.kind
+        is HealthTransitionKind.DEGRADED
+    )
+    assert (
+        application.latest_health_transition.previous
+        is health_sequence[0]
+    )
+    assert (
+        application.latest_health_transition.current
+        is health_sequence[1]
+    )
+
+    application.build_dashboard()
+
+    assert application.latest_health is health_sequence[2]
+    assert application.latest_health_transition is None

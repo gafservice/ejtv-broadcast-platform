@@ -56,6 +56,10 @@ from app.services.network_telemetry_service import (
 from app.services.session_service import SessionService
 from app.services.streaming_health_service import StreamingHealthService
 from app.services.streaming_health_stabilizer import StreamingHealthStabilizer
+from app.services.streaming_health_transition_detector import (
+    StreamingHealthTransition,
+    StreamingHealthTransitionDetector,
+)
 from app.services.streaming_service import StreamingService
 from app.services.system_service import SystemService
 
@@ -153,6 +157,7 @@ class DashboardApplication:
         self._previous_snapshot: MediaMTXSnapshot | None = None
         self._previous_system_resources: SystemResources | None = None
         self._latest_health: StreamingHealth | None = None
+        self._latest_health_transition: StreamingHealthTransition | None = None
 
         self._validate_health_dependencies()
         self._validate_noc_dependencies()
@@ -214,6 +219,14 @@ class DashboardApplication:
         """Último estado de salud calculado por la aplicación."""
 
         return self._latest_health
+
+    @property
+    def latest_health_transition(
+        self,
+    ) -> StreamingHealthTransition | None:
+        """Última transición semántica detectada del Stream Health."""
+
+        return self._latest_health_transition
 
     def build_dashboard(self) -> DashboardData:
         """Construye el estado completo del dashboard sin renderizar."""
@@ -359,6 +372,11 @@ class DashboardApplication:
 
         self._previous_snapshot = snapshot
         self._previous_system_resources = system_resources
+        self._latest_health_transition = (
+            self._detect_streaming_health_transition(
+                streaming_health
+            )
+        )
         self._latest_health = streaming_health
 
         return dashboard_data
@@ -504,6 +522,29 @@ class DashboardApplication:
             return 0
 
         return total_items
+
+    def _detect_streaming_health_transition(
+        self,
+        current: StreamingHealth | None,
+    ) -> StreamingHealthTransition | None:
+        """Detecta un cambio semántico del Stream Health efectivo."""
+
+        if current is None:
+            return None
+
+        detector = getattr(
+            self,
+            "_streaming_health_transition_detector",
+            None,
+        )
+
+        if detector is None:
+            return None
+
+        return detector.detect(
+            self._latest_health,
+            current,
+        )
 
     def _build_streaming_health(
     self,
