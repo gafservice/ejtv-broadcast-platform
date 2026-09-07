@@ -2283,3 +2283,149 @@ def test_build_dashboard_detects_stream_health_transition_once_across_cycles() -
 
     assert application.latest_health is health_sequence[2]
     assert application.latest_health_transition is None
+
+
+def test_build_dashboard_records_one_stream_health_event_per_effective_transition() -> None:
+    """Block 4 registra un Event solamente por cambio efectivo de Stream Health."""
+
+    from datetime import timedelta
+
+    from app.domain.streaming.health import (
+        HealthStatus,
+        StreamingHealth,
+    )
+    from app.noc.domain.node_id import NodeId
+    from app.noc.domain.node_instance import NodeInstanceId
+    from app.services.streaming_health_transition_detector import (
+        StreamingHealthTransitionDetector,
+    )
+
+    base_time = datetime(
+        2026,
+        9,
+        7,
+        14,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    snapshots = [
+        MediaMTXSnapshot(
+            captured_at=base_time,
+            paths=(),
+            reported_item_count=0,
+            reported_page_count=0,
+        ),
+        MediaMTXSnapshot(
+            captured_at=base_time + timedelta(seconds=1),
+            paths=(),
+            reported_item_count=0,
+            reported_page_count=0,
+        ),
+        MediaMTXSnapshot(
+            captured_at=base_time + timedelta(seconds=2),
+            paths=(),
+            reported_item_count=0,
+            reported_page_count=0,
+        ),
+    ]
+
+    health_sequence = [
+        StreamingHealth(
+            captured_at=snapshots[0].captured_at,
+            paths=(),
+            status=HealthStatus.HEALTHY,
+            message="Streaming SRT estable.",
+        ),
+        StreamingHealth(
+            captured_at=snapshots[1].captured_at,
+            paths=(),
+            status=HealthStatus.DEGRADED,
+            message="Streaming SRT degradado.",
+        ),
+        StreamingHealth(
+            captured_at=snapshots[2].captured_at,
+            paths=(),
+            status=HealthStatus.DEGRADED,
+            message="Streaming SRT degradado.",
+        ),
+    ]
+
+    mediamtx_adapter = Mock()
+    mediamtx_adapter.capture.side_effect = snapshots
+
+    session_adapter = Mock()
+    session_adapter.capture.return_value = ()
+
+    streaming_service = Mock()
+    streaming_service.build_snapshot.side_effect = (
+        lambda snapshot: snapshot
+    )
+
+    session_service = Mock()
+    session_service.build_snapshot.return_value = ()
+
+    dashboard_service = Mock()
+    dashboard_service.build.return_value = Mock()
+
+    dashboard_renderer = Mock()
+
+    system_service = Mock()
+    system_service.get_system_resources.return_value = Mock()
+
+    network_telemetry_service = Mock()
+    network_telemetry_service.capture.return_value = None
+
+    stream_event_service = Mock()
+
+    application = DashboardApplication(
+        mediamtx_adapter=mediamtx_adapter,
+        session_adapter=session_adapter,
+        streaming_service=streaming_service,
+        session_service=session_service,
+        dashboard_service=dashboard_service,
+        dashboard_renderer=dashboard_renderer,
+        system_service=system_service,
+        network_telemetry_service=network_telemetry_service,
+        node_id=NodeId.create(
+            id="streaming-core",
+            name="streaming",
+            display_name="Streaming Core",
+        ),
+        instance_id=NodeInstanceId(
+            "streaming-primary"
+        ),
+        streaming_health_transition_event_service=(
+            stream_event_service
+        ),
+    )
+
+    application._streaming_health_transition_detector = (
+        StreamingHealthTransitionDetector()
+    )
+
+    application._build_streaming_health = Mock(
+        side_effect=health_sequence
+    )
+
+    application.build_dashboard()
+    application.build_dashboard()
+    application.build_dashboard()
+
+    assert stream_event_service.process_transition.call_count == 3
+
+    calls = stream_event_service.process_transition.call_args_list
+
+    assert calls[0].kwargs["transition"] is None
+
+    assert calls[1].kwargs["transition"] is not None
+    assert (
+        calls[1].kwargs["transition"].previous.status
+        is HealthStatus.HEALTHY
+    )
+    assert (
+        calls[1].kwargs["transition"].current.status
+        is HealthStatus.DEGRADED
+    )
+
+    assert calls[2].kwargs["transition"] is None

@@ -60,6 +60,9 @@ from app.services.streaming_health_transition_detector import (
     StreamingHealthTransition,
     StreamingHealthTransitionDetector,
 )
+from app.services.streaming_health_transition_event_service import (
+    StreamingHealthTransitionEventService,
+)
 from app.services.streaming_service import StreamingService
 from app.services.system_service import SystemService
 
@@ -81,11 +84,17 @@ class DashboardApplication:
         metrics_parser: MediaMTXMetricsParser | None = None,
         streaming_health_service: StreamingHealthService | None = None,
         streaming_health_stabilizer: StreamingHealthStabilizer | None = None,
+        streaming_health_transition_detector: (
+            StreamingHealthTransitionDetector | None
+        ) = None,
         dashboard_snapshot_service: DashboardSnapshotService | None = None,
         network_telemetry_service: NetworkTelemetryService | None = None,
         health_diagnostic_repository: NodeHealthDiagnosticRepository | None = None,
         event_service: EventService | None = None,
         alarm_service: AlarmService | None = None,
+        streaming_health_transition_event_service: (
+            StreamingHealthTransitionEventService | None
+        ) = None,
         history_query_service: HistoryQueryService | None = None,
         node_id: NodeId | None = None,
         instance_id: NodeInstanceId | None = None,
@@ -118,12 +127,18 @@ class DashboardApplication:
         self._metrics_parser = metrics_parser
         self._streaming_health_service = streaming_health_service
         self._streaming_health_stabilizer = streaming_health_stabilizer
+        self._streaming_health_transition_detector = (
+            streaming_health_transition_detector
+        )
 
         self._health_diagnostic_repository = (
             health_diagnostic_repository
         )
         self._event_service = event_service
         self._alarm_service = alarm_service
+        self._streaming_health_transition_event_service = (
+            streaming_health_transition_event_service
+        )
         self._history_query_service = history_query_service
         self._node_id = node_id
         self._instance_id = instance_id
@@ -377,6 +392,21 @@ class DashboardApplication:
                 streaming_health
             )
         )
+
+        if (
+            self._streaming_health_transition_event_service
+            is not None
+            and self._node_id is not None
+            and self._instance_id is not None
+            and streaming_health is not None
+        ):
+            self._streaming_health_transition_event_service.process_transition(
+                node_id=self._node_id,
+                instance_id=self._instance_id,
+                transition=self._latest_health_transition,
+                timestamp=streaming_health.captured_at,
+            )
+
         self._latest_health = streaming_health
 
         return dashboard_data

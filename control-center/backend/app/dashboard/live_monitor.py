@@ -28,6 +28,12 @@ from app.services.srt_connection_health_stabilizer import (
 from app.services.streaming_health_stabilizer import (
     StreamingHealthStabilizer,
 )
+from app.services.streaming_health_transition_detector import (
+    StreamingHealthTransitionDetector,
+)
+from app.services.streaming_health_transition_event_service import (
+    StreamingHealthTransitionEventService,
+)
 from app.services.streaming_service import StreamingService
 from app.services.system_service import SystemService
 from app.services.geoip_service import GeoIPService
@@ -37,9 +43,18 @@ from app.noc.bootstrap import (
     DEFAULT_NODE_DISPLAY_NAME,
     DEFAULT_NODE_ID,
     DEFAULT_NODE_NAME,
+    bootstrap_noc_runtime,
 )
 from app.noc.domain.node_id import NodeId
 from app.noc.domain.node_instance import NodeInstanceId
+from app.noc.infrastructure.memory_repository import (
+    InMemoryNodeRepository,
+)
+from app.noc.registry.registry import NodeRegistry
+from app.noc.history.jsonl_evidence_writer import (
+    JsonlEvidenceWriter,
+)
+from app.noc.services.event_service import EventService
 from app.noc.history.sqlite_alarm_repository import (
     SQLiteAlarmHistoryRepository,
 )
@@ -104,6 +119,9 @@ def build_dashboard_application() -> DashboardApplication:
 
     metrics_parser = MediaMTXMetricsParser()
     streaming_health_service = StreamingHealthService()
+    streaming_health_transition_detector = (
+        StreamingHealthTransitionDetector()
+    )
 
     streaming_health_stabilizer = None
 
@@ -151,6 +169,15 @@ def build_dashboard_application() -> DashboardApplication:
         DEFAULT_INSTANCE_ID
     )
 
+    node_repository = InMemoryNodeRepository()
+    node_registry = NodeRegistry(
+        node_repository
+    )
+
+    bootstrap_noc_runtime(
+        node_registry
+    )
+
     history_database = SQLiteHistoryDatabase(
         settings.noc_history_database_path
     )
@@ -158,6 +185,22 @@ def build_dashboard_application() -> DashboardApplication:
     event_history_repository = (
         SQLiteEventHistoryRepository(
             history_database
+        )
+    )
+
+    evidence_writer = JsonlEvidenceWriter(
+        settings.noc_evidence_path
+    )
+
+    event_service = EventService(
+        node_registry,
+        history_repository=event_history_repository,
+        evidence_writer=evidence_writer,
+    )
+
+    streaming_health_transition_event_service = (
+        StreamingHealthTransitionEventService(
+            event_service=event_service
         )
     )
 
@@ -200,8 +243,14 @@ def build_dashboard_application() -> DashboardApplication:
         metrics_parser=metrics_parser,
         streaming_health_service=streaming_health_service,
         streaming_health_stabilizer=streaming_health_stabilizer,
+        streaming_health_transition_detector=(
+            streaming_health_transition_detector
+        ),
         dashboard_snapshot_service=dashboard_snapshot_service,
         health_diagnostic_repository=health_diagnostic_repository,
+        streaming_health_transition_event_service=(
+            streaming_health_transition_event_service
+        ),
         history_query_service=history_query_service,
         node_id=node_id,
         instance_id=node_instance_id,

@@ -24,6 +24,9 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
     settings.noc_history_database_path = (
         "/tmp/noc-history.db"
     )
+    settings.noc_evidence_path = (
+        "/tmp/noc-evidence"
+    )
 
     api_http_client = Mock()
     metrics_http_client = Mock()
@@ -254,6 +257,52 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
             )
         )
 
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.InMemoryNodeRepository",
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.NodeRegistry",
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.bootstrap_noc_runtime",
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.JsonlEvidenceWriter",
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.EventService",
+            )
+        )
+
+        transition_detector_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor."
+                "StreamingHealthTransitionDetector",
+            )
+        )
+        transition_detector = (
+            transition_detector_class.return_value
+        )
+
+        stream_event_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor."
+                "StreamingHealthTransitionEventService",
+            )
+        )
+        stream_event_service = (
+            stream_event_service_class.return_value
+        )
+
         dashboard_application_class = stack.enter_context(
             patch(
                 "app.dashboard.live_monitor.DashboardApplication",
@@ -312,6 +361,8 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
         connection_stabilizer=srt_connection_health_stabilizer,
     )
 
+    transition_detector_class.assert_called_once_with()
+
     system_adapter_class.assert_called_once_with()
     system_service_class.assert_called_once_with(
         system_adapter
@@ -363,8 +414,12 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
         metrics_parser=metrics_parser,
         streaming_health_service=streaming_health_service,
         streaming_health_stabilizer=streaming_health_stabilizer,
+        streaming_health_transition_detector=transition_detector,
         dashboard_snapshot_service=dashboard_snapshot_service,
         health_diagnostic_repository=health_diagnostic_repository,
+        streaming_health_transition_event_service=(
+            stream_event_service
+        ),
         history_query_service=history_query_service,
         node_id=node_id,
         instance_id=node_instance_id,
@@ -388,6 +443,9 @@ def test_build_dashboard_application_disables_temporal_health_without_policy() -
     )
     settings.noc_history_database_path = (
         "/tmp/noc-history.db"
+    )
+    settings.noc_evidence_path = (
+        "/tmp/noc-evidence"
     )
 
     dashboard_application = Mock()
@@ -565,6 +623,38 @@ def test_build_dashboard_application_disables_temporal_health_without_policy() -
             )
         )
 
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.InMemoryNodeRepository",
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.NodeRegistry",
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.bootstrap_noc_runtime",
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.JsonlEvidenceWriter",
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.EventService",
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor."
+                "StreamingHealthTransitionEventService",
+            )
+        )
+
         dashboard_application_class = stack.enter_context(
             patch(
                 "app.dashboard.live_monitor.DashboardApplication",
@@ -584,3 +674,276 @@ def test_build_dashboard_application_disables_temporal_health_without_policy() -
     _, kwargs = dashboard_application_class.call_args
 
     assert kwargs["streaming_health_stabilizer"] is None
+
+
+def test_build_dashboard_application_composes_stream_health_event_runtime() -> None:
+    """Block 4 debe conectar Stream Health Events al runtime real del terminal."""
+
+    settings = Mock()
+    settings.mediamtx_api_url = "http://127.0.0.1:9997"
+    settings.mediamtx_api_timeout_seconds = 3.0
+    settings.mediamtx_metrics_url = "http://127.0.0.1:9998"
+    settings.mediamtx_metrics_timeout_seconds = 4.0
+
+    settings.stream_health_srt_degradation_seconds = None
+    settings.stream_health_srt_recovery_seconds = None
+
+    settings.geoip_database_path = (
+        "data/geoip/GeoLite2-Country.mmdb"
+    )
+    settings.noc_history_database_path = (
+        "/tmp/block4-noc-history.db"
+    )
+    settings.noc_evidence_path = (
+        "/tmp/block4-noc-evidence"
+    )
+
+    dashboard_application = Mock()
+
+    node_repository = Mock()
+    node_registry = Mock()
+    bootstrap_result = Mock()
+
+    evidence_writer = Mock()
+    event_service = Mock()
+    stream_event_service = Mock()
+
+    event_history_repository = Mock()
+
+    with ExitStack() as stack:
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.get_settings",
+                return_value=settings,
+            )
+        )
+
+        # Existing unrelated composition is isolated.
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.HttpClient"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.MediaMTXClient"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.MediaMTXAdapter"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.GeoIPService"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.MediaMTXSessionClient"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.MediaMTXSessionAdapter"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.SessionService"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.MediaMTXMetricsClient"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.MediaMTXMetricsParser"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.StreamingHealthService"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.LinuxSystemAdapter"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.SystemService"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.NetworkTelemetryService"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.NodeId"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.NodeInstanceId"
+            )
+        )
+
+        history_database_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.SQLiteHistoryDatabase"
+            )
+        )
+
+        history_database = Mock()
+        history_database_class.return_value = history_database
+
+        event_history_repository_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.SQLiteEventHistoryRepository",
+                return_value=event_history_repository,
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.SQLiteAlarmHistoryRepository"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.HistoryQueryService"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.SQLiteNodeHealthDiagnosticRepository"
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.StreamingService"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.DashboardService"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.DashboardSnapshotService"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.DashboardRenderer"
+            )
+        )
+
+        node_repository_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.InMemoryNodeRepository",
+                return_value=node_repository,
+            )
+        )
+
+        node_registry_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.NodeRegistry",
+                return_value=node_registry,
+            )
+        )
+
+        bootstrap = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.bootstrap_noc_runtime",
+                return_value=bootstrap_result,
+            )
+        )
+
+        evidence_writer_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.JsonlEvidenceWriter",
+                return_value=evidence_writer,
+            )
+        )
+
+        event_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.EventService",
+                return_value=event_service,
+            )
+        )
+
+        stream_event_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.StreamingHealthTransitionEventService",
+                return_value=stream_event_service,
+            )
+        )
+
+        transition_detector_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.StreamingHealthTransitionDetector"
+            )
+        )
+        transition_detector = transition_detector_class.return_value
+
+        dashboard_application_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.DashboardApplication",
+                return_value=dashboard_application,
+            )
+        )
+
+        result = build_dashboard_application()
+
+    assert result is dashboard_application
+
+    node_repository_class.assert_called_once_with()
+    node_registry_class.assert_called_once_with(
+        node_repository
+    )
+    bootstrap.assert_called_once_with(
+        node_registry
+    )
+
+    evidence_writer_class.assert_called_once_with(
+        "/tmp/block4-noc-evidence"
+    )
+
+    event_history_repository_class.assert_called_once_with(
+        history_database
+    )
+
+    event_service_class.assert_called_once_with(
+        node_registry,
+        history_repository=event_history_repository,
+        evidence_writer=evidence_writer,
+    )
+
+    stream_event_service_class.assert_called_once_with(
+        event_service=event_service
+    )
+
+    transition_detector_class.assert_called_once_with()
+
+    _, kwargs = dashboard_application_class.call_args
+
+    assert (
+        kwargs["streaming_health_transition_detector"]
+        is transition_detector
+    )
+
+    assert (
+        kwargs["streaming_health_transition_event_service"]
+        is stream_event_service
+    )
