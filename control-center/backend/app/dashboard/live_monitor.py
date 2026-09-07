@@ -22,6 +22,12 @@ from app.services.network_telemetry_service import (
 )
 from app.services.session_service import SessionService
 from app.services.streaming_health_service import StreamingHealthService
+from app.services.srt_connection_health_stabilizer import (
+    SRTConnectionHealthStabilizer,
+)
+from app.services.streaming_health_stabilizer import (
+    StreamingHealthStabilizer,
+)
 from app.services.streaming_service import StreamingService
 from app.services.system_service import SystemService
 from app.services.geoip_service import GeoIPService
@@ -99,6 +105,31 @@ def build_dashboard_application() -> DashboardApplication:
     metrics_parser = MediaMTXMetricsParser()
     streaming_health_service = StreamingHealthService()
 
+    streaming_health_stabilizer = None
+
+    if (
+        settings.stream_health_srt_degradation_seconds
+        is not None
+        and settings.stream_health_srt_recovery_seconds
+        is not None
+    ):
+        srt_connection_health_stabilizer = (
+            SRTConnectionHealthStabilizer(
+                degradation_seconds=(
+                    settings.stream_health_srt_degradation_seconds
+                ),
+                recovery_seconds=(
+                    settings.stream_health_srt_recovery_seconds
+                ),
+            )
+        )
+
+        streaming_health_stabilizer = StreamingHealthStabilizer(
+            connection_stabilizer=(
+                srt_connection_health_stabilizer
+            ),
+        )
+
     #
     # System
     #
@@ -168,6 +199,7 @@ def build_dashboard_application() -> DashboardApplication:
         metrics_client=metrics_client,
         metrics_parser=metrics_parser,
         streaming_health_service=streaming_health_service,
+        streaming_health_stabilizer=streaming_health_stabilizer,
         dashboard_snapshot_service=dashboard_snapshot_service,
         health_diagnostic_repository=health_diagnostic_repository,
         history_query_service=history_query_service,

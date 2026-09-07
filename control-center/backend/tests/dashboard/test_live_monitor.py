@@ -14,6 +14,10 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
     settings.mediamtx_api_timeout_seconds = 3.0
     settings.mediamtx_metrics_url = "http://127.0.0.1:9998"
     settings.mediamtx_metrics_timeout_seconds = 4.0
+
+    settings.stream_health_srt_degradation_seconds = 7.5
+    settings.stream_health_srt_recovery_seconds = 12.0
+
     settings.geoip_database_path = (
         "data/geoip/GeoLite2-Country.mmdb"
     )
@@ -35,6 +39,8 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
     metrics_client = Mock()
     metrics_parser = Mock()
     streaming_health_service = Mock()
+    srt_connection_health_stabilizer = Mock()
+    streaming_health_stabilizer = Mock()
 
     system_adapter = Mock()
     system_service = Mock()
@@ -133,6 +139,20 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
             patch(
                 "app.dashboard.live_monitor.StreamingHealthService",
                 return_value=streaming_health_service,
+            )
+        )
+
+        srt_connection_health_stabilizer_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.SRTConnectionHealthStabilizer",
+                return_value=srt_connection_health_stabilizer,
+            )
+        )
+
+        streaming_health_stabilizer_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.StreamingHealthStabilizer",
+                return_value=streaming_health_stabilizer,
             )
         )
 
@@ -284,6 +304,14 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
     metrics_parser_class.assert_called_once_with()
     streaming_health_service_class.assert_called_once_with()
 
+    srt_connection_health_stabilizer_class.assert_called_once_with(
+        degradation_seconds=7.5,
+        recovery_seconds=12.0,
+    )
+    streaming_health_stabilizer_class.assert_called_once_with(
+        connection_stabilizer=srt_connection_health_stabilizer,
+    )
+
     system_adapter_class.assert_called_once_with()
     system_service_class.assert_called_once_with(
         system_adapter
@@ -334,9 +362,225 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
         metrics_client=metrics_client,
         metrics_parser=metrics_parser,
         streaming_health_service=streaming_health_service,
+        streaming_health_stabilizer=streaming_health_stabilizer,
         dashboard_snapshot_service=dashboard_snapshot_service,
         health_diagnostic_repository=health_diagnostic_repository,
         history_query_service=history_query_service,
         node_id=node_id,
         instance_id=node_instance_id,
     )
+
+
+def test_build_dashboard_application_disables_temporal_health_without_policy() -> None:
+    """Sin política temporal, el monitor conserva Health instantáneo."""
+
+    settings = Mock()
+    settings.mediamtx_api_url = "http://127.0.0.1:9997"
+    settings.mediamtx_api_timeout_seconds = 3.0
+    settings.mediamtx_metrics_url = "http://127.0.0.1:9998"
+    settings.mediamtx_metrics_timeout_seconds = 4.0
+
+    settings.stream_health_srt_degradation_seconds = None
+    settings.stream_health_srt_recovery_seconds = None
+
+    settings.geoip_database_path = (
+        "data/geoip/GeoLite2-Country.mmdb"
+    )
+    settings.noc_history_database_path = (
+        "/tmp/noc-history.db"
+    )
+
+    dashboard_application = Mock()
+
+    with ExitStack() as stack:
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.get_settings",
+                return_value=settings,
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.HttpClient",
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.MediaMTXClient",
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.MediaMTXAdapter",
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.GeoIPService",
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.MediaMTXSessionClient",
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.MediaMTXSessionAdapter",
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.SessionService",
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.MediaMTXMetricsClient",
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.MediaMTXMetricsParser",
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.StreamingHealthService",
+            )
+        )
+
+        srt_connection_health_stabilizer_class = (
+            stack.enter_context(
+                patch(
+                    "app.dashboard.live_monitor."
+                    "SRTConnectionHealthStabilizer",
+                )
+            )
+        )
+
+        streaming_health_stabilizer_class = (
+            stack.enter_context(
+                patch(
+                    "app.dashboard.live_monitor."
+                    "StreamingHealthStabilizer",
+                )
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.LinuxSystemAdapter",
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.SystemService",
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.NetworkTelemetryService",
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.NodeId",
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.NodeInstanceId",
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.SQLiteHistoryDatabase",
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor."
+                "SQLiteEventHistoryRepository",
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor."
+                "SQLiteAlarmHistoryRepository",
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.HistoryQueryService",
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor."
+                "SQLiteNodeHealthDiagnosticRepository",
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.StreamingService",
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.DashboardService",
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.DashboardSnapshotService",
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.DashboardRenderer",
+            )
+        )
+
+        dashboard_application_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.DashboardApplication",
+                return_value=dashboard_application,
+            )
+        )
+
+        result = build_dashboard_application()
+
+    assert result is dashboard_application
+
+    srt_connection_health_stabilizer_class.assert_not_called()
+    streaming_health_stabilizer_class.assert_not_called()
+
+    dashboard_application_class.assert_called_once()
+
+    _, kwargs = dashboard_application_class.call_args
+
+    assert kwargs["streaming_health_stabilizer"] is None

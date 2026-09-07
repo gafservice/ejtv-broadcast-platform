@@ -33,3 +33,14 @@ Define, entre otros aspectos:
 - políticas de agregación y prevención de alarm storms;
 - evolución incremental desde SRT Health hacia RTMP, RTSP, HLS y WebRTC;
 - estrategia de pruebas, regresión, validación física y cierre de ENG-013B.
+
+### `03-STREAM-HEALTH-TEMPORAL-EVIDENCE.md`
+
+Evidencia de validación de Block 2 — Temporal Health:
+
+- persistencia de degradación;
+- histéresis de recuperación;
+- prevención de flapping;
+- conservación de telemetría actual;
+- validación física SRT;
+- regresión automatizada y completa del backend.

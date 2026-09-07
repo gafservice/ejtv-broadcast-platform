@@ -524,6 +524,18 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         streaming_health
     )
 
+    effective_streaming_health = StreamingHealth(
+        captured_at=captured_at,
+        paths=(),
+        status=HealthStatus.HEALTHY,
+        message="Streaming SRT estable.",
+    )
+
+    streaming_health_stabilizer = Mock()
+    streaming_health_stabilizer.stabilize.return_value = (
+        effective_streaming_health
+    )
+
     dashboard_service = Mock()
     dashboard_service.build_dashboard_from_measurement.return_value = (
         dashboard_data
@@ -575,13 +587,14 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         metrics_client=metrics_client,
         metrics_parser=metrics_parser,
         streaming_health_service=streaming_health_service,
+        streaming_health_stabilizer=streaming_health_stabilizer,
         network_telemetry_service=network_telemetry_service,
     )
 
     result = application.run_once()
 
     assert result is rendered_dashboard
-    assert application.latest_health is streaming_health
+    assert application.latest_health is effective_streaming_health
 
     mediamtx_adapter.health.assert_called_once_with()
     mediamtx_adapter.get_snapshot.assert_called_once_with()
@@ -609,6 +622,10 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         session_snapshot=session_snapshot,
     )
 
+    streaming_health_stabilizer.stabilize.assert_called_once_with(
+        streaming_health
+    )
+
     dashboard_service.build_dashboard_from_measurement.assert_called_once_with(
         hostname="server-01",
         mediamtx_online=True,
@@ -618,7 +635,7 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         session_measurement=session_measurement,
         system_resources=system_resources,
         previous_system_resources=None,
-        health=streaming_health,
+        health=effective_streaming_health,
         network_interfaces=network_interfaces,
         node_health=None,
         recent_events=None,
@@ -633,6 +650,25 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         dashboard_data,
         navigation_state=application.navigation_state,
     )
+
+
+def test_application_accepts_base_health_without_temporal_stabilizer() -> None:
+    """Temporal Health debe ser opcional sobre el motor base de salud."""
+
+    application = DashboardApplication(
+        mediamtx_adapter=Mock(),
+        session_adapter=Mock(),
+        streaming_service=Mock(),
+        session_service=Mock(),
+        dashboard_service=Mock(),
+        dashboard_renderer=Mock(),
+        system_service=Mock(),
+        metrics_client=Mock(),
+        metrics_parser=Mock(),
+        streaming_health_service=Mock(),
+    )
+
+    assert application is not None
 
 
 def test_application_rejects_partial_health_configuration() -> None:
@@ -1737,3 +1773,287 @@ def test_run_once_passes_current_navigation_state_to_renderer() -> None:
         dashboard_data,
         navigation_state=navigation_state,
     )
+
+
+def test_run_once_preserves_temporal_stream_health_across_cycles() -> None:
+    """La misma aplicación debe conservar el estado temporal entre ciclos."""
+
+    from datetime import timedelta
+
+    from app.adapters.mediamtx.metrics_parser import (
+        MediaMTXMetricsSnapshot,
+    )
+    from app.domain.streaming.health import (
+        HealthStatus,
+        SRTConnectionHealth,
+        SRTPathHealth,
+        StreamingHealth,
+    )
+    from app.services.srt_connection_health_stabilizer import (
+        SRTConnectionHealthStabilizer,
+    )
+    from app.services.streaming_health_stabilizer import (
+        StreamingHealthStabilizer,
+    )
+
+    base_time = datetime(
+        2026,
+        9,
+        6,
+        12,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    captured_times = (
+        base_time,
+        base_time + timedelta(seconds=1),
+        base_time + timedelta(seconds=11),
+    )
+
+    def make_snapshot(captured_at: datetime) -> MediaMTXSnapshot:
+        return MediaMTXSnapshot(
+            captured_at=captured_at,
+            paths=(),
+            reported_item_count=0,
+            reported_page_count=0,
+        )
+
+    def make_health(
+        *,
+        captured_at: datetime,
+        status: HealthStatus,
+        rtt_ms: float,
+    ) -> StreamingHealth:
+        message = (
+            "Streaming healthy."
+            if status is HealthStatus.HEALTHY
+            else "Streaming degraded."
+        )
+
+        connection = SRTConnectionHealth(
+            connection_id="conn-1",
+            path_name="impact",
+            state="publish",
+            rtt_ms=rtt_ms,
+            packets_retransmitted=0,
+            packets_lost=0,
+            status=status,
+            message=message,
+            send_rate_mbps=3.5,
+            link_capacity_mbps=100.0,
+            link_utilization_percent=3.5,
+        )
+
+        path = SRTPathHealth(
+            name="impact",
+            connections=(connection,),
+            average_rtt_ms=rtt_ms,
+            total_packets_retransmitted=0,
+            total_packets_lost=0,
+            status=status,
+            message=message,
+            maximum_rtt_ms=rtt_ms,
+            average_link_utilization_percent=3.5,
+        )
+
+        return StreamingHealth(
+            captured_at=captured_at,
+            paths=(path,),
+            status=status,
+            message=message,
+        )
+
+    snapshots = tuple(
+        make_snapshot(captured_at)
+        for captured_at in captured_times
+    )
+
+    instantaneous_health = (
+        make_health(
+            captured_at=captured_times[0],
+            status=HealthStatus.HEALTHY,
+            rtt_ms=5.0,
+        ),
+        make_health(
+            captured_at=captured_times[1],
+            status=HealthStatus.DEGRADED,
+            rtt_ms=120.0,
+        ),
+        make_health(
+            captured_at=captured_times[2],
+            status=HealthStatus.DEGRADED,
+            rtt_ms=130.0,
+        ),
+    )
+
+    mediamtx_adapter = Mock()
+    mediamtx_adapter.health.return_value = True
+    mediamtx_adapter.get_snapshot.side_effect = snapshots
+
+    session_snapshots = (
+        Mock(),
+        Mock(),
+        Mock(),
+    )
+
+    session_adapter = Mock()
+    session_adapter.get_snapshot.side_effect = (
+        session_snapshots
+    )
+
+    streaming_service = Mock()
+    streaming_service.compare.side_effect = (
+        Mock(),
+        Mock(),
+        Mock(),
+    )
+
+    session_service = Mock()
+    session_service.measure.side_effect = (
+        Mock(),
+        Mock(),
+        Mock(),
+    )
+
+    metrics_client = Mock()
+    metrics_client.get_metrics_text.side_effect = (
+        "metrics-1",
+        "metrics-2",
+        "metrics-3",
+    )
+
+    metrics_snapshots = (
+        MediaMTXMetricsSnapshot(samples=()),
+        MediaMTXMetricsSnapshot(samples=()),
+        MediaMTXMetricsSnapshot(samples=()),
+    )
+
+    metrics_parser = Mock()
+    metrics_parser.parse.side_effect = metrics_snapshots
+
+    streaming_health_service = Mock()
+    streaming_health_service.build.side_effect = (
+        instantaneous_health
+    )
+
+    connection_stabilizer = SRTConnectionHealthStabilizer(
+        degradation_seconds=10.0,
+        recovery_seconds=10.0,
+    )
+
+    streaming_health_stabilizer = StreamingHealthStabilizer(
+        connection_stabilizer=connection_stabilizer,
+    )
+
+    dashboard_service = Mock()
+
+    dashboard_data = (
+        Mock(spec=DashboardData),
+        Mock(spec=DashboardData),
+        Mock(spec=DashboardData),
+    )
+
+    dashboard_service.build_dashboard_from_measurement.side_effect = (
+        dashboard_data
+    )
+
+    dashboard_renderer = Mock()
+    dashboard_renderer.render.side_effect = (
+        Mock(spec=Layout),
+        Mock(spec=Layout),
+        Mock(spec=Layout),
+    )
+
+    system_service = Mock()
+
+    system_info = Mock()
+    system_info.hostname = "server-01"
+    system_service.get_system_info.return_value = system_info
+
+    system_service.get_system_resources.side_effect = (
+        Mock(),
+        Mock(),
+        Mock(),
+    )
+
+    system_service.get_network_interface_infos.return_value = Mock()
+
+    network_telemetry_service = Mock()
+    network_telemetry_service.build.side_effect = (
+        Mock(),
+        Mock(),
+        Mock(),
+    )
+
+    dashboard_service.build_network_interfaces_panel.side_effect = (
+        Mock(),
+        Mock(),
+        Mock(),
+    )
+
+    application = DashboardApplication(
+        mediamtx_adapter=mediamtx_adapter,
+        session_adapter=session_adapter,
+        streaming_service=streaming_service,
+        session_service=session_service,
+        dashboard_service=dashboard_service,
+        dashboard_renderer=dashboard_renderer,
+        system_service=system_service,
+        metrics_client=metrics_client,
+        metrics_parser=metrics_parser,
+        streaming_health_service=streaming_health_service,
+        streaming_health_stabilizer=streaming_health_stabilizer,
+        network_telemetry_service=network_telemetry_service,
+    )
+
+    application.run_once()
+
+    first_health = application.latest_health
+
+    application.run_once()
+
+    second_health = application.latest_health
+
+    application.run_once()
+
+    third_health = application.latest_health
+
+    assert first_health is not None
+    assert second_health is not None
+    assert third_health is not None
+
+    # t0 — first observation establishes HEALTHY baseline.
+    assert first_health.status is HealthStatus.HEALTHY
+    assert first_health.captured_at == captured_times[0]
+
+    # t+1 — instantaneous degradation exists, but is not yet committed.
+    assert second_health.status is HealthStatus.HEALTHY
+    assert second_health.paths[0].status is HealthStatus.HEALTHY
+    assert (
+        second_health.paths[0].connections[0].status
+        is HealthStatus.HEALTHY
+    )
+
+    # Current evidence must remain current while status is held.
+    assert second_health.captured_at == captured_times[1]
+    assert second_health.paths[0].connections[0].rtt_ms == 120.0
+
+    # t+11 — same degradation has persisted for the confirmation window.
+    assert third_health.status is HealthStatus.DEGRADED
+    assert third_health.paths[0].status is HealthStatus.DEGRADED
+    assert (
+        third_health.paths[0].connections[0].status
+        is HealthStatus.DEGRADED
+    )
+
+    assert third_health.captured_at == captured_times[2]
+    assert third_health.paths[0].connections[0].rtt_ms == 130.0
+
+    # The same service instance supplied all three instantaneous observations.
+    assert streaming_health_service.build.call_count == 3
+
+    assert [
+        call.kwargs["captured_at"]
+        for call in streaming_health_service.build.call_args_list
+    ] == list(captured_times)

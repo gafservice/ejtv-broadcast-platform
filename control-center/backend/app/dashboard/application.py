@@ -55,6 +55,7 @@ from app.services.network_telemetry_service import (
 )
 from app.services.session_service import SessionService
 from app.services.streaming_health_service import StreamingHealthService
+from app.services.streaming_health_stabilizer import StreamingHealthStabilizer
 from app.services.streaming_service import StreamingService
 from app.services.system_service import SystemService
 
@@ -75,6 +76,7 @@ class DashboardApplication:
         metrics_client: MediaMTXMetricsClient | None = None,
         metrics_parser: MediaMTXMetricsParser | None = None,
         streaming_health_service: StreamingHealthService | None = None,
+        streaming_health_stabilizer: StreamingHealthStabilizer | None = None,
         dashboard_snapshot_service: DashboardSnapshotService | None = None,
         network_telemetry_service: NetworkTelemetryService | None = None,
         health_diagnostic_repository: NodeHealthDiagnosticRepository | None = None,
@@ -111,6 +113,7 @@ class DashboardApplication:
         self._metrics_client = metrics_client
         self._metrics_parser = metrics_parser
         self._streaming_health_service = streaming_health_service
+        self._streaming_health_stabilizer = streaming_health_stabilizer
 
         self._health_diagnostic_repository = (
             health_diagnostic_repository
@@ -525,10 +528,17 @@ class DashboardApplication:
             metrics_text
         )
 
-        return self._streaming_health_service.build(
+        instantaneous_health = self._streaming_health_service.build(
             snapshot=metrics_snapshot,
             captured_at=captured_at,
             session_snapshot=session_snapshot,
+        )
+
+        if self._streaming_health_stabilizer is None:
+            return instantaneous_health
+
+        return self._streaming_health_stabilizer.stabilize(
+            instantaneous_health
         )
 
     def _validate_noc_dependencies(self) -> None:

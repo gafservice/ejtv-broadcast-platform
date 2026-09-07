@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.constants import (
@@ -46,6 +46,20 @@ class Settings(BaseSettings):
     mediamtx_metrics_timeout_seconds: float = Field(
         default=5.0,
         gt=0,
+    )
+
+    # ------------------------------------------------------------------
+    # Stream Health
+    # ------------------------------------------------------------------
+
+    stream_health_srt_degradation_seconds: float | None = Field(
+        default=None,
+        ge=0,
+    )
+
+    stream_health_srt_recovery_seconds: float | None = Field(
+        default=None,
+        ge=0,
     )
 
     geoip_database_path: str = (
@@ -114,6 +128,30 @@ class Settings(BaseSettings):
     bootstrap_admin_username: str = "administrator"
     bootstrap_admin_email: str = "admin@example.com"
     bootstrap_admin_password: str | None = None
+
+    @model_validator(mode="after")
+    def validate_stream_health_temporal_policy(
+        self,
+    ) -> "Settings":
+        """Require complete SRT temporal policy or no policy."""
+
+        degradation_configured = (
+            self.stream_health_srt_degradation_seconds
+            is not None
+        )
+        recovery_configured = (
+            self.stream_health_srt_recovery_seconds
+            is not None
+        )
+
+        if degradation_configured != recovery_configured:
+            raise ValueError(
+                "STREAM_HEALTH_SRT_DEGRADATION_SECONDS and "
+                "STREAM_HEALTH_SRT_RECOVERY_SECONDS must be "
+                "configured together."
+            )
+
+        return self
 
     model_config = SettingsConfigDict(
         env_file=".env",
