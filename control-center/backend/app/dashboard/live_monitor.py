@@ -12,6 +12,7 @@ from app.adapters.mediamtx.session_client import MediaMTXSessionClient
 from app.core.config import get_settings
 from app.core.http import HttpClient
 from app.dashboard.application import DashboardApplication
+from app.domain.streaming.aggregation import StreamingHealthAggregator
 from app.dashboard.renderers.dashboard_renderer import DashboardRenderer
 from app.dashboard.services.dashboard_service import DashboardService
 from app.dashboard.services.dashboard_snapshot_service import (
@@ -123,6 +124,7 @@ def build_dashboard_application() -> DashboardApplication:
 
     metrics_parser = MediaMTXMetricsParser()
     streaming_health_service = StreamingHealthService()
+    streaming_health_aggregator = StreamingHealthAggregator()
     streaming_health_transition_detector = (
         StreamingHealthTransitionDetector()
     )
@@ -258,6 +260,7 @@ def build_dashboard_application() -> DashboardApplication:
         metrics_client=metrics_client,
         metrics_parser=metrics_parser,
         streaming_health_service=streaming_health_service,
+        streaming_health_aggregator=streaming_health_aggregator,
         streaming_health_stabilizer=streaming_health_stabilizer,
         streaming_health_transition_detector=(
             streaming_health_transition_detector

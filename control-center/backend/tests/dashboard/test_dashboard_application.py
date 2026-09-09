@@ -2583,3 +2583,160 @@ def test_stream_health_transition_is_shared_with_event_and_alarm_services():
         alarm_calls[1].kwargs["timestamp"]
         == event_calls[1].kwargs["timestamp"]
     )
+
+
+def test_application_builds_platform_health_from_effective_streaming_health() -> None:
+    """Block 6 aggregation must consume the existing session snapshot and effective health."""
+
+    from app.domain.streaming import HealthStatus, StreamingHealth
+    from app.domain.streaming.aggregation import (
+        HealthPopulation,
+        PlatformHealth,
+    )
+
+    captured_at = datetime(
+        2026,
+        9,
+        9,
+        21,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=0,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=None,
+        interval_seconds=None,
+        paths=(),
+        total_inbound_bitrate_bps=None,
+        total_outbound_bitrate_bps=None,
+        quality=MeasurementQuality.NOT_AVAILABLE,
+    )
+
+    session_snapshot = Mock()
+    session_measurement = Mock()
+
+    raw_streaming_health = StreamingHealth(
+        captured_at=captured_at,
+        paths=(),
+        status=HealthStatus.DEGRADED,
+        message="Raw SRT health.",
+    )
+
+    effective_streaming_health = StreamingHealth(
+        captured_at=captured_at,
+        paths=(),
+        status=HealthStatus.HEALTHY,
+        message="Effective stabilized SRT health.",
+    )
+
+    platform_health = PlatformHealth(
+        captured_at=captured_at,
+        services=(),
+        population=HealthPopulation(
+            healthy_count=0,
+            degraded_count=0,
+            critical_count=0,
+            unknown_count=0,
+        ),
+        status=HealthStatus.UNKNOWN,
+        worst_observed_status=HealthStatus.UNKNOWN,
+        message="No observed multimedia sessions.",
+    )
+
+    mediamtx_adapter = Mock()
+    mediamtx_adapter.health.return_value = True
+    mediamtx_adapter.get_snapshot.return_value = snapshot
+
+    session_adapter = Mock()
+    session_adapter.get_snapshot.return_value = session_snapshot
+
+    streaming_service = Mock()
+    streaming_service.compare.return_value = measurement
+
+    session_service = Mock()
+    session_service.measure.return_value = session_measurement
+
+    metrics_client = Mock()
+    metrics_client.get_metrics_text.return_value = ""
+
+    metrics_parser = Mock()
+    metrics_snapshot = Mock()
+    metrics_parser.parse.return_value = metrics_snapshot
+
+    streaming_health_service = Mock()
+    streaming_health_service.build.return_value = raw_streaming_health
+
+    streaming_health_stabilizer = Mock()
+    streaming_health_stabilizer.stabilize.return_value = (
+        effective_streaming_health
+    )
+
+    streaming_health_aggregator = Mock()
+    streaming_health_aggregator.build.return_value = platform_health
+
+    dashboard_data = Mock(spec=DashboardData)
+
+    dashboard_service = Mock()
+    dashboard_service.build_dashboard_from_measurement.return_value = (
+        dashboard_data
+    )
+
+    rendered_dashboard = Mock(spec=Layout)
+
+    dashboard_renderer = Mock()
+    dashboard_renderer.render.return_value = rendered_dashboard
+
+    system_service = Mock()
+
+    system_info = Mock()
+    system_info.hostname = "server-01"
+    system_service.get_system_info.return_value = system_info
+
+    system_resources = Mock()
+    system_service.get_system_resources.return_value = system_resources
+    system_service.get_network_interface_infos.return_value = ()
+
+    network_telemetry_service = Mock()
+    network_telemetry_service.build.return_value = None
+
+    application = DashboardApplication(
+        mediamtx_adapter=mediamtx_adapter,
+        session_adapter=session_adapter,
+        streaming_service=streaming_service,
+        session_service=session_service,
+        dashboard_service=dashboard_service,
+        dashboard_renderer=dashboard_renderer,
+        system_service=system_service,
+        metrics_client=metrics_client,
+        metrics_parser=metrics_parser,
+        streaming_health_service=streaming_health_service,
+        streaming_health_stabilizer=streaming_health_stabilizer,
+        streaming_health_aggregator=streaming_health_aggregator,
+        network_telemetry_service=network_telemetry_service,
+    )
+
+    result = application.run_once()
+
+    assert result is rendered_dashboard
+
+    streaming_health_stabilizer.stabilize.assert_called_once_with(
+        raw_streaming_health
+    )
+
+    streaming_health_aggregator.build.assert_called_once_with(
+        session_snapshot=session_snapshot,
+        streaming_health=effective_streaming_health,
+    )
+
+    assert application.latest_health is effective_streaming_health
+    assert application.latest_platform_health is platform_health
+
+    session_adapter.get_snapshot.assert_called_once_with()

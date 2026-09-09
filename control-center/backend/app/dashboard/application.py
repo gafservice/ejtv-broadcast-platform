@@ -41,6 +41,10 @@ from app.dashboard.services.dashboard_snapshot_service import (
 )
 from app.domain.sessions import SessionSnapshot
 from app.domain.streaming import MediaMTXSnapshot, StreamingHealth
+from app.domain.streaming.aggregation import (
+    PlatformHealth,
+    StreamingHealthAggregator,
+)
 from app.domain.system import SystemResources
 from app.noc.domain.node_id import NodeId
 from app.noc.domain.node_instance import NodeInstanceId
@@ -87,6 +91,7 @@ class DashboardApplication:
         metrics_parser: MediaMTXMetricsParser | None = None,
         streaming_health_service: StreamingHealthService | None = None,
         streaming_health_stabilizer: StreamingHealthStabilizer | None = None,
+        streaming_health_aggregator: StreamingHealthAggregator | None = None,
         streaming_health_transition_detector: (
             StreamingHealthTransitionDetector | None
         ) = None,
@@ -133,6 +138,7 @@ class DashboardApplication:
         self._metrics_parser = metrics_parser
         self._streaming_health_service = streaming_health_service
         self._streaming_health_stabilizer = streaming_health_stabilizer
+        self._streaming_health_aggregator = streaming_health_aggregator
         self._streaming_health_transition_detector = (
             streaming_health_transition_detector
         )
@@ -181,6 +187,7 @@ class DashboardApplication:
         self._previous_snapshot: MediaMTXSnapshot | None = None
         self._previous_system_resources: SystemResources | None = None
         self._latest_health: StreamingHealth | None = None
+        self._latest_platform_health: PlatformHealth | None = None
         self._latest_health_transition: StreamingHealthTransition | None = None
 
         self._validate_health_dependencies()
@@ -245,6 +252,12 @@ class DashboardApplication:
         return self._latest_health
 
     @property
+    def latest_platform_health(self) -> PlatformHealth | None:
+        """Última salud agregada multiprotocolo de la plataforma."""
+
+        return self._latest_platform_health
+
+    @property
     def latest_health_transition(
         self,
     ) -> StreamingHealthTransition | None:
@@ -274,6 +287,16 @@ class DashboardApplication:
             captured_at=snapshot.captured_at,
             session_snapshot=session_snapshot,
         )
+
+        self._latest_platform_health = None
+
+        if self._streaming_health_aggregator is not None:
+            self._latest_platform_health = (
+                self._streaming_health_aggregator.build(
+                    session_snapshot=session_snapshot,
+                    streaming_health=streaming_health,
+                )
+            )
 
         system_info = self._system_service.get_system_info()
         system_resources = self._system_service.get_system_resources()

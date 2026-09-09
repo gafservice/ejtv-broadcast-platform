@@ -42,6 +42,7 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
     metrics_client = Mock()
     metrics_parser = Mock()
     streaming_health_service = Mock()
+    streaming_health_aggregator = Mock()
     srt_connection_health_stabilizer = Mock()
     streaming_health_stabilizer = Mock()
 
@@ -142,6 +143,13 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
             patch(
                 "app.dashboard.live_monitor.StreamingHealthService",
                 return_value=streaming_health_service,
+            )
+        )
+
+        streaming_health_aggregator_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.StreamingHealthAggregator",
+                return_value=streaming_health_aggregator,
             )
         )
 
@@ -373,6 +381,7 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
     )
     metrics_parser_class.assert_called_once_with()
     streaming_health_service_class.assert_called_once_with()
+    streaming_health_aggregator_class.assert_called_once_with()
 
     srt_connection_health_stabilizer_class.assert_called_once_with(
         degradation_seconds=7.5,
@@ -444,6 +453,7 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
         metrics_client=metrics_client,
         metrics_parser=metrics_parser,
         streaming_health_service=streaming_health_service,
+        streaming_health_aggregator=streaming_health_aggregator,
         streaming_health_stabilizer=streaming_health_stabilizer,
         streaming_health_transition_detector=transition_detector,
         dashboard_snapshot_service=dashboard_snapshot_service,
