@@ -25,6 +25,7 @@ from app.domain.streaming import (
     StreamingHealth,
     StreamingMeasurement,
 )
+from app.domain.streaming.aggregation import PlatformHealth
 from app.domain.system import SystemResources
 
 
@@ -52,6 +53,7 @@ class DashboardSnapshotInput:
     node_health: NodeHealthPanelData | None = None
     recent_events: RecentEventsPanelData | None = None
     active_alarms: ActiveAlarmsPanelData | None = None
+    platform_health: PlatformHealth | None = None
     active_connections_viewport: PanelViewport | None = None
 
 
@@ -124,6 +126,7 @@ class DashboardSnapshotService:
             node_health=snapshot_input.node_health,
             recent_events=snapshot_input.recent_events,
             active_alarms=snapshot_input.active_alarms,
+            platform_health=snapshot_input.platform_health,
             active_connections_viewport=(
                 snapshot_input.active_connections_viewport
             ),

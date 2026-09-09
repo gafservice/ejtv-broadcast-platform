@@ -69,3 +69,15 @@ la semántica explícita de `UNKNOWN`; la separación entre agregación,
 Expected Presence, Events, Alarms y presentación; la integración mediante
 `latest_platform_health`; la regresión completa del backend; y la
 validación física contra sesiones SRT reales de `ejtv` e `impact`.
+
+### `06-PLATFORM-HEALTH-DASHBOARD-EVIDENCE.md`
+
+Evidencia de implementación y validación de Block 7 — Dashboard.
+Documenta la proyección de `PlatformHealth` hacia
+`PlatformHealthPanelData`, el transporte por `DashboardApplication` y
+`DashboardSnapshotService`, el nuevo `PlatformHealthRenderer`, la
+integración incremental del panel `PLATFORM HEALTH`, la separación respecto
+de `STREAM HEALTH` y `NODE HEALTH`, la procedencia temporal independiente
+de `SessionSnapshot`, la corrección descubierta durante la prueba física,
+la validación observed-only con `ejtv` e `impact`, y la regresión completa
+del backend.

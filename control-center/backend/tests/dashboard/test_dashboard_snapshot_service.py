@@ -262,3 +262,72 @@ def test_snapshot_preserves_active_alarms() -> None:
         result.active_alarms.alarms[0].alarm_id
         == "alarm-001"
     )
+
+
+def test_snapshot_service_transports_platform_health() -> None:
+    """Debe transportar PlatformHealth hasta DashboardData."""
+
+    from app.domain.streaming.aggregation import (
+        HealthPopulation,
+        PlatformHealth,
+    )
+    from app.domain.streaming.health import HealthStatus
+
+    captured_at = datetime(
+        2026,
+        9,
+        9,
+        21,
+        15,
+        tzinfo=UTC,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=0,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=None,
+        interval_seconds=None,
+        paths=(),
+        total_inbound_bitrate_bps=None,
+        total_outbound_bitrate_bps=None,
+        quality=MeasurementQuality.NOT_AVAILABLE,
+    )
+
+    platform_health = PlatformHealth(
+        captured_at=captured_at,
+        services=(),
+        population=HealthPopulation(
+            healthy_count=0,
+            degraded_count=0,
+            critical_count=0,
+            unknown_count=0,
+        ),
+        status=HealthStatus.UNKNOWN,
+        worst_observed_status=HealthStatus.UNKNOWN,
+        message="No observed multimedia sessions.",
+    )
+
+    result = DashboardSnapshotService().build_snapshot(
+        DashboardSnapshotInput(
+            hostname="ejtv-01",
+            mediamtx_online=True,
+            api_online=True,
+            snapshot=snapshot,
+            measurement=measurement,
+            platform_health=platform_health,
+        )
+    )
+
+    assert result.platform_health is not None
+    assert result.platform_health.status == "UNKNOWN"
+    assert result.platform_health.worst_status == "UNKNOWN"
+    assert result.platform_health.service_count == 0
+    assert result.platform_health.evidence_coverage is None
+    assert result.platform_health.affected_fraction is None
+    assert result.platform_health.captured_at == captured_at

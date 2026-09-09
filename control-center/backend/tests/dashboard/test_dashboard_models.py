@@ -387,3 +387,192 @@ def test_dashboard_data_accepts_active_alarms() -> None:
 
     assert dashboard.active_alarms is active_alarms
     assert dashboard.active_alarms.alarm_count == 1
+
+
+def test_platform_health_panel_data_stores_expected_values() -> None:
+    """PlatformHealthPanelData debe preservar el resumen agregado."""
+
+    from datetime import UTC, datetime
+
+    from app.dashboard.models import PlatformHealthPanelData
+
+    captured_at = datetime(
+        2026,
+        9,
+        9,
+        20,
+        18,
+        tzinfo=UTC,
+    )
+
+    data = PlatformHealthPanelData(
+        status="DEGRADED",
+        worst_status="CRITICAL",
+        healthy_count=2,
+        degraded_count=1,
+        critical_count=1,
+        unknown_count=1,
+        evidence_coverage=0.8,
+        affected_fraction=0.5,
+        service_count=3,
+        captured_at=captured_at,
+    )
+
+    assert data.status == "DEGRADED"
+    assert data.worst_status == "CRITICAL"
+    assert data.healthy_count == 2
+    assert data.degraded_count == 1
+    assert data.critical_count == 1
+    assert data.unknown_count == 1
+    assert data.evidence_coverage == 0.8
+    assert data.affected_fraction == 0.5
+    assert data.service_count == 3
+    assert data.captured_at == captured_at
+
+
+@pytest.mark.parametrize(
+    "field_name,value",
+    (
+        ("healthy_count", -1),
+        ("degraded_count", -1),
+        ("critical_count", -1),
+        ("unknown_count", -1),
+        ("service_count", -1),
+    ),
+)
+def test_platform_health_panel_data_rejects_negative_counts(
+    field_name: str,
+    value: int,
+) -> None:
+    """Los contadores de presentación no pueden ser negativos."""
+
+    from datetime import UTC, datetime
+
+    from app.dashboard.models import PlatformHealthPanelData
+
+    kwargs = {
+        "status": "HEALTHY",
+        "worst_status": "HEALTHY",
+        "healthy_count": 1,
+        "degraded_count": 0,
+        "critical_count": 0,
+        "unknown_count": 0,
+        "evidence_coverage": 1.0,
+        "affected_fraction": 0.0,
+        "service_count": 1,
+        "captured_at": datetime(2026, 9, 9, 20, 18, tzinfo=UTC),
+    }
+
+    kwargs[field_name] = value
+
+    with pytest.raises(ValueError):
+        PlatformHealthPanelData(**kwargs)
+
+
+@pytest.mark.parametrize(
+    "field_name,value",
+    (
+        ("evidence_coverage", -0.1),
+        ("evidence_coverage", 1.1),
+        ("affected_fraction", -0.1),
+        ("affected_fraction", 1.1),
+    ),
+)
+def test_platform_health_panel_data_rejects_invalid_fractions(
+    field_name: str,
+    value: float,
+) -> None:
+    """Las fracciones deben permanecer dentro del intervalo 0..1."""
+
+    from datetime import UTC, datetime
+
+    from app.dashboard.models import PlatformHealthPanelData
+
+    kwargs = {
+        "status": "HEALTHY",
+        "worst_status": "HEALTHY",
+        "healthy_count": 1,
+        "degraded_count": 0,
+        "critical_count": 0,
+        "unknown_count": 0,
+        "evidence_coverage": 1.0,
+        "affected_fraction": 0.0,
+        "service_count": 1,
+        "captured_at": datetime(2026, 9, 9, 20, 18, tzinfo=UTC),
+    }
+
+    kwargs[field_name] = value
+
+    with pytest.raises(ValueError):
+        PlatformHealthPanelData(**kwargs)
+
+
+def test_platform_health_panel_data_rejects_naive_timestamp() -> None:
+    """La captura mostrada debe conservar zona horaria."""
+
+    from datetime import datetime
+
+    from app.dashboard.models import PlatformHealthPanelData
+
+    with pytest.raises(ValueError):
+        PlatformHealthPanelData(
+            status="HEALTHY",
+            worst_status="HEALTHY",
+            healthy_count=1,
+            degraded_count=0,
+            critical_count=0,
+            unknown_count=0,
+            evidence_coverage=1.0,
+            affected_fraction=0.0,
+            service_count=1,
+            captured_at=datetime(2026, 9, 9, 20, 18),
+        )
+
+
+def test_dashboard_data_accepts_platform_health_panel() -> None:
+    """DashboardData debe transportar PLATFORM HEALTH."""
+
+    from datetime import UTC, datetime
+
+    from app.dashboard.models import PlatformHealthPanelData
+
+    platform_health = PlatformHealthPanelData(
+        status="HEALTHY",
+        worst_status="HEALTHY",
+        healthy_count=2,
+        degraded_count=0,
+        critical_count=0,
+        unknown_count=0,
+        evidence_coverage=1.0,
+        affected_fraction=0.0,
+        service_count=2,
+        captured_at=datetime(
+            2026,
+            9,
+            9,
+            20,
+            18,
+            tzinfo=UTC,
+        ),
+    )
+
+    dashboard = DashboardData(
+        server=ServerPanelData(
+            hostname="ejtv-01",
+            mediamtx_online=True,
+            api_online=True,
+            snapshot_at=platform_health.captured_at,
+            quality="AVAILABLE",
+        ),
+        streaming=StreamingPanelData(
+            active_paths=2,
+            readers=2,
+            inbound_bitrate_bps=8_000_000,
+            outbound_bitrate_bps=8_000_000,
+            quality="AVAILABLE",
+        ),
+        paths=(),
+        platform_health=platform_health,
+    )
+
+    assert dashboard.platform_health is platform_health

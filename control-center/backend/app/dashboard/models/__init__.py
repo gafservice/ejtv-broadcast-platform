@@ -27,6 +27,7 @@ from app.dashboard.models.node_health_panel import (
     NodeHealthInterfaceRowData,
     NodeHealthPanelData,
 )
+from app.dashboard.models.platform_health_panel import PlatformHealthPanelData
 from app.dashboard.models.network_panel import NetworkPanelData
 from app.dashboard.models.recent_events_panel import (
     RecentEventRowData,
@@ -51,6 +52,7 @@ __all__ = [
     "NodeHealthPanelData",
     "NetworkPanelData",
     "PathRowData",
+    "PlatformHealthPanelData",
     "RecentEventRowData",
     "RecentEventsPanelData",
     "ServerPanelData",

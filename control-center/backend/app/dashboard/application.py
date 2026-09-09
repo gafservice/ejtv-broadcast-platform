@@ -390,6 +390,11 @@ class DashboardApplication:
         if streaming_health is not None:
             snapshot_kwargs["health"] = streaming_health
 
+        if self._latest_platform_health is not None:
+            snapshot_kwargs["platform_health"] = (
+                self._latest_platform_health
+            )
+
         if node_health is not None:
             snapshot_kwargs["node_health"] = node_health
 

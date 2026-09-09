@@ -8,6 +8,7 @@ from datetime import datetime
 from app.domain.streaming import StreamingHealth
 from app.dashboard.models.network_interfaces_panel import NetworkInterfacesPanelData
 from app.dashboard.models.node_health_panel import NodeHealthPanelData
+from app.dashboard.models.platform_health_panel import PlatformHealthPanelData
 from app.dashboard.models.active_alarms_panel import ActiveAlarmsPanelData
 from app.dashboard.models.recent_events_panel import RecentEventsPanelData
 from app.dashboard.models.system_panel import SystemPanelData
@@ -96,3 +97,4 @@ class DashboardData:
     node_health: NodeHealthPanelData | None = None
     recent_events: RecentEventsPanelData | None = None
     active_alarms: ActiveAlarmsPanelData | None = None
+    platform_health: PlatformHealthPanelData | None = None

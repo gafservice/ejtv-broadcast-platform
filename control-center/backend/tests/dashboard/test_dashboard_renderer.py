@@ -822,3 +822,68 @@ def test_navigation_visual_position_uses_viewport_bounds() -> None:
 
     assert "6–10 / 27" in str(panel.title)
     assert panel.border_style == "bold bright_yellow"
+
+def test_render_contains_platform_health_panel() -> None:
+    """Debe integrar PLATFORM HEALTH en el resumen del dashboard."""
+
+    from datetime import UTC, datetime
+
+    from app.dashboard.models import PlatformHealthPanelData
+
+    renderer = DashboardRenderer()
+    base_data = build_dashboard_data()
+
+    platform_health = PlatformHealthPanelData(
+        status="DEGRADED",
+        worst_status="CRITICAL",
+        healthy_count=2,
+        degraded_count=1,
+        critical_count=1,
+        unknown_count=1,
+        evidence_coverage=0.8,
+        affected_fraction=0.5,
+        service_count=3,
+        captured_at=datetime(
+            2026,
+            9,
+            9,
+            22,
+            0,
+            tzinfo=UTC,
+        ),
+    )
+
+    data = DashboardData(
+        server=base_data.server,
+        streaming=base_data.streaming,
+        paths=base_data.paths,
+        health=base_data.health,
+        system=base_data.system,
+        sessions=base_data.sessions,
+        active_connections=base_data.active_connections,
+        network_interfaces=base_data.network_interfaces,
+        node_health=base_data.node_health,
+        recent_events=base_data.recent_events,
+        active_alarms=base_data.active_alarms,
+        platform_health=platform_health,
+    )
+
+    layout = renderer.render(data)
+
+    console = Console(
+        record=True,
+        width=200,
+        height=80,
+        color_system=None,
+    )
+    console.print(layout)
+
+    output = console.export_text()
+
+    assert "PLATFORM HEALTH" in output
+    assert "Status: DEGRADED" in output
+    assert "Worst: CRITICAL" in output
+    assert "Services: 3" in output
+    assert "Coverage: 80%" in output
+    assert "Affected: 50%" in output
+    assert "H:2 D:1 C:1 U:1" in output

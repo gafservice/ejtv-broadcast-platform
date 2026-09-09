@@ -155,6 +155,7 @@ def test_run_once_builds_and_renders_dashboard() -> None:
         node_health=None,
         recent_events=None,
         active_alarms=None,
+        platform_health=None,
         active_connections_viewport=PanelViewport(
             offset=0,
             page_size=7,
@@ -640,6 +641,7 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         node_health=None,
         recent_events=None,
         active_alarms=None,
+        platform_health=None,
         active_connections_viewport=PanelViewport(
             offset=0,
             page_size=7,
@@ -2740,3 +2742,135 @@ def test_application_builds_platform_health_from_effective_streaming_health() ->
     assert application.latest_platform_health is platform_health
 
     session_adapter.get_snapshot.assert_called_once_with()
+
+
+def test_application_transports_platform_health_to_dashboard_snapshot() -> None:
+    """Debe entregar PlatformHealth calculado al snapshot del dashboard."""
+
+    from app.domain.streaming import HealthStatus, StreamingHealth
+    from app.domain.streaming.aggregation import (
+        HealthPopulation,
+        PlatformHealth,
+    )
+
+    captured_at = datetime(
+        2026,
+        9,
+        9,
+        21,
+        30,
+        tzinfo=timezone.utc,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=0,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=None,
+        interval_seconds=None,
+        paths=(),
+        total_inbound_bitrate_bps=None,
+        total_outbound_bitrate_bps=None,
+        quality=MeasurementQuality.NOT_AVAILABLE,
+    )
+
+    session_snapshot = Mock()
+    session_measurement = Mock()
+
+    streaming_health = StreamingHealth(
+        captured_at=captured_at,
+        paths=(),
+        status=HealthStatus.HEALTHY,
+        message="Effective streaming health.",
+    )
+
+    platform_health = PlatformHealth(
+        captured_at=captured_at,
+        services=(),
+        population=HealthPopulation(
+            healthy_count=0,
+            degraded_count=0,
+            critical_count=0,
+            unknown_count=0,
+        ),
+        status=HealthStatus.UNKNOWN,
+        worst_observed_status=HealthStatus.UNKNOWN,
+        message="No observed multimedia sessions.",
+    )
+
+    mediamtx_adapter = Mock()
+    mediamtx_adapter.health.return_value = True
+    mediamtx_adapter.get_snapshot.return_value = snapshot
+
+    session_adapter = Mock()
+    session_adapter.get_snapshot.return_value = session_snapshot
+
+    streaming_service = Mock()
+    streaming_service.compare.return_value = measurement
+
+    session_service = Mock()
+    session_service.measure.return_value = session_measurement
+
+    metrics_client = Mock()
+    metrics_client.get_metrics_text.return_value = ""
+
+    metrics_parser = Mock()
+    metrics_parser.parse.return_value = Mock()
+
+    streaming_health_service = Mock()
+    streaming_health_service.build.return_value = streaming_health
+
+    streaming_health_aggregator = Mock()
+    streaming_health_aggregator.build.return_value = platform_health
+
+    dashboard_snapshot_service = Mock()
+    dashboard_snapshot_service.build_snapshot.return_value = Mock(
+        spec=DashboardData
+    )
+
+    dashboard_renderer = Mock()
+    dashboard_renderer.render.return_value = Mock(spec=Layout)
+
+    system_service = Mock()
+    system_service.get_system_info.return_value = Mock(
+        hostname="server-01"
+    )
+    system_service.get_system_resources.return_value = Mock()
+    system_service.get_network_interface_infos.return_value = ()
+
+    network_telemetry_service = Mock()
+    network_telemetry_service.build.return_value = None
+
+    application = DashboardApplication(
+        mediamtx_adapter=mediamtx_adapter,
+        session_adapter=session_adapter,
+        streaming_service=streaming_service,
+        session_service=session_service,
+        dashboard_service=Mock(),
+        dashboard_snapshot_service=dashboard_snapshot_service,
+        dashboard_renderer=dashboard_renderer,
+        system_service=system_service,
+        metrics_client=metrics_client,
+        metrics_parser=metrics_parser,
+        streaming_health_service=streaming_health_service,
+        streaming_health_aggregator=streaming_health_aggregator,
+        network_telemetry_service=network_telemetry_service,
+    )
+
+    application.run_once()
+
+    dashboard_snapshot_service.build_snapshot.assert_called_once()
+
+    snapshot_input = (
+        dashboard_snapshot_service
+        .build_snapshot
+        .call_args
+        .args[0]
+    )
+
+    assert snapshot_input.platform_health is platform_health

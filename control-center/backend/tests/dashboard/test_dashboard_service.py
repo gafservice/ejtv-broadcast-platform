@@ -2083,3 +2083,228 @@ def test_build_active_connections_panel_applies_viewport() -> None:
         "session-6",
     )
     assert panel.total_items == 10
+
+
+def test_build_platform_health_panel_from_domain_health() -> None:
+    """Debe proyectar PlatformHealth sin recalcular salud."""
+
+    from app.domain.sessions import SessionProtocol
+    from app.domain.streaming.aggregation import (
+        HealthPopulation,
+        PlatformHealth,
+        ProtocolHealth,
+        ServiceHealth,
+    )
+    from app.domain.streaming.health import HealthStatus
+
+    service = DashboardService()
+
+    captured_at = datetime(
+        2026,
+        9,
+        9,
+        20,
+        18,
+        tzinfo=timezone.utc,
+    )
+
+    population = HealthPopulation(
+        healthy_count=2,
+        degraded_count=1,
+        critical_count=1,
+        unknown_count=1,
+    )
+
+    protocol_health = ProtocolHealth(
+        service_id="ejtv",
+        protocol=SessionProtocol.SRT,
+        population=population,
+        reader_count=5,
+        publisher_count=0,
+        unknown_role_count=0,
+        status=HealthStatus.DEGRADED,
+        worst_observed_status=HealthStatus.CRITICAL,
+        message="SRT health test",
+    )
+
+    service_health = ServiceHealth(
+        service_id="ejtv",
+        protocols=(protocol_health,),
+        population=population,
+        status=HealthStatus.DEGRADED,
+        worst_observed_status=HealthStatus.CRITICAL,
+        message="Service health test",
+    )
+
+    platform_health = PlatformHealth(
+        captured_at=captured_at,
+        services=(service_health,),
+        population=population,
+        status=HealthStatus.DEGRADED,
+        worst_observed_status=HealthStatus.CRITICAL,
+        message="Platform health test",
+    )
+
+    panel = service.build_platform_health_panel(
+        platform_health=platform_health,
+    )
+
+    assert panel.status == "DEGRADED"
+    assert panel.worst_status == "CRITICAL"
+    assert panel.healthy_count == 2
+    assert panel.degraded_count == 1
+    assert panel.critical_count == 1
+    assert panel.unknown_count == 1
+    assert panel.evidence_coverage == 0.8
+    assert panel.affected_fraction == 0.5
+    assert panel.service_count == 1
+    assert panel.captured_at == captured_at
+
+
+def test_build_dashboard_from_measurement_transports_platform_health() -> None:
+    """Debe proyectar PlatformHealth y transportarlo en DashboardData."""
+
+    from app.domain.streaming.aggregation import (
+        HealthPopulation,
+        PlatformHealth,
+    )
+    from app.domain.streaming.health import HealthStatus
+
+    service = DashboardService()
+
+    captured_at = datetime(
+        2026,
+        9,
+        9,
+        21,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=0,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=None,
+        interval_seconds=None,
+        paths=(),
+        total_inbound_bitrate_bps=None,
+        total_outbound_bitrate_bps=None,
+        quality=MeasurementQuality.NOT_AVAILABLE,
+    )
+
+    platform_health = PlatformHealth(
+        captured_at=captured_at,
+        services=(),
+        population=HealthPopulation(
+            healthy_count=0,
+            degraded_count=0,
+            critical_count=0,
+            unknown_count=0,
+        ),
+        status=HealthStatus.UNKNOWN,
+        worst_observed_status=HealthStatus.UNKNOWN,
+        message="No observed multimedia sessions.",
+    )
+
+    dashboard = service.build_dashboard_from_measurement(
+        hostname="ejtv-01",
+        mediamtx_online=True,
+        api_online=True,
+        snapshot=snapshot,
+        measurement=measurement,
+        platform_health=platform_health,
+    )
+
+    assert dashboard.platform_health is not None
+    assert dashboard.platform_health.status == "UNKNOWN"
+    assert dashboard.platform_health.worst_status == "UNKNOWN"
+    assert dashboard.platform_health.healthy_count == 0
+    assert dashboard.platform_health.degraded_count == 0
+    assert dashboard.platform_health.critical_count == 0
+    assert dashboard.platform_health.unknown_count == 0
+    assert dashboard.platform_health.evidence_coverage is None
+    assert dashboard.platform_health.affected_fraction is None
+    assert dashboard.platform_health.service_count == 0
+    assert dashboard.platform_health.captured_at == captured_at
+
+
+def test_build_dashboard_accepts_platform_health_independent_capture_time() -> None:
+    """Platform Health conserva el instante de su SessionSnapshot fuente."""
+
+    from datetime import timedelta
+
+    from app.domain.streaming.aggregation import (
+        HealthPopulation,
+        PlatformHealth,
+    )
+    from app.domain.streaming.health import HealthStatus
+
+    service = DashboardService()
+
+    captured_at = datetime(
+        2026,
+        9,
+        9,
+        21,
+        30,
+        41,
+        709130,
+        tzinfo=timezone.utc,
+    )
+
+    platform_captured_at = (
+        captured_at
+        + timedelta(microseconds=5577)
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=0,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=None,
+        interval_seconds=None,
+        paths=(),
+        total_inbound_bitrate_bps=None,
+        total_outbound_bitrate_bps=None,
+        quality=MeasurementQuality.NOT_AVAILABLE,
+    )
+
+    platform_health = PlatformHealth(
+        captured_at=platform_captured_at,
+        services=(),
+        population=HealthPopulation(
+            healthy_count=0,
+            degraded_count=0,
+            critical_count=0,
+            unknown_count=0,
+        ),
+        status=HealthStatus.UNKNOWN,
+        worst_observed_status=HealthStatus.UNKNOWN,
+        message="No active multimedia sessions were observed.",
+    )
+
+    dashboard = service.build_dashboard_from_measurement(
+        hostname="ejtv-01",
+        mediamtx_online=True,
+        api_online=True,
+        snapshot=snapshot,
+        measurement=measurement,
+        platform_health=platform_health,
+    )
+
+    assert dashboard.platform_health is not None
+    assert (
+        dashboard.platform_health.captured_at
+        == platform_captured_at
+    )

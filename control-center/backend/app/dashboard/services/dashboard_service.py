@@ -16,6 +16,7 @@ from app.dashboard.models import (
     NodeHealthInterfaceRowData,
     NodeHealthPanelData,
     PathRowData,
+    PlatformHealthPanelData,
     RecentEventRowData,
     RecentEventsPanelData,
     ServerPanelData,
@@ -31,6 +32,7 @@ from app.domain.streaming import (
     StreamingHealth,
     StreamingMeasurement,
 )
+from app.domain.streaming.aggregation import PlatformHealth
 from app.noc.domain.node_event import EventRecord
 from app.noc.domain.node_alarm import AlarmRecord
 from app.noc.domain.node_health_diagnostic import (
@@ -105,6 +107,29 @@ class DashboardService:
             inbound_bitrate_bps=inbound_bitrate_bps,
             outbound_bitrate_bps=outbound_bitrate_bps,
             quality=quality.value,
+        )
+
+
+    def build_platform_health_panel(
+        self,
+        *,
+        platform_health: PlatformHealth,
+    ) -> PlatformHealthPanelData:
+        """Proyecta PLATFORM HEALTH al modelo de presentación."""
+
+        population = platform_health.population
+
+        return PlatformHealthPanelData(
+            status=platform_health.status.value,
+            worst_status=platform_health.worst_observed_status.value,
+            healthy_count=population.healthy_count,
+            degraded_count=population.degraded_count,
+            critical_count=population.critical_count,
+            unknown_count=population.unknown_count,
+            evidence_coverage=population.evidence_coverage,
+            affected_fraction=population.affected_fraction,
+            service_count=len(platform_health.services),
+            captured_at=platform_health.captured_at,
         )
 
     def build_session_panel(
@@ -602,6 +627,7 @@ class DashboardService:
         node_health: NodeHealthPanelData | None = None,
         recent_events: RecentEventsPanelData | None = None,
         active_alarms: ActiveAlarmsPanelData | None = None,
+        platform_health: PlatformHealthPanelData | None = None,
         active_connections_viewport: PanelViewport | None = None,
     ) -> DashboardData:
         """Agrupa todas las secciones del dashboard."""
@@ -618,6 +644,7 @@ class DashboardService:
             node_health=node_health,
             recent_events=recent_events,
             active_alarms=active_alarms,
+            platform_health=platform_health,
         )
 
     def build_dashboard_from_measurement(
@@ -636,6 +663,7 @@ class DashboardService:
         node_health: NodeHealthPanelData | None = None,
         recent_events: RecentEventsPanelData | None = None,
         active_alarms: ActiveAlarmsPanelData | None = None,
+        platform_health: PlatformHealth | None = None,
         active_connections_viewport: PanelViewport | None = None,
     ) -> DashboardData:
         """Construye el dashboard completo desde snapshot y medición."""
@@ -705,6 +733,14 @@ class DashboardService:
             else None
         )
 
+        platform_health_panel = (
+            self.build_platform_health_panel(
+                platform_health=platform_health,
+            )
+            if platform_health is not None
+            else None
+        )
+
         paths = tuple(
             self.build_path_row(
                 name=path_measurement.name,
@@ -737,6 +773,7 @@ class DashboardService:
             node_health=node_health,
             recent_events=recent_events,
             active_alarms=active_alarms,
+            platform_health=platform_health_panel,
         )
 
     @staticmethod

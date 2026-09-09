@@ -20,6 +20,9 @@ from app.dashboard.renderers.network_interfaces_panel_renderer import (
 from app.dashboard.renderers.node_health_panel_renderer import (
     NodeHealthPanelRenderer,
 )
+from app.dashboard.renderers.platform_health_renderer import (
+    PlatformHealthRenderer,
+)
 from app.dashboard.renderers.recent_events_panel_renderer import (
     RecentEventsPanelRenderer,
 )
@@ -61,6 +64,9 @@ class DashboardRenderer:
         )
         self._node_health_renderer = (
             NodeHealthPanelRenderer()
+        )
+        self._platform_health_renderer = (
+            PlatformHealthRenderer()
         )
         self._recent_events_renderer = (
             RecentEventsPanelRenderer()
@@ -149,10 +155,12 @@ class DashboardRenderer:
             layout["summary_bottom"].split_row(
                 Layout(name="system"),
                 Layout(name="sessions"),
+                Layout(name="platform_health"),
             )
         else:
             layout["summary_bottom"].split_row(
                 Layout(name="system"),
+                Layout(name="platform_health"),
             )
 
         layout["server"].update(
@@ -165,6 +173,12 @@ class DashboardRenderer:
 
         layout["health"].update(
             self._health_renderer.render(data.health)
+        )
+
+        layout["platform_health"].update(
+            self._platform_health_renderer.render(
+                data.platform_health
+            )
         )
 
         layout["node_health"].update(
