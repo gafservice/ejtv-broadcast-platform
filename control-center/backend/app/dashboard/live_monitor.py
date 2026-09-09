@@ -34,6 +34,9 @@ from app.services.streaming_health_transition_detector import (
 from app.services.streaming_health_transition_event_service import (
     StreamingHealthTransitionEventService,
 )
+from app.services.streaming_health_transition_alarm_service import (
+    StreamingHealthTransitionAlarmService,
+)
 from app.services.streaming_service import StreamingService
 from app.services.system_service import SystemService
 from app.services.geoip_service import GeoIPService
@@ -55,6 +58,7 @@ from app.noc.history.jsonl_evidence_writer import (
     JsonlEvidenceWriter,
 )
 from app.noc.services.event_service import EventService
+from app.noc.services.alarm_service import AlarmService
 from app.noc.history.sqlite_alarm_repository import (
     SQLiteAlarmHistoryRepository,
 )
@@ -210,6 +214,18 @@ def build_dashboard_application() -> DashboardApplication:
         )
     )
 
+    alarm_service = AlarmService(
+        node_registry,
+        history_repository=alarm_history_repository,
+        evidence_writer=evidence_writer,
+    )
+
+    streaming_health_transition_alarm_service = (
+        StreamingHealthTransitionAlarmService(
+            alarm_service=alarm_service
+        )
+    )
+
     history_query_service = HistoryQueryService(
         event_repository=event_history_repository,
         alarm_repository=alarm_history_repository,
@@ -250,6 +266,9 @@ def build_dashboard_application() -> DashboardApplication:
         health_diagnostic_repository=health_diagnostic_repository,
         streaming_health_transition_event_service=(
             streaming_health_transition_event_service
+        ),
+        streaming_health_transition_alarm_service=(
+            streaming_health_transition_alarm_service
         ),
         history_query_service=history_query_service,
         node_id=node_id,

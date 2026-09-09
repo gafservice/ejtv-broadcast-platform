@@ -63,6 +63,9 @@ from app.services.streaming_health_transition_detector import (
 from app.services.streaming_health_transition_event_service import (
     StreamingHealthTransitionEventService,
 )
+from app.services.streaming_health_transition_alarm_service import (
+    StreamingHealthTransitionAlarmService,
+)
 from app.services.streaming_service import StreamingService
 from app.services.system_service import SystemService
 
@@ -94,6 +97,9 @@ class DashboardApplication:
         alarm_service: AlarmService | None = None,
         streaming_health_transition_event_service: (
             StreamingHealthTransitionEventService | None
+        ) = None,
+        streaming_health_transition_alarm_service: (
+            StreamingHealthTransitionAlarmService | None
         ) = None,
         history_query_service: HistoryQueryService | None = None,
         node_id: NodeId | None = None,
@@ -138,6 +144,9 @@ class DashboardApplication:
         self._alarm_service = alarm_service
         self._streaming_health_transition_event_service = (
             streaming_health_transition_event_service
+        )
+        self._streaming_health_transition_alarm_service = (
+            streaming_health_transition_alarm_service
         )
         self._history_query_service = history_query_service
         self._node_id = node_id
@@ -401,6 +410,20 @@ class DashboardApplication:
             and streaming_health is not None
         ):
             self._streaming_health_transition_event_service.process_transition(
+                node_id=self._node_id,
+                instance_id=self._instance_id,
+                transition=self._latest_health_transition,
+                timestamp=streaming_health.captured_at,
+            )
+
+        if (
+            self._streaming_health_transition_alarm_service
+            is not None
+            and self._node_id is not None
+            and self._instance_id is not None
+            and streaming_health is not None
+        ):
+            self._streaming_health_transition_alarm_service.process_transition(
                 node_id=self._node_id,
                 instance_id=self._instance_id,
                 transition=self._latest_health_transition,

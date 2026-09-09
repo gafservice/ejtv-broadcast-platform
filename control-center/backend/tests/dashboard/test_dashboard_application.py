@@ -2429,3 +2429,157 @@ def test_build_dashboard_records_one_stream_health_event_per_effective_transitio
     )
 
     assert calls[2].kwargs["transition"] is None
+
+
+def test_stream_health_transition_is_shared_with_event_and_alarm_services():
+    """One Block 3 transition feeds both Block 4 and Block 5 consumers."""
+
+    from datetime import timedelta
+
+    from app.domain.streaming.health import (
+        HealthStatus,
+        StreamingHealth,
+    )
+    from app.noc.domain.node_id import NodeId
+    from app.noc.domain.node_instance import NodeInstanceId
+    from app.services.streaming_health_transition_detector import (
+        StreamingHealthTransitionDetector,
+    )
+
+    captured_at = datetime(
+        2026,
+        9,
+        8,
+        12,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    healthy = StreamingHealth(
+        captured_at=captured_at,
+        paths=(),
+        status=HealthStatus.HEALTHY,
+        message="healthy",
+    )
+
+    degraded = StreamingHealth(
+        captured_at=captured_at + timedelta(seconds=1),
+        paths=(),
+        status=HealthStatus.DEGRADED,
+        message="degraded",
+    )
+
+    health_sequence = [
+        healthy,
+        degraded,
+        degraded,
+    ]
+
+    mediamtx_adapter = Mock()
+    mediamtx_adapter.health.return_value = True
+
+    snapshot = Mock()
+    snapshot.captured_at = captured_at
+    mediamtx_adapter.get_snapshot.return_value = snapshot
+
+    session_adapter = Mock()
+    session_adapter.get_snapshot.return_value = ()
+
+    streaming_service = Mock()
+    streaming_service.compare.return_value = Mock()
+
+    session_service = Mock()
+    session_service.measure.return_value = Mock()
+
+    dashboard_service = Mock()
+    dashboard_service.build.return_value = Mock()
+
+    dashboard_renderer = Mock()
+
+    system_service = Mock()
+    system_service.get_system_info.return_value = Mock()
+    system_service.get_system_resources.return_value = Mock()
+    system_service.get_network_interface_infos.return_value = ()
+
+    network_telemetry_service = Mock()
+    network_telemetry_service.build.return_value = None
+
+    stream_event_service = Mock()
+    stream_alarm_service = Mock()
+
+    application = DashboardApplication(
+        mediamtx_adapter=mediamtx_adapter,
+        session_adapter=session_adapter,
+        streaming_service=streaming_service,
+        session_service=session_service,
+        dashboard_service=dashboard_service,
+        dashboard_renderer=dashboard_renderer,
+        system_service=system_service,
+        network_telemetry_service=network_telemetry_service,
+        node_id=NodeId.create(
+            id="streaming-core",
+            name="streaming",
+            display_name="Streaming Core",
+        ),
+        instance_id=NodeInstanceId(
+            "streaming-primary"
+        ),
+        streaming_health_transition_detector=(
+            StreamingHealthTransitionDetector()
+        ),
+        streaming_health_transition_event_service=(
+            stream_event_service
+        ),
+        streaming_health_transition_alarm_service=(
+            stream_alarm_service
+        ),
+    )
+
+    application._build_streaming_health = Mock(
+        side_effect=health_sequence
+    )
+
+    application.build_dashboard()
+    application.build_dashboard()
+    application.build_dashboard()
+
+    assert stream_event_service.process_transition.call_count == 3
+    assert stream_alarm_service.process_transition.call_count == 3
+
+    event_calls = (
+        stream_event_service.process_transition.call_args_list
+    )
+    alarm_calls = (
+        stream_alarm_service.process_transition.call_args_list
+    )
+
+    assert event_calls[0].kwargs["transition"] is None
+    assert alarm_calls[0].kwargs["transition"] is None
+
+    event_transition = event_calls[1].kwargs["transition"]
+    alarm_transition = alarm_calls[1].kwargs["transition"]
+
+    assert event_transition is not None
+
+    # Critical Block 5 invariant:
+    # both consumers receive the exact same transition object.
+    assert alarm_transition is event_transition
+
+    assert event_transition.previous.status is HealthStatus.HEALTHY
+    assert event_transition.current.status is HealthStatus.DEGRADED
+
+    assert event_calls[2].kwargs["transition"] is None
+    assert alarm_calls[2].kwargs["transition"] is None
+
+    assert (
+        alarm_calls[1].kwargs["node_id"]
+        == event_calls[1].kwargs["node_id"]
+    )
+    assert (
+        alarm_calls[1].kwargs["instance_id"]
+        == event_calls[1].kwargs["instance_id"]
+    )
+    assert (
+        alarm_calls[1].kwargs["timestamp"]
+        == event_calls[1].kwargs["timestamp"]
+    )

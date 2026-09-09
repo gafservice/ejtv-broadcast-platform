@@ -44,3 +44,16 @@ Evidencia de validación de Block 2 — Temporal Health:
 - conservación de telemetría actual;
 - validación física SRT;
 - regresión automatizada y completa del backend.
+
+### Block 3 — Health Transitions
+
+Implementa la detección semántica de transiciones de Stream Health sobre el estado temporal estabilizado, evitando que las capas posteriores vuelvan a detectar cambios de estado.
+
+### Block 4 — Events Integration
+
+Integra las transiciones semánticas de Stream Health con la infraestructura existente de Events del NOC. La transición detectada por Block 3 se transforma en un `EventRecord` y se persiste mediante el `EventService` existente, reutilizando SQLite y la proyección de evidencia JSONL sin introducir un subsistema paralelo.
+
+
+### `04-STREAM-HEALTH-ALARM-POLICY-EVIDENCE.md`
+
+Evidencia de implementación y validación de Block 5 — Alarm Policy Integration. Documenta la separación entre Health, Events y Alarms; las decisiones `NONE`, `RAISE`, `KEEP` y `RESOLVE`; la reutilización del `AlarmService` y del almacenamiento durable existentes; la prevención de alarm storms; la regresión automatizada; y la validación física stable/no-flood. La transición física controlada fue completada con degradación y recuperación reales, persistencia durable en SQLite y JSONL, y ausencia de alarmas espurias. Block 5 todavía no se declara cerrado hasta completar la regresión final, commit, push y verificación de origin.

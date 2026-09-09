@@ -262,25 +262,46 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
                 "app.dashboard.live_monitor.InMemoryNodeRepository",
             )
         )
-        stack.enter_context(
+        node_registry_class = stack.enter_context(
             patch(
                 "app.dashboard.live_monitor.NodeRegistry",
             )
         )
+        node_registry = node_registry_class.return_value
+
         stack.enter_context(
             patch(
                 "app.dashboard.live_monitor.bootstrap_noc_runtime",
             )
         )
-        stack.enter_context(
+        evidence_writer_class = stack.enter_context(
             patch(
                 "app.dashboard.live_monitor.JsonlEvidenceWriter",
             )
         )
-        stack.enter_context(
+        evidence_writer = evidence_writer_class.return_value
+        event_service_class = stack.enter_context(
             patch(
                 "app.dashboard.live_monitor.EventService",
             )
+        )
+        event_service = event_service_class.return_value
+
+        alarm_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.AlarmService",
+            )
+        )
+        alarm_service = alarm_service_class.return_value
+
+        stream_alarm_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor."
+                "StreamingHealthTransitionAlarmService",
+            )
+        )
+        stream_alarm_service = (
+            stream_alarm_service_class.return_value
         )
 
         transition_detector_class = stack.enter_context(
@@ -402,6 +423,16 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
     )
     dashboard_renderer_class.assert_called_once_with()
 
+    alarm_service_class.assert_called_once_with(
+        node_registry,
+        history_repository=alarm_history_repository,
+        evidence_writer=evidence_writer,
+    )
+
+    stream_alarm_service_class.assert_called_once_with(
+        alarm_service=alarm_service
+    )
+
     dashboard_application_class.assert_called_once_with(
         mediamtx_adapter=mediamtx_adapter,
         session_adapter=session_adapter,
@@ -419,6 +450,9 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
         health_diagnostic_repository=health_diagnostic_repository,
         streaming_health_transition_event_service=(
             stream_event_service
+        ),
+        streaming_health_transition_alarm_service=(
+            stream_alarm_service
         ),
         history_query_service=history_query_service,
         node_id=node_id,
@@ -646,6 +680,17 @@ def test_build_dashboard_application_disables_temporal_health_without_policy() -
         stack.enter_context(
             patch(
                 "app.dashboard.live_monitor.EventService",
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.AlarmService",
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor."
+                "StreamingHealthTransitionAlarmService",
             )
         )
         stack.enter_context(
@@ -880,6 +925,18 @@ def test_build_dashboard_application_composes_stream_health_event_runtime() -> N
             patch(
                 "app.dashboard.live_monitor.EventService",
                 return_value=event_service,
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.AlarmService",
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor."
+                "StreamingHealthTransitionAlarmService",
             )
         )
 
