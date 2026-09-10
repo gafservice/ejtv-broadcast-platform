@@ -2,6 +2,7 @@
 
 from .health import (
     HealthStatus,
+    RTMPConnectionHealth,
     SRTConnectionHealth,
     SRTPathHealth,
     StreamingHealth,
@@ -22,6 +23,7 @@ from .models import (
 
 __all__ = [
     "HealthStatus",
+    "RTMPConnectionHealth",
     "SRTConnectionHealth",
     "SRTPathHealth",
     "StreamingHealth",

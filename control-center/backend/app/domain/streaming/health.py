@@ -117,6 +117,75 @@ class SRTConnectionHealth:
 
 
 @dataclass(frozen=True, slots=True)
+class RTMPConnectionHealth:
+    """Salud observada de una conexión RTMP individual."""
+
+    connection_id: str
+    path_name: str
+    state: str
+
+    effective_delta_bytes: int | None
+    effective_bitrate_mbps: float | None
+    outbound_frames_discarded: int | None
+
+    status: HealthStatus
+    message: str
+
+    def __post_init__(self) -> None:
+        """Valida y normaliza la evidencia de la conexión RTMP."""
+
+        connection_id = self.connection_id.strip()
+        path_name = self.path_name.strip()
+        state = self.state.strip()
+        message = self.message.strip()
+
+        if not connection_id:
+            raise ValueError(
+                "connection_id debe contener texto válido."
+            )
+
+        if not path_name:
+            raise ValueError(
+                "path_name debe contener texto válido."
+            )
+
+        if not state:
+            raise ValueError(
+                "state debe contener texto válido."
+            )
+
+        if not message:
+            raise ValueError(
+                "message debe contener texto válido."
+            )
+
+        for field_name, value in (
+            ("effective_delta_bytes", self.effective_delta_bytes),
+            (
+                "outbound_frames_discarded",
+                self.outbound_frames_discarded,
+            ),
+        ):
+            if value is not None and value < 0:
+                raise ValueError(
+                    f"{field_name} no puede ser negativo."
+                )
+
+        if self.effective_bitrate_mbps is not None and (
+            not isfinite(self.effective_bitrate_mbps)
+            or self.effective_bitrate_mbps < 0
+        ):
+            raise ValueError(
+                "effective_bitrate_mbps debe ser finito y no negativo."
+            )
+
+        object.__setattr__(self, "connection_id", connection_id)
+        object.__setattr__(self, "path_name", path_name)
+        object.__setattr__(self, "state", state)
+        object.__setattr__(self, "message", message)
+
+
+@dataclass(frozen=True, slots=True)
 class SRTPathHealth:
     """Resumen de salud de todas las conexiones SRT de un path."""
 
