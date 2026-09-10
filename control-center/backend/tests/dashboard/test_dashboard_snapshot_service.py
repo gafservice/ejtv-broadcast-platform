@@ -331,3 +331,95 @@ def test_snapshot_service_transports_platform_health() -> None:
     assert result.platform_health.evidence_coverage is None
     assert result.platform_health.affected_fraction is None
     assert result.platform_health.captured_at == captured_at
+
+def test_snapshot_service_transports_rtmp_health_to_active_connections() -> None:
+    """Debe transportar RTMP health hasta CONNECTED CLIENTS."""
+
+    from app.domain.sessions import (
+        ActiveSession,
+        SessionMeasurement,
+        SessionProtocol,
+        SessionQuality,
+        SessionRole,
+    )
+    from app.domain.streaming import HealthStatus, RTMPConnectionHealth
+
+    captured_at = datetime(
+        2026,
+        9,
+        10,
+        18,
+        10,
+        tzinfo=UTC,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=0,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=None,
+        interval_seconds=None,
+        paths=(),
+        total_inbound_bitrate_bps=None,
+        total_outbound_bitrate_bps=None,
+        quality=MeasurementQuality.NOT_AVAILABLE,
+    )
+
+    session = ActiveSession(
+        session_id="rtmp-reader-001",
+        protocol=SessionProtocol.RTMP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="201.192.154.132",
+        remote_port=50288,
+        path="impact",
+        connected_since=captured_at,
+    )
+
+    session_measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=1,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=0.0,
+        worst_quality=SessionQuality.UNKNOWN,
+        protocols=(SessionProtocol.RTMP,),
+    )
+
+    rtmp_health = RTMPConnectionHealth(
+        connection_id="rtmp-reader-001",
+        path_name="impact",
+        state="read",
+        effective_delta_bytes=None,
+        effective_bitrate_mbps=None,
+        outbound_frames_discarded=None,
+        status=HealthStatus.UNKNOWN,
+        message="Insufficient temporal evidence.",
+    )
+
+    result = DashboardSnapshotService().build_snapshot(
+        DashboardSnapshotInput(
+            hostname="ejtv-01",
+            mediamtx_online=True,
+            api_online=True,
+            snapshot=snapshot,
+            measurement=measurement,
+            session_measurement=session_measurement,
+            rtmp_connections=(rtmp_health,),
+        )
+    )
+
+    assert result.active_connections is not None
+    assert result.active_connections.connection_count == 1
+    assert result.active_connections.connections[0].health == "UNKNOWN"

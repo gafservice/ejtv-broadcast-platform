@@ -2308,3 +2308,134 @@ def test_build_dashboard_accepts_platform_health_independent_capture_time() -> N
         dashboard.platform_health.captured_at
         == platform_captured_at
     )
+
+def test_build_active_connections_panel_projects_rtmp_unknown_health() -> None:
+    """Debe preservar UNKNOWN de evidencia RTMP especializada."""
+
+    from app.domain.streaming import HealthStatus, RTMPConnectionHealth
+
+    captured_at = datetime(
+        2026,
+        9,
+        10,
+        18,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    session = ActiveSession(
+        session_id="rtmp-reader-001",
+        protocol=SessionProtocol.RTMP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="201.192.154.132",
+        remote_port=50288,
+        path="impact",
+        connected_since=captured_at,
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=1,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=0.0,
+        worst_quality=SessionQuality.UNKNOWN,
+        protocols=(SessionProtocol.RTMP,),
+    )
+
+    rtmp_health = RTMPConnectionHealth(
+        connection_id="rtmp-reader-001",
+        path_name="impact",
+        state="read",
+        effective_delta_bytes=None,
+        effective_bitrate_mbps=None,
+        outbound_frames_discarded=None,
+        status=HealthStatus.UNKNOWN,
+        message="Insufficient temporal evidence for RTMP connection.",
+    )
+
+    panel = DashboardService().build_active_connections_panel(
+        measurement=measurement,
+        rtmp_connections=(rtmp_health,),
+    )
+
+    assert panel.connection_count == 1
+    assert panel.connections[0].health == "UNKNOWN"
+
+def test_build_active_connections_panel_rejects_ambiguous_rtmp_health() -> None:
+    """No debe elegir arbitrariamente entre evidencias RTMP duplicadas."""
+
+    from app.domain.streaming import HealthStatus, RTMPConnectionHealth
+
+    captured_at = datetime(
+        2026,
+        9,
+        10,
+        18,
+        5,
+        tzinfo=timezone.utc,
+    )
+
+    session = ActiveSession(
+        session_id="rtmp-reader-001",
+        protocol=SessionProtocol.RTMP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="201.192.154.132",
+        remote_port=50288,
+        path="impact",
+        connected_since=captured_at,
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=1,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=0.0,
+        worst_quality=SessionQuality.UNKNOWN,
+        protocols=(SessionProtocol.RTMP,),
+    )
+
+    first = RTMPConnectionHealth(
+        connection_id="rtmp-reader-001",
+        path_name="impact",
+        state="read",
+        effective_delta_bytes=None,
+        effective_bitrate_mbps=None,
+        outbound_frames_discarded=None,
+        status=HealthStatus.UNKNOWN,
+        message="Insufficient temporal evidence.",
+    )
+
+    second = RTMPConnectionHealth(
+        connection_id="rtmp-reader-001",
+        path_name="impact",
+        state="read",
+        effective_delta_bytes=500000,
+        effective_bitrate_mbps=0.8,
+        outbound_frames_discarded=None,
+        status=HealthStatus.HEALTHY,
+        message="RTMP connection is healthy.",
+    )
+
+    panel = DashboardService().build_active_connections_panel(
+        measurement=measurement,
+        rtmp_connections=(first, second),
+    )
+
+    assert panel.connection_count == 1
+    assert panel.connections[0].health is None

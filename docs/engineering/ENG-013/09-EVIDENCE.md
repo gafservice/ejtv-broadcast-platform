@@ -112,3 +112,57 @@ en verde.
 
 El cierre formal de Block 7 queda pendiente únicamente de revisión final
 del diff, commit, push y verificación de sincronización con origin.
+
+### Block 8 / RTMP Health
+
+Documento:
+`ENG-013B-noc-core/07-RTMP-HEALTH-EVIDENCE.md`
+
+Block 8 incorpora Health especializado para conexiones RTMP mediante
+`RTMPConnectionHealth` y `RTMPConnectionHealthService`.
+
+La evaluación temporal utiliza observaciones consecutivas de la misma sesión
+compatible y calcula Health a partir del delta efectivo de bytes, sin utilizar
+contadores absolutos como indicador de salud.
+
+La integración conserva:
+
+- autoridad poblacional de `SessionSnapshot`;
+- semántica observed-only;
+- `UNKNOWN` especializado como evidencia válida;
+- comportamiento existente de SRT;
+- separación entre Health, agregación y presentación;
+- ausencia de Expected Presence en este bloque.
+
+Block 8D integró RTMP Health en `StreamingHealthAggregator`.
+
+Block 8E transportó el Health ya calculado hasta `CONNECTED CLIENTS`.
+
+La validación física en `ejtv-01` confirmó:
+
+```text
+ejtv    SRT   READER   N/A
+impact  RTMP  READER   HEALTHY
+```
+
+La conexión RTMP real presentó un delta positivo de 2467958 bytes en 5 s.
+
+El dashboard físico reportó Platform Health HEALTHY, 2 servicios y 100% de cobertura.
+
+Resultado de regresión completa al cierre funcional de Block 8:
+
+```text
+3284 passed
+0 failed
+1 warning
+67.84 seconds
+```
+
+El warning restante corresponde a la deprecación conocida de
+Starlette/httpx TestClient y no está relacionado con Block 8.
+
+Block 8 cuenta con implementación, validación física y regresión completa
+en verde.
+
+El cierre formal queda pendiente únicamente de revisión final del diff,
+commit, push y verificación de sincronización con origin.

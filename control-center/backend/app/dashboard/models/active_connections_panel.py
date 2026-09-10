@@ -25,6 +25,7 @@ class ActiveConnectionRow:
     uptime_seconds: float
 
     username: str | None = None
+    health: str | None = None
 
     def __post_init__(self) -> None:
 

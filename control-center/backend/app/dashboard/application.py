@@ -400,6 +400,7 @@ class DashboardApplication:
             "snapshot": snapshot,
             "measurement": measurement,
             "session_measurement": session_measurement,
+            "rtmp_connections": rtmp_connections,
             "active_connections_viewport": (
                 self._navigation_state.active_connections
             ),

@@ -79,6 +79,11 @@ class ActiveConnectionsPanelRenderer:
             ratio=1,
         )
         table.add_column(
+            "HEALTH",
+            no_wrap=True,
+            ratio=1,
+        )
+        table.add_column(
             "UPTIME",
             justify="right",
             no_wrap=True,
@@ -112,6 +117,10 @@ class ActiveConnectionsPanelRenderer:
                 self._format_text(
                     connection.role,
                     fallback="UNKNOWN",
+                ),
+                self._format_text(
+                    connection.health,
+                    fallback="N/A",
                 ),
                 self._format_uptime(
                     connection.uptime_seconds,

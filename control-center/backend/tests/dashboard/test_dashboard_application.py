@@ -148,6 +148,7 @@ def test_run_once_builds_and_renders_dashboard() -> None:
         snapshot=snapshot,
         measurement=measurement,
         session_measurement=session_measurement,
+        rtmp_connections=(),
         system_resources=system_resources,
         previous_system_resources=None,
         health=None,
@@ -634,6 +635,7 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         snapshot=snapshot,
         measurement=measurement,
         session_measurement=session_measurement,
+        rtmp_connections=(),
         system_resources=system_resources,
         previous_system_resources=None,
         health=effective_streaming_health,
@@ -2911,8 +2913,12 @@ def test_application_wires_temporal_rtmp_health_into_platform_aggregation() -> N
         sessions=(),
     )
 
-    first_rtmp_health: tuple[RTMPConnectionHealth, ...] = ()
-    second_rtmp_health: tuple[RTMPConnectionHealth, ...] = ()
+    first_rtmp_health: tuple[RTMPConnectionHealth, ...] = (
+        Mock(spec=RTMPConnectionHealth),
+    )
+    second_rtmp_health: tuple[RTMPConnectionHealth, ...] = (
+        Mock(spec=RTMPConnectionHealth),
+    )
 
     mediamtx_adapter = Mock()
     mediamtx_adapter.health.return_value = True
@@ -2994,3 +3000,12 @@ def test_application_wires_temporal_rtmp_health_into_platform_aggregation() -> N
     second_aggregate_call = streaming_health_aggregator.build.call_args_list[1]
     assert second_aggregate_call.kwargs["session_snapshot"] is second_session_snapshot
     assert second_aggregate_call.kwargs["rtmp_connections"] is second_rtmp_health
+
+    snapshot_calls = dashboard_snapshot_service.build_snapshot.call_args_list
+    assert len(snapshot_calls) == 2
+
+    first_snapshot_input = snapshot_calls[0].args[0]
+    second_snapshot_input = snapshot_calls[1].args[0]
+
+    assert first_snapshot_input.rtmp_connections is first_rtmp_health
+    assert second_snapshot_input.rtmp_connections is second_rtmp_health

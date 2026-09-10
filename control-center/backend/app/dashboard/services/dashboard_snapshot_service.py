@@ -22,6 +22,7 @@ from app.dashboard.services.dashboard_service import DashboardService
 from app.domain.sessions.measurement import SessionMeasurement
 from app.domain.streaming import (
     MediaMTXSnapshot,
+    RTMPConnectionHealth,
     StreamingHealth,
     StreamingMeasurement,
 )
@@ -46,6 +47,7 @@ class DashboardSnapshotInput:
     measurement: StreamingMeasurement
 
     session_measurement: SessionMeasurement | None = None
+    rtmp_connections: tuple[RTMPConnectionHealth, ...] = ()
     system_resources: SystemResources | None = None
     previous_system_resources: SystemResources | None = None
     health: StreamingHealth | None = None
@@ -115,6 +117,7 @@ class DashboardSnapshotService:
             snapshot=snapshot_input.snapshot,
             measurement=snapshot_input.measurement,
             session_measurement=snapshot_input.session_measurement,
+            rtmp_connections=snapshot_input.rtmp_connections,
             system_resources=snapshot_input.system_resources,
             previous_system_resources=(
                 snapshot_input.previous_system_resources

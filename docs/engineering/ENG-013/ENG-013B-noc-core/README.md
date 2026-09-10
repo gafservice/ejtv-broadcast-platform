@@ -81,3 +81,13 @@ de `STREAM HEALTH` y `NODE HEALTH`, la procedencia temporal independiente
 de `SessionSnapshot`, la corrección descubierta durante la prueba física,
 la validación observed-only con `ejtv` e `impact`, y la regresión completa
 del backend.
+
+### `07-RTMP-HEALTH-EVIDENCE.md`
+
+Evidencia de implementación y validación de Block 8 — RTMP Health.
+Documenta el modelo especializado `RTMPConnectionHealth`, la evaluación
+temporal basada en deltas, la integración con `StreamingHealthAggregator`,
+la autoridad poblacional de `SessionSnapshot`, la preservación explícita de
+`UNKNOWN`, el transporte hacia presentación, la columna `HEALTH` de
+`CONNECTED CLIENTS`, la validación física RTMP/SRT y la regresión completa
+del backend.

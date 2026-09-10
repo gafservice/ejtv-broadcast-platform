@@ -149,3 +149,42 @@ de dependencias.
 
 Estado: implementación, pruebas y evidencia completadas. Cierre Git pendiente
 de revisión final, staging selectivo, commit, push y verificación origin.
+
+### Block 8 — RTMP Health
+
+- incorporación de `RTMPConnectionHealth`;
+- incorporación de evaluación temporal mediante `RTMPConnectionHealthService`;
+- cálculo de bitrate efectivo a partir de deltas temporales;
+- primera observación RTMP explícitamente `UNKNOWN`;
+- preservación de `UNKNOWN` ante evidencia insuficiente o inválida;
+- integración con `StreamingHealthAggregator`;
+- autoridad poblacional preservada en `SessionSnapshot`;
+- prevención de ghost connections mediante semántica observed-only;
+- precedencia de Health RTMP especializado cuando existe evidencia única;
+- transporte mediante `DashboardApplication` y `DashboardSnapshotService`;
+- proyección hacia `ActiveConnectionRow.health`;
+- incorporación de columna `HEALTH` en `CONNECTED CLIENTS`;
+- representación `N/A` cuando no existe Health RTMP especializado aplicable;
+- rechazo de selección arbitraria ante evidencia especializada ambigua;
+- preservación de semántica BITRATE existente;
+- ausencia de cambios en SRT Health, alarmas, eventos y MediaMTX;
+- codec y track completeness permanecen fuera del alcance de Block 8.
+
+Validación física:
+
+```text
+ejtv    SRT   READER   N/A
+impact  RTMP  READER   HEALTHY
+```
+
+Regresión final:
+
+```text
+Dashboard suite  389 passed
+Backend          3284 passed
+Failed           0
+Warnings         1
+```
+
+Estado: implementación y validación funcional completadas.
+Pendiente únicamente commit, push y verificación de sincronización con origin.

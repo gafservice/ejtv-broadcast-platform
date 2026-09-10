@@ -29,6 +29,7 @@ def build_panel() -> ActiveConnectionsPanelData:
         bitrate_bps=4_310_000,
         uptime_seconds=3_725,
         username="cliente-norte",
+        health="UNKNOWN",
     )
 
     return ActiveConnectionsPanelData(
@@ -74,6 +75,7 @@ def test_render_contains_network_identity() -> None:
     assert "PROVIDER" in headers
     assert "PROTOCOL" in headers
     assert "BITRATE" in headers
+    assert "HEALTH" in headers
 
     row_text = " ".join(
         str(cell)
@@ -87,6 +89,7 @@ def test_render_contains_network_identity() -> None:
     assert "RACSA" in row_text
     assert "SRT" in row_text
     assert "4.31 Mbps" in row_text
+    assert "UNKNOWN" in row_text
 
 
 def test_render_uses_path_when_username_is_missing() -> None:
@@ -180,3 +183,42 @@ def test_render_empty_panel() -> None:
     assert "No hay clientes conectados." in str(
         panel.renderable
     )
+
+def test_render_formats_missing_health_as_na() -> None:
+    connection = ActiveConnectionRow(
+        session_id="renderer-session-003",
+        remote_address="190.115.202.229:40175",
+        country="Costa Rica",
+        country_code="CR",
+        asn=17054,
+        provider="RACSA",
+        protocol="SRT",
+        path="impact",
+        role="READER",
+        bitrate_bps=4_800_000,
+        uptime_seconds=120,
+        username=None,
+        health=None,
+    )
+
+    panel = ActiveConnectionsPanelRenderer().render(
+        ActiveConnectionsPanelData(
+            captured_at=datetime.now(timezone.utc),
+            connections=(connection,),
+        )
+    )
+
+    table = panel.renderable
+
+    assert isinstance(table, Table)
+
+    headers = [
+        column.header
+        for column in table.columns
+    ]
+
+    health_index = headers.index("HEALTH")
+    health_cells = table.columns[health_index]._cells
+
+    assert len(health_cells) == 1
+    assert str(health_cells[0]) == "N/A"

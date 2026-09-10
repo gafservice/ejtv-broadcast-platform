@@ -29,6 +29,7 @@ from app.domain.sessions.measurement import SessionMeasurement
 from app.domain.streaming import (
     MeasurementQuality,
     MediaMTXSnapshot,
+    RTMPConnectionHealth,
     StreamingHealth,
     StreamingMeasurement,
 )
@@ -167,9 +168,25 @@ class DashboardService:
         self,
         *,
         measurement: SessionMeasurement,
+        rtmp_connections: tuple[RTMPConnectionHealth, ...] = (),
         viewport: PanelViewport | None = None,
     ) -> ActiveConnectionsPanelData:
         """Construye los datos del panel CONNECTED CLIENTS."""
+
+        rtmp_health_by_key = {}
+        ambiguous_rtmp_health_keys = set()
+
+        for connection in rtmp_connections:
+            key = (
+                connection.connection_id,
+                connection.path_name,
+            )
+
+            if key in rtmp_health_by_key:
+                ambiguous_rtmp_health_keys.add(key)
+                continue
+
+            rtmp_health_by_key[key] = connection
 
         connections = tuple(
             ActiveConnectionRow(
@@ -191,6 +208,23 @@ class DashboardService:
                     now=measurement.captured_at,
                 ),
                 username=session.username,
+                health=(
+                    rtmp_health_by_key[
+                        (session.session_id, session.path)
+                    ].status.value
+                    if (
+                        session.protocol.value == "RTMP"
+                        and (
+                            session.session_id,
+                            session.path,
+                        ) in rtmp_health_by_key
+                        and (
+                            session.session_id,
+                            session.path,
+                        ) not in ambiguous_rtmp_health_keys
+                    )
+                    else None
+                ),
             )
             for session in measurement.sessions
         )
@@ -656,6 +690,7 @@ class DashboardService:
         snapshot: MediaMTXSnapshot,
         measurement: StreamingMeasurement,
         session_measurement: SessionMeasurement | None = None,
+        rtmp_connections: tuple[RTMPConnectionHealth, ...] = (),
         system_resources: SystemResources | None = None,
         previous_system_resources: SystemResources | None = None,
         health: StreamingHealth | None = None,
@@ -718,6 +753,7 @@ class DashboardService:
         active_connections = (
             self.build_active_connections_panel(
                 measurement=session_measurement,
+                rtmp_connections=rtmp_connections,
                 viewport=active_connections_viewport,
             )
             if session_measurement is not None
