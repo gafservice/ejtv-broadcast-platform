@@ -71,7 +71,7 @@ def test_health_population_rejects_negative_counts(
             unknown_count=unknown_count,
         )
 
-from app.domain.streaming.health import HealthStatus
+from app.domain.streaming.health import HealthStatus, RTMPConnectionHealth
 from app.domain.streaming.aggregation import (
     resolve_aggregate_status,
     resolve_worst_status,
@@ -2086,3 +2086,262 @@ def test_streaming_health_aggregator_escalates_without_healthy_members() -> None
 
     assert protocol.status is HealthStatus.CRITICAL
     assert protocol.worst_observed_status is HealthStatus.CRITICAL
+
+def test_streaming_health_aggregator_prefers_matching_rtmp_unknown_health() -> None:
+    captured_at = datetime(
+        2026,
+        9,
+        10,
+        11,
+        0,
+        tzinfo=UTC,
+    )
+
+    session = ActiveSession(
+        session_id="rtmp-reader-specialized-1",
+        protocol=SessionProtocol.RTMP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="203.0.113.150",
+        remote_port=1935,
+        path="IMPACT",
+        connected_since=captured_at,
+        quality=SessionQuality.GOOD,
+    )
+
+    specialized_health = RTMPConnectionHealth(
+        connection_id="rtmp-reader-specialized-1",
+        path_name="IMPACT",
+        state="read",
+        effective_delta_bytes=None,
+        effective_bitrate_mbps=None,
+        outbound_frames_discarded=None,
+        status=HealthStatus.UNKNOWN,
+        message="Insufficient temporal evidence for RTMP connection.",
+    )
+
+    health = StreamingHealthAggregator().build(
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(session,),
+        ),
+        streaming_health=None,
+        rtmp_connections=(specialized_health,),
+    )
+
+    assert health.population == HealthPopulation(
+        healthy_count=0,
+        degraded_count=0,
+        critical_count=0,
+        unknown_count=1,
+    )
+
+    assert health.status is HealthStatus.UNKNOWN
+    assert health.worst_observed_status is HealthStatus.UNKNOWN
+
+    service = health.services[0]
+    protocol = service.protocols[0]
+
+    assert service.service_id == "IMPACT"
+    assert service.status is HealthStatus.UNKNOWN
+    assert service.worst_observed_status is HealthStatus.UNKNOWN
+
+    assert protocol.protocol is SessionProtocol.RTMP
+    assert protocol.population == health.population
+    assert protocol.status is HealthStatus.UNKNOWN
+    assert protocol.worst_observed_status is HealthStatus.UNKNOWN
+    assert protocol.reader_count == 1
+
+def test_streaming_health_aggregator_prefers_matching_rtmp_healthy_health() -> None:
+    captured_at = datetime(2026, 9, 10, 11, 15, tzinfo=UTC)
+
+    session = ActiveSession(
+        session_id="rtmp-publisher-specialized-1",
+        protocol=SessionProtocol.RTMP,
+        role=SessionRole.PUBLISHER,
+        state="publish",
+        remote_ip="203.0.113.151",
+        remote_port=1935,
+        path="IMPACT",
+        connected_since=captured_at,
+        quality=SessionQuality.CRITICAL,
+    )
+
+    specialized_health = RTMPConnectionHealth(
+        connection_id="rtmp-publisher-specialized-1",
+        path_name="IMPACT",
+        state="publish",
+        effective_delta_bytes=1_443_033,
+        effective_bitrate_mbps=1.1544264,
+        outbound_frames_discarded=0,
+        status=HealthStatus.HEALTHY,
+        message="RTMP publisher has observed effective traffic.",
+    )
+
+    health = StreamingHealthAggregator().build(
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(session,),
+        ),
+        streaming_health=None,
+        rtmp_connections=(specialized_health,),
+    )
+
+    assert health.population == HealthPopulation(
+        healthy_count=1,
+        degraded_count=0,
+        critical_count=0,
+        unknown_count=0,
+    )
+    assert health.status is HealthStatus.HEALTHY
+    assert health.worst_observed_status is HealthStatus.HEALTHY
+    assert health.services[0].protocols[0].status is HealthStatus.HEALTHY
+
+
+def test_streaming_health_aggregator_rejects_rtmp_path_mismatch() -> None:
+    captured_at = datetime(2026, 9, 10, 11, 30, tzinfo=UTC)
+
+    session = ActiveSession(
+        session_id="rtmp-reader-path-mismatch",
+        protocol=SessionProtocol.RTMP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="203.0.113.152",
+        remote_port=1935,
+        path="IMPACT",
+        connected_since=captured_at,
+        quality=SessionQuality.GOOD,
+    )
+
+    specialized_health = RTMPConnectionHealth(
+        connection_id="rtmp-reader-path-mismatch",
+        path_name="ENLACE",
+        state="read",
+        effective_delta_bytes=None,
+        effective_bitrate_mbps=None,
+        outbound_frames_discarded=None,
+        status=HealthStatus.UNKNOWN,
+        message="RTMP evidence belongs to another path.",
+    )
+
+    health = StreamingHealthAggregator().build(
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(session,),
+        ),
+        streaming_health=None,
+        rtmp_connections=(specialized_health,),
+    )
+
+    assert health.population == HealthPopulation(
+        healthy_count=1,
+        degraded_count=0,
+        critical_count=0,
+        unknown_count=0,
+    )
+    assert health.status is HealthStatus.HEALTHY
+    assert health.worst_observed_status is HealthStatus.HEALTHY
+    assert health.services[0].protocols[0].status is HealthStatus.HEALTHY
+
+def test_streaming_health_aggregator_ignores_orphan_rtmp_evidence() -> None:
+    captured_at = datetime(2026, 9, 10, 11, 45, tzinfo=UTC)
+
+    session = ActiveSession(
+        session_id="rtmp-impact-observed",
+        protocol=SessionProtocol.RTMP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="203.0.113.153",
+        remote_port=1935,
+        path="IMPACT",
+        connected_since=captured_at,
+        quality=SessionQuality.GOOD,
+    )
+
+    orphan_health = RTMPConnectionHealth(
+        connection_id="rtmp-orphan-1",
+        path_name="ENLACE",
+        state="read",
+        effective_delta_bytes=None,
+        effective_bitrate_mbps=None,
+        outbound_frames_discarded=None,
+        status=HealthStatus.UNKNOWN,
+        message="Orphan RTMP evidence.",
+    )
+
+    health = StreamingHealthAggregator().build(
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(session,),
+        ),
+        streaming_health=None,
+        rtmp_connections=(orphan_health,),
+    )
+
+    assert health.population == HealthPopulation(
+        healthy_count=1,
+        degraded_count=0,
+        critical_count=0,
+        unknown_count=0,
+    )
+    assert health.population.total_count == 1
+    assert health.status is HealthStatus.HEALTHY
+    assert tuple(service.service_id for service in health.services) == ("IMPACT",)
+    assert health.services[0].protocols[0].status is HealthStatus.HEALTHY
+
+
+def test_streaming_health_aggregator_falls_back_on_ambiguous_rtmp_evidence() -> None:
+    captured_at = datetime(2026, 9, 10, 12, 0, tzinfo=UTC)
+
+    session = ActiveSession(
+        session_id="rtmp-reader-ambiguous",
+        protocol=SessionProtocol.RTMP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="203.0.113.154",
+        remote_port=1935,
+        path="IMPACT",
+        connected_since=captured_at,
+        quality=SessionQuality.GOOD,
+    )
+
+    first_health = RTMPConnectionHealth(
+        connection_id="rtmp-reader-ambiguous",
+        path_name="IMPACT",
+        state="read",
+        effective_delta_bytes=None,
+        effective_bitrate_mbps=None,
+        outbound_frames_discarded=None,
+        status=HealthStatus.UNKNOWN,
+        message="First RTMP candidate.",
+    )
+
+    second_health = RTMPConnectionHealth(
+        connection_id="rtmp-reader-ambiguous",
+        path_name="IMPACT",
+        state="read",
+        effective_delta_bytes=1_000_000,
+        effective_bitrate_mbps=0.8,
+        outbound_frames_discarded=0,
+        status=HealthStatus.HEALTHY,
+        message="Second RTMP candidate.",
+    )
+
+    health = StreamingHealthAggregator().build(
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(session,),
+        ),
+        streaming_health=None,
+        rtmp_connections=(first_health, second_health),
+    )
+
+    assert health.population == HealthPopulation(
+        healthy_count=1,
+        degraded_count=0,
+        critical_count=0,
+        unknown_count=0,
+    )
+    assert health.status is HealthStatus.HEALTHY
+    assert health.worst_observed_status is HealthStatus.HEALTHY
+    assert health.services[0].protocols[0].status is HealthStatus.HEALTHY
