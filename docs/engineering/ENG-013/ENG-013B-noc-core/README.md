@@ -91,3 +91,15 @@ la autoridad poblacional de `SessionSnapshot`, la preservación explícita de
 `UNKNOWN`, el transporte hacia presentación, la columna `HEALTH` de
 `CONNECTED CLIENTS`, la validación física RTMP/SRT y la regresión completa
 del backend.
+
+
+### `08-POST-BLOCK-8-STABILIZATION-EVIDENCE.md`
+
+Evidencia consolidada de los microincrementos posteriores al cierre formal
+de Block 8. Documenta la proyección del bitrate RTMP especializado en
+`CONNECTED CLIENTS`, la ventana temporal RTMP de 5 segundos, la proyección
+de Health SRT especializado en `CONNECTED CLIENTS` y la corrección de
+consistencia de tráfico outbound en `ACTIVE CLIENTS`. Incluye los contratos
+de fallback y ambigüedad, la prevención de doble conteo RTMP, la preservación
+de la semántica histórica de `Total traffic`, la regresión completa del
+backend y la validación física multiprotocolo SRT/RTMP.

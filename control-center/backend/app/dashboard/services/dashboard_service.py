@@ -137,8 +137,57 @@ class DashboardService:
         self,
         *,
         measurement: SessionMeasurement,
+        rtmp_connections: tuple[RTMPConnectionHealth, ...] = (),
     ) -> SessionPanelData:
         """Construye los datos del panel ACTIVE CLIENTS."""
+
+        rtmp_health_by_key = {}
+        ambiguous_rtmp_health_keys = set()
+
+        for connection in rtmp_connections:
+            key = (
+                connection.connection_id,
+                connection.path_name,
+            )
+
+            if key in rtmp_health_by_key:
+                ambiguous_rtmp_health_keys.add(key)
+                continue
+
+            rtmp_health_by_key[key] = connection
+
+        outbound_bitrate_mbps = measurement.total_outbound_bitrate_mbps
+
+        for session in measurement.sessions:
+            key = (
+                session.session_id,
+                session.path,
+            )
+
+            if (
+                session.protocol.value != "RTMP"
+                or session.role.value != "READER"
+                or key not in rtmp_health_by_key
+                or key in ambiguous_rtmp_health_keys
+            ):
+                continue
+
+            specialized_bitrate_mbps = (
+                rtmp_health_by_key[key].effective_bitrate_mbps
+            )
+
+            if specialized_bitrate_mbps is None:
+                continue
+
+            native_bitrate_mbps = (
+                session.bitrate_send_mbps or 0.0
+            )
+
+            outbound_bitrate_mbps = (
+                outbound_bitrate_mbps
+                - native_bitrate_mbps
+                + specialized_bitrate_mbps
+            )
 
         return SessionPanelData(
             total_sessions=measurement.total_sessions,
@@ -151,7 +200,7 @@ class DashboardService:
                 * 1_000_000
             ),
             outbound_bitrate_bps=(
-                measurement.total_outbound_bitrate_mbps
+                outbound_bitrate_mbps
                 * 1_000_000
             ),
             quality=measurement.worst_quality.value,
@@ -168,10 +217,28 @@ class DashboardService:
         self,
         *,
         measurement: SessionMeasurement,
+        health: StreamingHealth | None = None,
         rtmp_connections: tuple[RTMPConnectionHealth, ...] = (),
         viewport: PanelViewport | None = None,
     ) -> ActiveConnectionsPanelData:
         """Construye los datos del panel CONNECTED CLIENTS."""
+
+        srt_health_by_key = {}
+        ambiguous_srt_health_keys = set()
+
+        if health is not None:
+            for path_health in health.paths:
+                for connection in path_health.connections:
+                    key = (
+                        connection.connection_id,
+                        connection.path_name,
+                    )
+
+                    if key in srt_health_by_key:
+                        ambiguous_srt_health_keys.add(key)
+                        continue
+
+                    srt_health_by_key[key] = connection
 
         rtmp_health_by_key = {}
         ambiguous_rtmp_health_keys = set()
@@ -200,18 +267,10 @@ class DashboardService:
                 path=session.path or "(sin path)",
                 role=session.role.value,
                 bitrate_bps=(
-                    session.effective_bitrate_mbps * 1_000_000
-                    if session.effective_bitrate_mbps is not None
-                    else None
-                ),
-                uptime_seconds=session.duration_seconds(
-                    now=measurement.captured_at,
-                ),
-                username=session.username,
-                health=(
                     rtmp_health_by_key[
                         (session.session_id, session.path)
-                    ].status.value
+                    ].effective_bitrate_mbps
+                    * 1_000_000
                     if (
                         session.protocol.value == "RTMP"
                         and (
@@ -222,8 +281,53 @@ class DashboardService:
                             session.session_id,
                             session.path,
                         ) not in ambiguous_rtmp_health_keys
+                        and rtmp_health_by_key[
+                            (session.session_id, session.path)
+                        ].effective_bitrate_mbps
+                        is not None
                     )
-                    else None
+                    else (
+                        session.effective_bitrate_mbps * 1_000_000
+                        if session.effective_bitrate_mbps is not None
+                        else None
+                    )
+                ),
+                uptime_seconds=session.duration_seconds(
+                    now=measurement.captured_at,
+                ),
+                username=session.username,
+                health=(
+                    srt_health_by_key[
+                        (session.session_id, session.path)
+                    ].status.value
+                    if (
+                        session.protocol.value == "SRT"
+                        and (
+                            session.session_id,
+                            session.path,
+                        ) in srt_health_by_key
+                        and (
+                            session.session_id,
+                            session.path,
+                        ) not in ambiguous_srt_health_keys
+                    )
+                    else (
+                        rtmp_health_by_key[
+                            (session.session_id, session.path)
+                        ].status.value
+                        if (
+                            session.protocol.value == "RTMP"
+                            and (
+                                session.session_id,
+                                session.path,
+                            ) in rtmp_health_by_key
+                            and (
+                                session.session_id,
+                                session.path,
+                            ) not in ambiguous_rtmp_health_keys
+                        )
+                        else None
+                    )
                 ),
             )
             for session in measurement.sessions
@@ -746,6 +850,7 @@ class DashboardService:
         sessions = (
             self.build_session_panel(
                 measurement=session_measurement,
+                rtmp_connections=rtmp_connections,
             )
             if session_measurement is not None
             else None
@@ -753,6 +858,7 @@ class DashboardService:
         active_connections = (
             self.build_active_connections_panel(
                 measurement=session_measurement,
+                health=health,
                 rtmp_connections=rtmp_connections,
                 viewport=active_connections_viewport,
             )

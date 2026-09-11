@@ -59,6 +59,9 @@ from app.services.network_telemetry_service import (
 )
 from app.services.session_service import SessionService
 from app.services.rtmp_connection_health_service import RTMPConnectionHealthService
+from app.services.rtmp_connection_health_window import (
+    RTMPConnectionHealthWindow,
+)
 from app.services.streaming_health_service import StreamingHealthService
 from app.services.streaming_health_stabilizer import StreamingHealthStabilizer
 from app.services.streaming_health_transition_detector import (
@@ -94,6 +97,7 @@ class DashboardApplication:
         streaming_health_stabilizer: StreamingHealthStabilizer | None = None,
         streaming_health_aggregator: StreamingHealthAggregator | None = None,
         rtmp_connection_health_service: RTMPConnectionHealthService | None = None,
+        rtmp_connection_health_window: RTMPConnectionHealthWindow | None = None,
         streaming_health_transition_detector: (
             StreamingHealthTransitionDetector | None
         ) = None,
@@ -142,6 +146,7 @@ class DashboardApplication:
         self._streaming_health_stabilizer = streaming_health_stabilizer
         self._streaming_health_aggregator = streaming_health_aggregator
         self._rtmp_connection_health_service = rtmp_connection_health_service
+        self._rtmp_connection_health_window = rtmp_connection_health_window
         self._streaming_health_transition_detector = (
             streaming_health_transition_detector
         )
@@ -299,6 +304,15 @@ class DashboardApplication:
                 previous_snapshot=self._previous_session_snapshot,
                 current_snapshot=session_snapshot,
             )
+
+            if self._rtmp_connection_health_window is not None:
+                rtmp_connections = tuple(
+                    self._rtmp_connection_health_window.stabilize(
+                        connection,
+                        observed_at=session_snapshot.captured_at,
+                    )
+                    for connection in rtmp_connections
+                )
 
         self._latest_platform_health = None
 

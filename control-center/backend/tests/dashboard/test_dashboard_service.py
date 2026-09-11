@@ -2368,6 +2368,7 @@ def test_build_active_connections_panel_projects_rtmp_unknown_health() -> None:
 
     assert panel.connection_count == 1
     assert panel.connections[0].health == "UNKNOWN"
+    assert panel.connections[0].bitrate_bps is None
 
 def test_build_active_connections_panel_rejects_ambiguous_rtmp_health() -> None:
     """No debe elegir arbitrariamente entre evidencias RTMP duplicadas."""
@@ -2439,3 +2440,633 @@ def test_build_active_connections_panel_rejects_ambiguous_rtmp_health() -> None:
 
     assert panel.connection_count == 1
     assert panel.connections[0].health is None
+    assert panel.connections[0].bitrate_bps is None
+
+def test_build_active_connections_panel_projects_specialized_rtmp_bitrate() -> None:
+    """Debe proyectar el bitrate temporal RTMP especializado."""
+
+    from app.domain.streaming import HealthStatus, RTMPConnectionHealth
+
+    captured_at = datetime(
+        2026, 9, 10, 20, 30, tzinfo=timezone.utc
+    )
+
+    session = ActiveSession(
+        session_id="rtmp-reader-bitrate-001",
+        protocol=SessionProtocol.RTMP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="201.192.154.132",
+        remote_port=51407,
+        path="impact",
+        connected_since=captured_at,
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=1,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=0.0,
+        worst_quality=SessionQuality.UNKNOWN,
+        protocols=(SessionProtocol.RTMP,),
+    )
+
+    rtmp_health = RTMPConnectionHealth(
+        connection_id="rtmp-reader-bitrate-001",
+        path_name="impact",
+        state="read",
+        effective_delta_bytes=2467958,
+        effective_bitrate_mbps=3.95,
+        outbound_frames_discarded=77,
+        status=HealthStatus.HEALTHY,
+        message="RTMP connection is healthy.",
+    )
+
+    panel = DashboardService().build_active_connections_panel(
+        measurement=measurement,
+        rtmp_connections=(rtmp_health,),
+    )
+
+    assert panel.connection_count == 1
+    assert panel.connections[0].bitrate_bps == 3_950_000
+    assert panel.connections[0].health == "HEALTHY"
+
+
+def test_build_active_connections_panel_projects_specialized_srt_health() -> None:
+    """Debe proyectar salud SRT especializada en CONNECTED CLIENTS."""
+
+    from app.domain.streaming import (
+        HealthStatus,
+        SRTConnectionHealth,
+        SRTPathHealth,
+        StreamingHealth,
+    )
+
+    captured_at = datetime(
+        2026, 9, 10, 21, 0, tzinfo=timezone.utc
+    )
+
+    session = ActiveSession(
+        session_id="srt-reader-health-001",
+        protocol=SessionProtocol.SRT,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="190.115.202.229",
+        remote_port=46175,
+        path="ejtv",
+        connected_since=captured_at,
+        bitrate_send_mbps=4.50,
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=1,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=4.50,
+        worst_quality=SessionQuality.GOOD,
+        protocols=(SessionProtocol.SRT,),
+    )
+
+    connection_health = SRTConnectionHealth(
+        connection_id="srt-reader-health-001",
+        path_name="ejtv",
+        state="read",
+        rtt_ms=42.0,
+        packets_retransmitted=10,
+        packets_lost=0,
+        status=HealthStatus.HEALTHY,
+        message="Conexión SRT saludable.",
+        send_rate_mbps=4.50,
+        link_capacity_mbps=20.0,
+        link_utilization_percent=22.5,
+    )
+
+    path_health = SRTPathHealth(
+        name="ejtv",
+        connections=(connection_health,),
+        average_rtt_ms=42.0,
+        total_packets_retransmitted=10,
+        total_packets_lost=0,
+        status=HealthStatus.HEALTHY,
+        message="Path SRT estable.",
+        maximum_rtt_ms=42.0,
+        average_link_utilization_percent=22.5,
+    )
+
+    streaming_health = StreamingHealth(
+        captured_at=captured_at,
+        paths=(path_health,),
+        status=HealthStatus.HEALTHY,
+        message="Streaming SRT estable.",
+    )
+
+    panel = DashboardService().build_active_connections_panel(
+        measurement=measurement,
+        health=streaming_health,
+    )
+
+    assert panel.connection_count == 1
+    assert panel.connections[0].health == "HEALTHY"
+
+
+def test_build_active_connections_panel_projects_srt_unknown_health() -> None:
+    """Debe preservar UNKNOWN de evidencia SRT especializada."""
+
+    from app.domain.streaming import (
+        HealthStatus,
+        SRTConnectionHealth,
+        SRTPathHealth,
+        StreamingHealth,
+    )
+
+    captured_at = datetime(
+        2026, 9, 10, 21, 5, tzinfo=timezone.utc
+    )
+
+    session = ActiveSession(
+        session_id="srt-reader-unknown-001",
+        protocol=SessionProtocol.SRT,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="190.115.202.229",
+        remote_port=46175,
+        path="ejtv",
+        connected_since=captured_at,
+        bitrate_send_mbps=4.50,
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=1,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=4.50,
+        worst_quality=SessionQuality.GOOD,
+        protocols=(SessionProtocol.SRT,),
+    )
+
+    connection_health = SRTConnectionHealth(
+        connection_id="srt-reader-unknown-001",
+        path_name="ejtv",
+        state="read",
+        rtt_ms=None,
+        packets_retransmitted=None,
+        packets_lost=None,
+        status=HealthStatus.UNKNOWN,
+        message="Salud SRT no determinada.",
+        send_rate_mbps=4.50,
+        link_capacity_mbps=None,
+        link_utilization_percent=None,
+    )
+
+    path_health = SRTPathHealth(
+        name="ejtv",
+        connections=(connection_health,),
+        average_rtt_ms=None,
+        total_packets_retransmitted=None,
+        total_packets_lost=None,
+        status=HealthStatus.UNKNOWN,
+        message="Salud del path SRT no determinada.",
+        maximum_rtt_ms=None,
+        average_link_utilization_percent=None,
+    )
+
+    streaming_health = StreamingHealth(
+        captured_at=captured_at,
+        paths=(path_health,),
+        status=HealthStatus.UNKNOWN,
+        message="Salud del streaming SRT no determinada.",
+    )
+
+    panel = DashboardService().build_active_connections_panel(
+        measurement=measurement,
+        health=streaming_health,
+    )
+
+    assert panel.connection_count == 1
+    assert panel.connections[0].health == "UNKNOWN"
+
+
+def test_build_active_connections_panel_rejects_ambiguous_srt_health() -> None:
+    """No debe elegir arbitrariamente entre evidencias SRT duplicadas."""
+
+    from app.domain.streaming import (
+        HealthStatus,
+        SRTConnectionHealth,
+        SRTPathHealth,
+        StreamingHealth,
+    )
+
+    captured_at = datetime(
+        2026, 9, 10, 21, 10, tzinfo=timezone.utc
+    )
+
+    session = ActiveSession(
+        session_id="srt-reader-ambiguous-001",
+        protocol=SessionProtocol.SRT,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="190.115.202.229",
+        remote_port=46175,
+        path="ejtv",
+        connected_since=captured_at,
+        bitrate_send_mbps=4.50,
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=1,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=4.50,
+        worst_quality=SessionQuality.GOOD,
+        protocols=(SessionProtocol.SRT,),
+    )
+
+    first = SRTConnectionHealth(
+        connection_id="srt-reader-ambiguous-001",
+        path_name="ejtv",
+        state="read",
+        rtt_ms=40.0,
+        packets_retransmitted=10,
+        packets_lost=0,
+        status=HealthStatus.HEALTHY,
+        message="Conexión SRT saludable.",
+        send_rate_mbps=4.50,
+        link_capacity_mbps=20.0,
+        link_utilization_percent=22.5,
+    )
+
+    second = SRTConnectionHealth(
+        connection_id="srt-reader-ambiguous-001",
+        path_name="ejtv",
+        state="read",
+        rtt_ms=150.0,
+        packets_retransmitted=25,
+        packets_lost=2,
+        status=HealthStatus.DEGRADED,
+        message="Conexión SRT degradada.",
+        send_rate_mbps=4.50,
+        link_capacity_mbps=20.0,
+        link_utilization_percent=22.5,
+    )
+
+    ambiguous_path = SRTPathHealth(
+        name="ejtv",
+        connections=(first, second),
+        average_rtt_ms=95.0,
+        total_packets_retransmitted=35,
+        total_packets_lost=2,
+        status=HealthStatus.DEGRADED,
+        message="Path SRT degradado.",
+        maximum_rtt_ms=150.0,
+        average_link_utilization_percent=22.5,
+    )
+
+    streaming_health = StreamingHealth(
+        captured_at=captured_at,
+        paths=(ambiguous_path,),
+        status=HealthStatus.DEGRADED,
+        message="El streaming SRT está degradado.",
+    )
+
+    panel = DashboardService().build_active_connections_panel(
+        measurement=measurement,
+        health=streaming_health,
+    )
+
+    assert panel.connection_count == 1
+    assert panel.connections[0].health is None
+
+
+def test_build_session_panel_projects_specialized_rtmp_reader_outbound() -> None:
+    """Debe incorporar bitrate RTMP especializado al outbound presentado."""
+
+    from app.domain.streaming import HealthStatus, RTMPConnectionHealth
+
+    captured_at = datetime(
+        2026, 9, 10, 21, 20, tzinfo=timezone.utc
+    )
+
+    srt_session = ActiveSession(
+        session_id="srt-reader-total-001",
+        protocol=SessionProtocol.SRT,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="190.115.202.229",
+        remote_port=46175,
+        path="ejtv",
+        connected_since=captured_at,
+        bitrate_send_mbps=4.0,
+    )
+
+    rtmp_session = ActiveSession(
+        session_id="rtmp-reader-total-001",
+        protocol=SessionProtocol.RTMP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="201.192.154.132",
+        remote_port=51407,
+        path="impact",
+        connected_since=captured_at,
+        bitrate_send_mbps=None,
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(srt_session, rtmp_session),
+        paths=(),
+        total_sessions=2,
+        reader_count=2,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=4.0,
+        worst_quality=SessionQuality.GOOD,
+        protocols=(
+            SessionProtocol.SRT,
+            SessionProtocol.RTMP,
+        ),
+    )
+
+    rtmp_health = RTMPConnectionHealth(
+        connection_id="rtmp-reader-total-001",
+        path_name="impact",
+        state="read",
+        effective_delta_bytes=750000,
+        effective_bitrate_mbps=6.0,
+        outbound_frames_discarded=0,
+        status=HealthStatus.HEALTHY,
+        message="RTMP connection is healthy.",
+    )
+
+    panel = DashboardService().build_session_panel(
+        measurement=measurement,
+        rtmp_connections=(rtmp_health,),
+    )
+
+    assert panel.total_sessions == 2
+    assert panel.outbound_bitrate_bps == 10_000_000
+
+
+def test_build_session_panel_replaces_native_rtmp_reader_outbound() -> None:
+    """Debe reemplazar el bitrate RTMP nativo, no sumarlo dos veces."""
+
+    from app.domain.streaming import HealthStatus, RTMPConnectionHealth
+
+    captured_at = datetime(
+        2026, 9, 10, 21, 25, tzinfo=timezone.utc
+    )
+
+    session = ActiveSession(
+        session_id="rtmp-reader-replace-001",
+        protocol=SessionProtocol.RTMP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="201.192.154.132",
+        remote_port=51407,
+        path="impact",
+        connected_since=captured_at,
+        bitrate_send_mbps=5.0,
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=1,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=5.0,
+        worst_quality=SessionQuality.GOOD,
+        protocols=(SessionProtocol.RTMP,),
+    )
+
+    rtmp_health = RTMPConnectionHealth(
+        connection_id="rtmp-reader-replace-001",
+        path_name="impact",
+        state="read",
+        effective_delta_bytes=750000,
+        effective_bitrate_mbps=6.0,
+        outbound_frames_discarded=0,
+        status=HealthStatus.HEALTHY,
+        message="RTMP connection is healthy.",
+    )
+
+    panel = DashboardService().build_session_panel(
+        measurement=measurement,
+        rtmp_connections=(rtmp_health,),
+    )
+
+    assert panel.outbound_bitrate_bps == 6_000_000
+
+
+def test_build_session_panel_preserves_native_when_rtmp_bitrate_missing() -> None:
+    """Debe conservar bitrate nativo si RTMP especializado no tiene bitrate."""
+
+    from app.domain.streaming import HealthStatus, RTMPConnectionHealth
+
+    captured_at = datetime(
+        2026, 9, 10, 21, 30, tzinfo=timezone.utc
+    )
+
+    session = ActiveSession(
+        session_id="rtmp-reader-none-001",
+        protocol=SessionProtocol.RTMP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="201.192.154.132",
+        remote_port=51407,
+        path="impact",
+        connected_since=captured_at,
+        bitrate_send_mbps=5.0,
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=1,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=5.0,
+        worst_quality=SessionQuality.GOOD,
+        protocols=(SessionProtocol.RTMP,),
+    )
+
+    rtmp_health = RTMPConnectionHealth(
+        connection_id="rtmp-reader-none-001",
+        path_name="impact",
+        state="read",
+        effective_delta_bytes=None,
+        effective_bitrate_mbps=None,
+        outbound_frames_discarded=0,
+        status=HealthStatus.UNKNOWN,
+        message="Insufficient RTMP traffic evidence.",
+    )
+
+    panel = DashboardService().build_session_panel(
+        measurement=measurement,
+        rtmp_connections=(rtmp_health,),
+    )
+
+    assert panel.outbound_bitrate_bps == 5_000_000
+
+
+def test_build_session_panel_preserves_native_when_rtmp_evidence_ambiguous() -> None:
+    """Debe ignorar evidencia RTMP ambigua para el total outbound."""
+
+    from app.domain.streaming import HealthStatus, RTMPConnectionHealth
+
+    captured_at = datetime(
+        2026, 9, 10, 21, 35, tzinfo=timezone.utc
+    )
+
+    session = ActiveSession(
+        session_id="rtmp-reader-ambiguous-001",
+        protocol=SessionProtocol.RTMP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="201.192.154.132",
+        remote_port=51407,
+        path="impact",
+        connected_since=captured_at,
+        bitrate_send_mbps=5.0,
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=1,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=5.0,
+        worst_quality=SessionQuality.GOOD,
+        protocols=(SessionProtocol.RTMP,),
+    )
+
+    first = RTMPConnectionHealth(
+        connection_id="rtmp-reader-ambiguous-001",
+        path_name="impact",
+        state="read",
+        effective_delta_bytes=625000,
+        effective_bitrate_mbps=5.0,
+        outbound_frames_discarded=0,
+        status=HealthStatus.HEALTHY,
+        message="First RTMP evidence.",
+    )
+
+    second = RTMPConnectionHealth(
+        connection_id="rtmp-reader-ambiguous-001",
+        path_name="impact",
+        state="read",
+        effective_delta_bytes=750000,
+        effective_bitrate_mbps=6.0,
+        outbound_frames_discarded=0,
+        status=HealthStatus.HEALTHY,
+        message="Second RTMP evidence.",
+    )
+
+    panel = DashboardService().build_session_panel(
+        measurement=measurement,
+        rtmp_connections=(first, second),
+    )
+
+    assert panel.outbound_bitrate_bps == 5_000_000
+
+
+def test_build_session_panel_does_not_project_rtmp_publisher_into_outbound() -> None:
+    """RTMP PUBLISHER no debe contaminar el tráfico outbound a clientes."""
+
+    from app.domain.streaming import HealthStatus, RTMPConnectionHealth
+
+    captured_at = datetime(
+        2026, 9, 10, 21, 40, tzinfo=timezone.utc
+    )
+
+    session = ActiveSession(
+        session_id="rtmp-publisher-001",
+        protocol=SessionProtocol.RTMP,
+        role=SessionRole.PUBLISHER,
+        state="publish",
+        remote_ip="201.192.154.132",
+        remote_port=51407,
+        path="impact",
+        connected_since=captured_at,
+        bitrate_receive_mbps=7.0,
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=0,
+        publisher_count=1,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=7.0,
+        total_outbound_bitrate_mbps=0.0,
+        worst_quality=SessionQuality.GOOD,
+        protocols=(SessionProtocol.RTMP,),
+    )
+
+    rtmp_health = RTMPConnectionHealth(
+        connection_id="rtmp-publisher-001",
+        path_name="impact",
+        state="publish",
+        effective_delta_bytes=875000,
+        effective_bitrate_mbps=7.0,
+        outbound_frames_discarded=0,
+        status=HealthStatus.HEALTHY,
+        message="RTMP publisher traffic is healthy.",
+    )
+
+    panel = DashboardService().build_session_panel(
+        measurement=measurement,
+        rtmp_connections=(rtmp_health,),
+    )
+
+    assert panel.outbound_bitrate_bps == 0

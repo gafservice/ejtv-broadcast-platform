@@ -3009,3 +3009,106 @@ def test_application_wires_temporal_rtmp_health_into_platform_aggregation() -> N
 
     assert first_snapshot_input.rtmp_connections is first_rtmp_health
     assert second_snapshot_input.rtmp_connections is second_rtmp_health
+
+
+def test_application_stabilizes_rtmp_health_before_aggregation() -> None:
+    """RTMP health debe estabilizarse antes de agregación y presentación."""
+    from app.domain.sessions import SessionSnapshot
+    from app.domain.streaming import RTMPConnectionHealth
+
+    captured_at = datetime(
+        2026, 9, 10, 15, 30, tzinfo=timezone.utc
+    )
+
+    media_snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=0,
+    )
+
+    session_snapshot = SessionSnapshot(
+        captured_at=captured_at,
+        sessions=(),
+    )
+
+    raw_health = Mock(spec=RTMPConnectionHealth)
+    stabilized_health = Mock(spec=RTMPConnectionHealth)
+
+    mediamtx_adapter = Mock()
+    mediamtx_adapter.health.return_value = True
+    mediamtx_adapter.get_snapshot.return_value = media_snapshot
+
+    session_adapter = Mock()
+    session_adapter.get_snapshot.return_value = session_snapshot
+
+    streaming_service = Mock()
+    streaming_service.compare.return_value = Mock()
+
+    session_service = Mock()
+    session_service.measure.return_value = Mock()
+
+    rtmp_connection_health_service = Mock()
+    rtmp_connection_health_service.build.return_value = (
+        raw_health,
+    )
+
+    rtmp_connection_health_window = Mock()
+    rtmp_connection_health_window.stabilize.return_value = (
+        stabilized_health
+    )
+
+    streaming_health_aggregator = Mock()
+    streaming_health_aggregator.build.return_value = Mock()
+
+    dashboard_snapshot_service = Mock()
+    dashboard_snapshot_service.build_snapshot.return_value = Mock(
+        spec=DashboardData
+    )
+
+    system_service = Mock()
+    system_service.get_system_info.return_value = Mock(
+        hostname="server-01"
+    )
+    system_service.get_system_resources.return_value = Mock()
+    system_service.get_network_interface_infos.return_value = ()
+
+    network_telemetry_service = Mock()
+    network_telemetry_service.build.return_value = None
+
+    application = DashboardApplication(
+        mediamtx_adapter=mediamtx_adapter,
+        session_adapter=session_adapter,
+        streaming_service=streaming_service,
+        session_service=session_service,
+        dashboard_service=Mock(),
+        dashboard_snapshot_service=dashboard_snapshot_service,
+        dashboard_renderer=Mock(),
+        system_service=system_service,
+        streaming_health_aggregator=streaming_health_aggregator,
+        rtmp_connection_health_service=rtmp_connection_health_service,
+        rtmp_connection_health_window=rtmp_connection_health_window,
+        network_telemetry_service=network_telemetry_service,
+    )
+
+    application.build_dashboard()
+
+    rtmp_connection_health_window.stabilize.assert_called_once_with(
+        raw_health,
+        observed_at=captured_at,
+    )
+
+    aggregate_call = streaming_health_aggregator.build.call_args
+    assert aggregate_call.kwargs["rtmp_connections"] == (
+        stabilized_health,
+    )
+
+    snapshot_input = (
+        dashboard_snapshot_service
+        .build_snapshot
+        .call_args
+        .args[0]
+    )
+    assert snapshot_input.rtmp_connections == (
+        stabilized_health,
+    )
