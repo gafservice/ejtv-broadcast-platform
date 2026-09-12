@@ -71,7 +71,11 @@ def test_health_population_rejects_negative_counts(
             unknown_count=unknown_count,
         )
 
-from app.domain.streaming.health import HealthStatus, RTMPConnectionHealth
+from app.domain.streaming.health import (
+    HealthStatus,
+    RTMPConnectionHealth,
+    RTSPSessionHealth,
+)
 from app.domain.streaming.aggregation import (
     resolve_aggregate_status,
     resolve_worst_status,
@@ -2334,6 +2338,246 @@ def test_streaming_health_aggregator_falls_back_on_ambiguous_rtmp_evidence() -> 
         ),
         streaming_health=None,
         rtmp_connections=(first_health, second_health),
+    )
+
+    assert health.population == HealthPopulation(
+        healthy_count=1,
+        degraded_count=0,
+        critical_count=0,
+        unknown_count=0,
+    )
+    assert health.status is HealthStatus.HEALTHY
+    assert health.worst_observed_status is HealthStatus.HEALTHY
+    assert health.services[0].protocols[0].status is HealthStatus.HEALTHY
+
+
+def test_streaming_health_aggregator_prefers_matching_rtsp_unknown_health() -> None:
+    captured_at = datetime(2026, 9, 11, 17, 0, tzinfo=UTC)
+
+    session = ActiveSession(
+        session_id="rtsp-reader-specialized-1",
+        protocol=SessionProtocol.RTSP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="127.0.0.1",
+        remote_port=42176,
+        path="IMPACT",
+        connected_since=captured_at,
+        quality=SessionQuality.GOOD,
+    )
+
+    specialized_health = RTSPSessionHealth(
+        session_id="rtsp-reader-specialized-1",
+        path_name="IMPACT",
+        state="read",
+        effective_delta_bytes=None,
+        effective_bitrate_mbps=None,
+        status=HealthStatus.UNKNOWN,
+        message="Insufficient temporal evidence for RTSP session.",
+    )
+
+    health = StreamingHealthAggregator().build(
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(session,),
+        ),
+        streaming_health=None,
+        rtsp_sessions=(specialized_health,),
+    )
+
+    assert health.population == HealthPopulation(
+        healthy_count=0,
+        degraded_count=0,
+        critical_count=0,
+        unknown_count=1,
+    )
+    assert health.status is HealthStatus.UNKNOWN
+    assert health.worst_observed_status is HealthStatus.UNKNOWN
+
+    service = health.services[0]
+    protocol = service.protocols[0]
+
+    assert service.service_id == "IMPACT"
+    assert service.status is HealthStatus.UNKNOWN
+    assert protocol.protocol is SessionProtocol.RTSP
+    assert protocol.status is HealthStatus.UNKNOWN
+    assert protocol.reader_count == 1
+
+
+def test_streaming_health_aggregator_prefers_matching_rtsp_healthy_health() -> None:
+    captured_at = datetime(2026, 9, 11, 17, 5, tzinfo=UTC)
+
+    session = ActiveSession(
+        session_id="rtsp-reader-specialized-2",
+        protocol=SessionProtocol.RTSP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="127.0.0.1",
+        remote_port=42177,
+        path="IMPACT",
+        connected_since=captured_at,
+        quality=SessionQuality.CRITICAL,
+    )
+
+    specialized_health = RTSPSessionHealth(
+        session_id="rtsp-reader-specialized-2",
+        path_name="IMPACT",
+        state="read",
+        effective_delta_bytes=3_510_747,
+        effective_bitrate_mbps=5.6171952,
+        status=HealthStatus.HEALTHY,
+        message="RTSP reader has observed effective traffic.",
+    )
+
+    health = StreamingHealthAggregator().build(
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(session,),
+        ),
+        streaming_health=None,
+        rtsp_sessions=(specialized_health,),
+    )
+
+    assert health.population == HealthPopulation(
+        healthy_count=1,
+        degraded_count=0,
+        critical_count=0,
+        unknown_count=0,
+    )
+    assert health.status is HealthStatus.HEALTHY
+    assert health.worst_observed_status is HealthStatus.HEALTHY
+    assert health.services[0].protocols[0].status is HealthStatus.HEALTHY
+
+
+def test_streaming_health_aggregator_rejects_rtsp_path_mismatch() -> None:
+    captured_at = datetime(2026, 9, 11, 17, 10, tzinfo=UTC)
+
+    session = ActiveSession(
+        session_id="rtsp-reader-path-mismatch",
+        protocol=SessionProtocol.RTSP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="127.0.0.1",
+        remote_port=42178,
+        path="IMPACT",
+        connected_since=captured_at,
+        quality=SessionQuality.GOOD,
+    )
+
+    specialized_health = RTSPSessionHealth(
+        session_id="rtsp-reader-path-mismatch",
+        path_name="ENLACE",
+        state="read",
+        effective_delta_bytes=None,
+        effective_bitrate_mbps=None,
+        status=HealthStatus.UNKNOWN,
+        message="RTSP evidence belongs to another path.",
+    )
+
+    health = StreamingHealthAggregator().build(
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(session,),
+        ),
+        streaming_health=None,
+        rtsp_sessions=(specialized_health,),
+    )
+
+    assert health.population == HealthPopulation(
+        healthy_count=1,
+        degraded_count=0,
+        critical_count=0,
+        unknown_count=0,
+    )
+    assert health.status is HealthStatus.HEALTHY
+    assert health.services[0].protocols[0].status is HealthStatus.HEALTHY
+
+
+def test_streaming_health_aggregator_ignores_orphan_rtsp_evidence() -> None:
+    captured_at = datetime(2026, 9, 11, 17, 15, tzinfo=UTC)
+
+    session = ActiveSession(
+        session_id="rtsp-impact-observed",
+        protocol=SessionProtocol.RTSP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="127.0.0.1",
+        remote_port=42179,
+        path="IMPACT",
+        connected_since=captured_at,
+        quality=SessionQuality.GOOD,
+    )
+
+    orphan_health = RTSPSessionHealth(
+        session_id="rtsp-orphan-1",
+        path_name="ENLACE",
+        state="read",
+        effective_delta_bytes=None,
+        effective_bitrate_mbps=None,
+        status=HealthStatus.UNKNOWN,
+        message="Orphan RTSP evidence.",
+    )
+
+    health = StreamingHealthAggregator().build(
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(session,),
+        ),
+        streaming_health=None,
+        rtsp_sessions=(orphan_health,),
+    )
+
+    assert health.population.total_count == 1
+    assert health.population.healthy_count == 1
+    assert health.status is HealthStatus.HEALTHY
+    assert tuple(service.service_id for service in health.services) == (
+        "IMPACT",
+    )
+    assert health.services[0].protocols[0].status is HealthStatus.HEALTHY
+
+
+def test_streaming_health_aggregator_falls_back_on_ambiguous_rtsp_evidence() -> None:
+    captured_at = datetime(2026, 9, 11, 17, 20, tzinfo=UTC)
+
+    session = ActiveSession(
+        session_id="rtsp-reader-ambiguous",
+        protocol=SessionProtocol.RTSP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="127.0.0.1",
+        remote_port=42180,
+        path="IMPACT",
+        connected_since=captured_at,
+        quality=SessionQuality.GOOD,
+    )
+
+    first_health = RTSPSessionHealth(
+        session_id="rtsp-reader-ambiguous",
+        path_name="IMPACT",
+        state="read",
+        effective_delta_bytes=None,
+        effective_bitrate_mbps=None,
+        status=HealthStatus.UNKNOWN,
+        message="First RTSP candidate.",
+    )
+
+    second_health = RTSPSessionHealth(
+        session_id="rtsp-reader-ambiguous",
+        path_name="IMPACT",
+        state="read",
+        effective_delta_bytes=1_000_000,
+        effective_bitrate_mbps=0.8,
+        status=HealthStatus.HEALTHY,
+        message="Second RTSP candidate.",
+    )
+
+    health = StreamingHealthAggregator().build(
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(session,),
+        ),
+        streaming_health=None,
+        rtsp_sessions=(first_health, second_health),
     )
 
     assert health.population == HealthPopulation(

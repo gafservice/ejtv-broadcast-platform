@@ -45,6 +45,7 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
     streaming_health_aggregator = Mock()
     rtmp_connection_health_service = Mock()
     rtmp_connection_health_window = Mock()
+    rtsp_session_health_service = Mock()
     srt_connection_health_stabilizer = Mock()
     streaming_health_stabilizer = Mock()
 
@@ -167,6 +168,13 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
             patch(
                 "app.dashboard.live_monitor.RTMPConnectionHealthWindow",
                 return_value=rtmp_connection_health_window,
+            )
+        )
+
+        rtsp_session_health_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.RTSPSessionHealthService",
+                return_value=rtsp_session_health_service,
             )
         )
 
@@ -403,6 +411,7 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
     rtmp_connection_health_window_class.assert_called_once_with(
         window_seconds=5.0
     )
+    rtsp_session_health_service_class.assert_called_once_with()
 
     srt_connection_health_stabilizer_class.assert_called_once_with(
         degradation_seconds=7.5,
@@ -477,6 +486,7 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
         streaming_health_aggregator=streaming_health_aggregator,
         rtmp_connection_health_service=rtmp_connection_health_service,
         rtmp_connection_health_window=rtmp_connection_health_window,
+        rtsp_session_health_service=rtsp_session_health_service,
         streaming_health_stabilizer=streaming_health_stabilizer,
         streaming_health_transition_detector=transition_detector,
         dashboard_snapshot_service=dashboard_snapshot_service,

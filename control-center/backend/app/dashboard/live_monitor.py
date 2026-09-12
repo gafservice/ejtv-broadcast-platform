@@ -26,6 +26,7 @@ from app.services.rtmp_connection_health_service import RTMPConnectionHealthServ
 from app.services.rtmp_connection_health_window import (
     RTMPConnectionHealthWindow,
 )
+from app.services.rtsp_session_health_service import RTSPSessionHealthService
 from app.services.streaming_health_service import StreamingHealthService
 from app.services.srt_connection_health_stabilizer import (
     SRTConnectionHealthStabilizer,
@@ -133,6 +134,7 @@ def build_dashboard_application() -> DashboardApplication:
     rtmp_connection_health_window = RTMPConnectionHealthWindow(
         window_seconds=5.0
     )
+    rtsp_session_health_service = RTSPSessionHealthService()
     streaming_health_transition_detector = (
         StreamingHealthTransitionDetector()
     )
@@ -271,6 +273,7 @@ def build_dashboard_application() -> DashboardApplication:
         streaming_health_aggregator=streaming_health_aggregator,
         rtmp_connection_health_service=rtmp_connection_health_service,
         rtmp_connection_health_window=rtmp_connection_health_window,
+        rtsp_session_health_service=rtsp_session_health_service,
         streaming_health_stabilizer=streaming_health_stabilizer,
         streaming_health_transition_detector=(
             streaming_health_transition_detector

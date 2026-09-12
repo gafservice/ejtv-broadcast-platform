@@ -3070,3 +3070,474 @@ def test_build_session_panel_does_not_project_rtmp_publisher_into_outbound() -> 
     )
 
     assert panel.outbound_bitrate_bps == 0
+
+
+def test_build_active_connections_panel_projects_specialized_rtsp_health_and_bitrate() -> None:
+    """Debe proyectar salud y bitrate temporal RTSP especializados."""
+    from app.domain.streaming import HealthStatus, RTSPSessionHealth
+
+    captured_at = datetime(
+        2026, 9, 11, 20, 0, tzinfo=timezone.utc
+    )
+
+    session = ActiveSession(
+        session_id="rtsp-reader-001",
+        protocol=SessionProtocol.RTSP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="127.0.0.1",
+        remote_port=36960,
+        path="impact",
+        connected_since=captured_at,
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=1,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=0.0,
+        worst_quality=SessionQuality.UNKNOWN,
+        protocols=(SessionProtocol.RTSP,),
+    )
+
+    rtsp_health = RTSPSessionHealth(
+        session_id="rtsp-reader-001",
+        path_name="impact",
+        state="read",
+        effective_delta_bytes=750000,
+        effective_bitrate_mbps=6.0,
+        status=HealthStatus.HEALTHY,
+        message="RTSP reader traffic is healthy.",
+    )
+
+    panel = DashboardService().build_active_connections_panel(
+        measurement=measurement,
+        rtsp_sessions=(rtsp_health,),
+    )
+
+    assert panel.connection_count == 1
+    assert panel.connections[0].health == "HEALTHY"
+    assert panel.connections[0].bitrate_bps == 6_000_000
+
+
+def test_build_active_connections_panel_projects_rtsp_unknown_health() -> None:
+    """Debe preservar UNKNOWN de evidencia RTSP especializada."""
+    from app.domain.streaming import HealthStatus, RTSPSessionHealth
+
+    captured_at = datetime(
+        2026, 9, 11, 20, 5, tzinfo=timezone.utc
+    )
+
+    session = ActiveSession(
+        session_id="rtsp-reader-unknown-001",
+        protocol=SessionProtocol.RTSP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="127.0.0.1",
+        remote_port=36960,
+        path="impact",
+        connected_since=captured_at,
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=1,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=0.0,
+        worst_quality=SessionQuality.UNKNOWN,
+        protocols=(SessionProtocol.RTSP,),
+    )
+
+    rtsp_health = RTSPSessionHealth(
+        session_id="rtsp-reader-unknown-001",
+        path_name="impact",
+        state="read",
+        effective_delta_bytes=None,
+        effective_bitrate_mbps=None,
+        status=HealthStatus.UNKNOWN,
+        message="Insufficient temporal evidence for RTSP session.",
+    )
+
+    panel = DashboardService().build_active_connections_panel(
+        measurement=measurement,
+        rtsp_sessions=(rtsp_health,),
+    )
+
+    assert panel.connection_count == 1
+    assert panel.connections[0].health == "UNKNOWN"
+    assert panel.connections[0].bitrate_bps is None
+
+
+def test_build_active_connections_panel_rejects_ambiguous_rtsp_health() -> None:
+    """No debe elegir arbitrariamente evidencia RTSP duplicada."""
+    from app.domain.streaming import HealthStatus, RTSPSessionHealth
+
+    captured_at = datetime(
+        2026, 9, 11, 20, 10, tzinfo=timezone.utc
+    )
+
+    session = ActiveSession(
+        session_id="rtsp-reader-ambiguous-001",
+        protocol=SessionProtocol.RTSP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="127.0.0.1",
+        remote_port=36960,
+        path="impact",
+        connected_since=captured_at,
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=1,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=0.0,
+        worst_quality=SessionQuality.UNKNOWN,
+        protocols=(SessionProtocol.RTSP,),
+    )
+
+    first = RTSPSessionHealth(
+        session_id="rtsp-reader-ambiguous-001",
+        path_name="impact",
+        state="read",
+        effective_delta_bytes=625000,
+        effective_bitrate_mbps=5.0,
+        status=HealthStatus.HEALTHY,
+        message="First RTSP evidence.",
+    )
+
+    second = RTSPSessionHealth(
+        session_id="rtsp-reader-ambiguous-001",
+        path_name="impact",
+        state="read",
+        effective_delta_bytes=750000,
+        effective_bitrate_mbps=6.0,
+        status=HealthStatus.HEALTHY,
+        message="Second RTSP evidence.",
+    )
+
+    panel = DashboardService().build_active_connections_panel(
+        measurement=measurement,
+        rtsp_sessions=(first, second),
+    )
+
+    assert panel.connection_count == 1
+    assert panel.connections[0].health is None
+    assert panel.connections[0].bitrate_bps is None
+
+
+def test_build_session_panel_projects_specialized_rtsp_reader_outbound() -> None:
+    """Debe incorporar bitrate RTSP especializado al outbound presentado."""
+    from app.domain.streaming import HealthStatus, RTSPSessionHealth
+
+    captured_at = datetime(
+        2026, 9, 11, 22, 0, tzinfo=timezone.utc
+    )
+
+    srt_session = ActiveSession(
+        session_id="srt-reader-rtsp-total-001",
+        protocol=SessionProtocol.SRT,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="190.115.202.229",
+        remote_port=46175,
+        path="ejtv",
+        connected_since=captured_at,
+        bitrate_send_mbps=4.0,
+    )
+
+    rtsp_session = ActiveSession(
+        session_id="rtsp-reader-total-001",
+        protocol=SessionProtocol.RTSP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="201.192.154.130",
+        remote_port=11607,
+        path="enlace",
+        connected_since=captured_at,
+        bitrate_send_mbps=None,
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(srt_session, rtsp_session),
+        paths=(),
+        total_sessions=2,
+        reader_count=2,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=4.0,
+        worst_quality=SessionQuality.GOOD,
+        protocols=(
+            SessionProtocol.SRT,
+            SessionProtocol.RTSP,
+        ),
+    )
+
+    rtsp_health = RTSPSessionHealth(
+        session_id="rtsp-reader-total-001",
+        path_name="enlace",
+        state="read",
+        effective_delta_bytes=750000,
+        effective_bitrate_mbps=6.0,
+        status=HealthStatus.HEALTHY,
+        message="RTSP session is healthy.",
+    )
+
+    panel = DashboardService().build_session_panel(
+        measurement=measurement,
+        rtsp_sessions=(rtsp_health,),
+    )
+
+    assert panel.total_sessions == 2
+    assert panel.outbound_bitrate_bps == 10_000_000
+
+
+def test_build_session_panel_replaces_native_rtsp_reader_outbound() -> None:
+    """Debe reemplazar bitrate RTSP nativo, no sumarlo dos veces."""
+    from app.domain.streaming import HealthStatus, RTSPSessionHealth
+
+    captured_at = datetime(
+        2026, 9, 11, 22, 5, tzinfo=timezone.utc
+    )
+
+    session = ActiveSession(
+        session_id="rtsp-reader-replace-001",
+        protocol=SessionProtocol.RTSP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="201.192.154.130",
+        remote_port=11607,
+        path="enlace",
+        connected_since=captured_at,
+        bitrate_send_mbps=5.0,
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=1,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=5.0,
+        worst_quality=SessionQuality.GOOD,
+        protocols=(SessionProtocol.RTSP,),
+    )
+
+    rtsp_health = RTSPSessionHealth(
+        session_id="rtsp-reader-replace-001",
+        path_name="enlace",
+        state="read",
+        effective_delta_bytes=750000,
+        effective_bitrate_mbps=6.0,
+        status=HealthStatus.HEALTHY,
+        message="RTSP session is healthy.",
+    )
+
+    panel = DashboardService().build_session_panel(
+        measurement=measurement,
+        rtsp_sessions=(rtsp_health,),
+    )
+
+    assert panel.outbound_bitrate_bps == 6_000_000
+
+
+def test_build_session_panel_preserves_native_when_rtsp_bitrate_missing() -> None:
+    """Debe conservar bitrate nativo si RTSP especializado no tiene bitrate."""
+    from app.domain.streaming import HealthStatus, RTSPSessionHealth
+
+    captured_at = datetime(
+        2026, 9, 11, 22, 10, tzinfo=timezone.utc
+    )
+
+    session = ActiveSession(
+        session_id="rtsp-reader-none-001",
+        protocol=SessionProtocol.RTSP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="201.192.154.130",
+        remote_port=11607,
+        path="enlace",
+        connected_since=captured_at,
+        bitrate_send_mbps=5.0,
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=1,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=5.0,
+        worst_quality=SessionQuality.GOOD,
+        protocols=(SessionProtocol.RTSP,),
+    )
+
+    rtsp_health = RTSPSessionHealth(
+        session_id="rtsp-reader-none-001",
+        path_name="enlace",
+        state="read",
+        effective_delta_bytes=None,
+        effective_bitrate_mbps=None,
+        status=HealthStatus.UNKNOWN,
+        message="Insufficient RTSP traffic evidence.",
+    )
+
+    panel = DashboardService().build_session_panel(
+        measurement=measurement,
+        rtsp_sessions=(rtsp_health,),
+    )
+
+    assert panel.outbound_bitrate_bps == 5_000_000
+
+
+def test_build_session_panel_preserves_native_when_rtsp_evidence_ambiguous() -> None:
+    """Debe ignorar evidencia RTSP ambigua para el total outbound."""
+    from app.domain.streaming import HealthStatus, RTSPSessionHealth
+
+    captured_at = datetime(
+        2026, 9, 11, 22, 15, tzinfo=timezone.utc
+    )
+
+    session = ActiveSession(
+        session_id="rtsp-reader-ambiguous-001",
+        protocol=SessionProtocol.RTSP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="201.192.154.130",
+        remote_port=11607,
+        path="enlace",
+        connected_since=captured_at,
+        bitrate_send_mbps=5.0,
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=1,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=5.0,
+        worst_quality=SessionQuality.GOOD,
+        protocols=(SessionProtocol.RTSP,),
+    )
+
+    first = RTSPSessionHealth(
+        session_id="rtsp-reader-ambiguous-001",
+        path_name="enlace",
+        state="read",
+        effective_delta_bytes=625000,
+        effective_bitrate_mbps=5.0,
+        status=HealthStatus.HEALTHY,
+        message="First RTSP evidence.",
+    )
+
+    second = RTSPSessionHealth(
+        session_id="rtsp-reader-ambiguous-001",
+        path_name="enlace",
+        state="read",
+        effective_delta_bytes=750000,
+        effective_bitrate_mbps=6.0,
+        status=HealthStatus.HEALTHY,
+        message="Second RTSP evidence.",
+    )
+
+    panel = DashboardService().build_session_panel(
+        measurement=measurement,
+        rtsp_sessions=(first, second),
+    )
+
+    assert panel.outbound_bitrate_bps == 5_000_000
+
+
+def test_build_session_panel_does_not_project_rtsp_publisher_into_outbound() -> None:
+    """RTSP PUBLISHER no debe contaminar el tráfico outbound a clientes."""
+    from app.domain.streaming import HealthStatus, RTSPSessionHealth
+
+    captured_at = datetime(
+        2026, 9, 11, 22, 20, tzinfo=timezone.utc
+    )
+
+    session = ActiveSession(
+        session_id="rtsp-publisher-001",
+        protocol=SessionProtocol.RTSP,
+        role=SessionRole.PUBLISHER,
+        state="publish",
+        remote_ip="201.192.154.130",
+        remote_port=11607,
+        path="enlace",
+        connected_since=captured_at,
+        bitrate_receive_mbps=7.0,
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=0,
+        publisher_count=1,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=7.0,
+        total_outbound_bitrate_mbps=0.0,
+        worst_quality=SessionQuality.GOOD,
+        protocols=(SessionProtocol.RTSP,),
+    )
+
+    rtsp_health = RTSPSessionHealth(
+        session_id="rtsp-publisher-001",
+        path_name="enlace",
+        state="publish",
+        effective_delta_bytes=875000,
+        effective_bitrate_mbps=7.0,
+        status=HealthStatus.HEALTHY,
+        message="RTSP publisher traffic is healthy.",
+    )
+
+    panel = DashboardService().build_session_panel(
+        measurement=measurement,
+        rtsp_sessions=(rtsp_health,),
+    )
+
+    assert panel.outbound_bitrate_bps == 0

@@ -30,6 +30,7 @@ from app.domain.streaming import (
     MeasurementQuality,
     MediaMTXSnapshot,
     RTMPConnectionHealth,
+    RTSPSessionHealth,
     StreamingHealth,
     StreamingMeasurement,
 )
@@ -138,6 +139,7 @@ class DashboardService:
         *,
         measurement: SessionMeasurement,
         rtmp_connections: tuple[RTMPConnectionHealth, ...] = (),
+        rtsp_sessions: tuple[RTSPSessionHealth, ...] = (),
     ) -> SessionPanelData:
         """Construye los datos del panel ACTIVE CLIENTS."""
 
@@ -155,6 +157,21 @@ class DashboardService:
                 continue
 
             rtmp_health_by_key[key] = connection
+
+        rtsp_health_by_key = {}
+        ambiguous_rtsp_health_keys = set()
+
+        for session_health in rtsp_sessions:
+            key = (
+                session_health.session_id,
+                session_health.path_name,
+            )
+
+            if key in rtsp_health_by_key:
+                ambiguous_rtsp_health_keys.add(key)
+                continue
+
+            rtsp_health_by_key[key] = session_health
 
         outbound_bitrate_mbps = measurement.total_outbound_bitrate_mbps
 
@@ -174,6 +191,37 @@ class DashboardService:
 
             specialized_bitrate_mbps = (
                 rtmp_health_by_key[key].effective_bitrate_mbps
+            )
+
+            if specialized_bitrate_mbps is None:
+                continue
+
+            native_bitrate_mbps = (
+                session.bitrate_send_mbps or 0.0
+            )
+
+            outbound_bitrate_mbps = (
+                outbound_bitrate_mbps
+                - native_bitrate_mbps
+                + specialized_bitrate_mbps
+            )
+
+        for session in measurement.sessions:
+            key = (
+                session.session_id,
+                session.path,
+            )
+
+            if (
+                session.protocol.value != "RTSP"
+                or session.role.value != "READER"
+                or key not in rtsp_health_by_key
+                or key in ambiguous_rtsp_health_keys
+            ):
+                continue
+
+            specialized_bitrate_mbps = (
+                rtsp_health_by_key[key].effective_bitrate_mbps
             )
 
             if specialized_bitrate_mbps is None:
@@ -219,6 +267,7 @@ class DashboardService:
         measurement: SessionMeasurement,
         health: StreamingHealth | None = None,
         rtmp_connections: tuple[RTMPConnectionHealth, ...] = (),
+        rtsp_sessions: tuple[RTSPSessionHealth, ...] = (),
         viewport: PanelViewport | None = None,
     ) -> ActiveConnectionsPanelData:
         """Construye los datos del panel CONNECTED CLIENTS."""
@@ -255,6 +304,21 @@ class DashboardService:
 
             rtmp_health_by_key[key] = connection
 
+        rtsp_health_by_key = {}
+        ambiguous_rtsp_health_keys = set()
+
+        for session_health in rtsp_sessions:
+            key = (
+                session_health.session_id,
+                session_health.path_name,
+            )
+
+            if key in rtsp_health_by_key:
+                ambiguous_rtsp_health_keys.add(key)
+                continue
+
+            rtsp_health_by_key[key] = session_health
+
         connections = tuple(
             ActiveConnectionRow(
                 session_id=session.session_id,
@@ -287,9 +351,30 @@ class DashboardService:
                         is not None
                     )
                     else (
-                        session.effective_bitrate_mbps * 1_000_000
-                        if session.effective_bitrate_mbps is not None
-                        else None
+                        rtsp_health_by_key[
+                            (session.session_id, session.path)
+                        ].effective_bitrate_mbps
+                        * 1_000_000
+                        if (
+                            session.protocol.value == "RTSP"
+                            and (
+                                session.session_id,
+                                session.path,
+                            ) in rtsp_health_by_key
+                            and (
+                                session.session_id,
+                                session.path,
+                            ) not in ambiguous_rtsp_health_keys
+                            and rtsp_health_by_key[
+                                (session.session_id, session.path)
+                            ].effective_bitrate_mbps
+                            is not None
+                        )
+                        else (
+                            session.effective_bitrate_mbps * 1_000_000
+                            if session.effective_bitrate_mbps is not None
+                            else None
+                        )
                     )
                 ),
                 uptime_seconds=session.duration_seconds(
@@ -326,7 +411,23 @@ class DashboardService:
                                 session.path,
                             ) not in ambiguous_rtmp_health_keys
                         )
-                        else None
+                        else (
+                            rtsp_health_by_key[
+                                (session.session_id, session.path)
+                            ].status.value
+                            if (
+                                session.protocol.value == "RTSP"
+                                and (
+                                    session.session_id,
+                                    session.path,
+                                ) in rtsp_health_by_key
+                                and (
+                                    session.session_id,
+                                    session.path,
+                                ) not in ambiguous_rtsp_health_keys
+                            )
+                            else None
+                        )
                     )
                 ),
             )
@@ -795,6 +896,7 @@ class DashboardService:
         measurement: StreamingMeasurement,
         session_measurement: SessionMeasurement | None = None,
         rtmp_connections: tuple[RTMPConnectionHealth, ...] = (),
+        rtsp_sessions: tuple[RTSPSessionHealth, ...] = (),
         system_resources: SystemResources | None = None,
         previous_system_resources: SystemResources | None = None,
         health: StreamingHealth | None = None,
@@ -851,6 +953,7 @@ class DashboardService:
             self.build_session_panel(
                 measurement=session_measurement,
                 rtmp_connections=rtmp_connections,
+                rtsp_sessions=rtsp_sessions,
             )
             if session_measurement is not None
             else None
@@ -860,6 +963,7 @@ class DashboardService:
                 measurement=session_measurement,
                 health=health,
                 rtmp_connections=rtmp_connections,
+                rtsp_sessions=rtsp_sessions,
                 viewport=active_connections_viewport,
             )
             if session_measurement is not None

@@ -62,6 +62,9 @@ from app.services.rtmp_connection_health_service import RTMPConnectionHealthServ
 from app.services.rtmp_connection_health_window import (
     RTMPConnectionHealthWindow,
 )
+from app.services.rtsp_session_health_service import (
+    RTSPSessionHealthService,
+)
 from app.services.streaming_health_service import StreamingHealthService
 from app.services.streaming_health_stabilizer import StreamingHealthStabilizer
 from app.services.streaming_health_transition_detector import (
@@ -98,6 +101,7 @@ class DashboardApplication:
         streaming_health_aggregator: StreamingHealthAggregator | None = None,
         rtmp_connection_health_service: RTMPConnectionHealthService | None = None,
         rtmp_connection_health_window: RTMPConnectionHealthWindow | None = None,
+        rtsp_session_health_service: RTSPSessionHealthService | None = None,
         streaming_health_transition_detector: (
             StreamingHealthTransitionDetector | None
         ) = None,
@@ -147,6 +151,7 @@ class DashboardApplication:
         self._streaming_health_aggregator = streaming_health_aggregator
         self._rtmp_connection_health_service = rtmp_connection_health_service
         self._rtmp_connection_health_window = rtmp_connection_health_window
+        self._rtsp_session_health_service = rtsp_session_health_service
         self._streaming_health_transition_detector = (
             streaming_health_transition_detector
         )
@@ -314,24 +319,33 @@ class DashboardApplication:
                     for connection in rtmp_connections
                 )
 
+        rtsp_sessions = ()
+
+        if self._rtsp_session_health_service is not None:
+            rtsp_sessions = self._rtsp_session_health_service.build(
+                previous_snapshot=self._previous_session_snapshot,
+                current_snapshot=session_snapshot,
+            )
+
         self._latest_platform_health = None
 
         if self._streaming_health_aggregator is not None:
-            if self._rtmp_connection_health_service is None:
-                self._latest_platform_health = (
-                    self._streaming_health_aggregator.build(
-                        session_snapshot=session_snapshot,
-                        streaming_health=streaming_health,
-                    )
+            aggregate_kwargs = {
+                "session_snapshot": session_snapshot,
+                "streaming_health": streaming_health,
+            }
+
+            if self._rtmp_connection_health_service is not None:
+                aggregate_kwargs["rtmp_connections"] = rtmp_connections
+
+            if self._rtsp_session_health_service is not None:
+                aggregate_kwargs["rtsp_sessions"] = rtsp_sessions
+
+            self._latest_platform_health = (
+                self._streaming_health_aggregator.build(
+                    **aggregate_kwargs
                 )
-            else:
-                self._latest_platform_health = (
-                    self._streaming_health_aggregator.build(
-                        session_snapshot=session_snapshot,
-                        streaming_health=streaming_health,
-                        rtmp_connections=rtmp_connections,
-                    )
-                )
+            )
 
         system_info = self._system_service.get_system_info()
         system_resources = self._system_service.get_system_resources()
@@ -415,6 +429,7 @@ class DashboardApplication:
             "measurement": measurement,
             "session_measurement": session_measurement,
             "rtmp_connections": rtmp_connections,
+            "rtsp_sessions": rtsp_sessions,
             "active_connections_viewport": (
                 self._navigation_state.active_connections
             ),

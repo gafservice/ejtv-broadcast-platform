@@ -12,7 +12,12 @@ from app.domain.sessions import (
     SessionRole,
     SessionSnapshot,
 )
-from app.domain.streaming.health import HealthStatus, RTMPConnectionHealth, StreamingHealth
+from app.domain.streaming.health import (
+    HealthStatus,
+    RTMPConnectionHealth,
+    RTSPSessionHealth,
+    StreamingHealth,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -359,6 +364,7 @@ class StreamingHealthAggregator:
         session_snapshot: "SessionSnapshot",
         streaming_health: "StreamingHealth | None",
         rtmp_connections: tuple[RTMPConnectionHealth, ...] = (),
+        rtsp_sessions: tuple[RTSPSessionHealth, ...] = (),
     ) -> PlatformHealth:
         """Build platform health from the current observed snapshot."""
 
@@ -390,6 +396,7 @@ class StreamingHealthAggregator:
                 session=session,
                 streaming_health=streaming_health,
                 rtmp_connections=rtmp_connections,
+                rtsp_sessions=rtsp_sessions,
             )
 
             key = (
@@ -532,6 +539,7 @@ class StreamingHealthAggregator:
         session: ActiveSession,
         streaming_health: StreamingHealth | None,
         rtmp_connections: tuple[RTMPConnectionHealth, ...],
+        rtsp_sessions: tuple[RTSPSessionHealth, ...],
     ) -> HealthStatus:
         if (
             session.protocol is SessionProtocol.SRT
@@ -549,6 +557,15 @@ class StreamingHealthAggregator:
             specialized_status = cls._matching_rtmp_status(
                 session=session,
                 rtmp_connections=rtmp_connections,
+            )
+
+            if specialized_status is not None:
+                return specialized_status
+
+        if session.protocol is SessionProtocol.RTSP:
+            specialized_status = cls._matching_rtsp_status(
+                session=session,
+                rtsp_sessions=rtsp_sessions,
             )
 
             if specialized_status is not None:
@@ -593,6 +610,27 @@ class StreamingHealthAggregator:
                 connection.connection_id == session.session_id
                 and session.path is not None
                 and connection.path_name == session.path
+            )
+        )
+
+        if len(matches) != 1:
+            return None
+
+        return matches[0].status
+
+    @staticmethod
+    def _matching_rtsp_status(
+        *,
+        session: ActiveSession,
+        rtsp_sessions: tuple[RTSPSessionHealth, ...],
+    ) -> HealthStatus | None:
+        matches = tuple(
+            rtsp_session
+            for rtsp_session in rtsp_sessions
+            if (
+                rtsp_session.session_id == session.session_id
+                and session.path is not None
+                and rtsp_session.path_name == session.path
             )
         )
 

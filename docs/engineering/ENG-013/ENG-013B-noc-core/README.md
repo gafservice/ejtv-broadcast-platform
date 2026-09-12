@@ -103,3 +103,16 @@ consistencia de tráfico outbound en `ACTIVE CLIENTS`. Incluye los contratos
 de fallback y ambigüedad, la prevención de doble conteo RTMP, la preservación
 de la semántica histórica de `Total traffic`, la regresión completa del
 backend y la validación física multiprotocolo SRT/RTMP.
+
+### `09-RTSP-HEALTH-EVIDENCE.md`
+
+Evidencia de implementación y validación de RTSP Health dentro de ENG-013B.
+Documenta el modelo especializado `RTSPSessionHealth`, la evaluación temporal
+basada en deltas de sesión, la decisión física de no introducir una ventana
+de estabilización RTSP, la integración con `StreamingHealthAggregator` y
+`PlatformHealth`, el transporte por `DashboardApplication`, la proyección de
+Health y bitrate especializado en `CONNECTED CLIENTS`, la corrección de
+tráfico outbound en `ACTIVE CLIENTS`, la prevención de doble conteo, la
+validación física con sesiones RTSP reales y la regresión completa del
+backend. RTSP queda funcionalmente cerrado para el alcance actual de
+ENG-013B; la siguiente especialización planificada es HLS Health.
