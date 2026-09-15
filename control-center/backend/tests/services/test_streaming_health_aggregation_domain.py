@@ -73,6 +73,7 @@ def test_health_population_rejects_negative_counts(
 
 from app.domain.streaming.health import (
     HealthStatus,
+    HLSSessionHealth,
     RTMPConnectionHealth,
     RTSPSessionHealth,
 )
@@ -2586,6 +2587,258 @@ def test_streaming_health_aggregator_falls_back_on_ambiguous_rtsp_evidence() -> 
         critical_count=0,
         unknown_count=0,
     )
+    assert health.status is HealthStatus.HEALTHY
+    assert health.worst_observed_status is HealthStatus.HEALTHY
+    assert health.services[0].protocols[0].status is HealthStatus.HEALTHY
+
+
+# ============================================================
+# HLS SPECIALIZED AGGREGATION CONTRACT
+# ============================================================
+
+
+def test_streaming_health_aggregator_prefers_matching_hls_unknown_health() -> None:
+    captured_at = datetime(2026, 9, 15, 14, 45, tzinfo=UTC)
+
+    session = ActiveSession(
+        session_id="hls-reader-specialized-1",
+        protocol=SessionProtocol.HLS,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="127.0.0.1",
+        remote_port=42176,
+        path="IMPACT",
+        connected_since=captured_at,
+        quality=SessionQuality.GOOD,
+    )
+
+    specialized_health = HLSSessionHealth(
+        session_id="hls-reader-specialized-1",
+        path_name="IMPACT",
+        state="read",
+        effective_delta_bytes=None,
+        effective_bitrate_mbps=None,
+        status=HealthStatus.UNKNOWN,
+        message="Insufficient temporal evidence for HLS session.",
+    )
+
+    health = StreamingHealthAggregator().build(
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(session,),
+        ),
+        streaming_health=None,
+        hls_sessions=(specialized_health,),
+    )
+
+    assert health.population == HealthPopulation(
+        healthy_count=0,
+        degraded_count=0,
+        critical_count=0,
+        unknown_count=1,
+    )
+
+    assert health.status is HealthStatus.UNKNOWN
+    assert health.worst_observed_status is HealthStatus.UNKNOWN
+
+    service = health.services[0]
+    protocol = service.protocols[0]
+
+    assert service.service_id == "IMPACT"
+    assert service.status is HealthStatus.UNKNOWN
+    assert protocol.protocol is SessionProtocol.HLS
+    assert protocol.status is HealthStatus.UNKNOWN
+    assert protocol.reader_count == 1
+
+
+def test_streaming_health_aggregator_prefers_matching_hls_healthy_health() -> None:
+    captured_at = datetime(2026, 9, 15, 14, 50, tzinfo=UTC)
+
+    session = ActiveSession(
+        session_id="hls-reader-specialized-2",
+        protocol=SessionProtocol.HLS,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="127.0.0.1",
+        remote_port=42177,
+        path="IMPACT",
+        connected_since=captured_at,
+        quality=SessionQuality.CRITICAL,
+    )
+
+    specialized_health = HLSSessionHealth(
+        session_id="hls-reader-specialized-2",
+        path_name="IMPACT",
+        state="read",
+        effective_delta_bytes=3_000_000,
+        effective_bitrate_mbps=4.8,
+        status=HealthStatus.HEALTHY,
+        message="HLS reader has observed effective traffic.",
+    )
+
+    health = StreamingHealthAggregator().build(
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(session,),
+        ),
+        streaming_health=None,
+        hls_sessions=(specialized_health,),
+    )
+
+    assert health.population == HealthPopulation(
+        healthy_count=1,
+        degraded_count=0,
+        critical_count=0,
+        unknown_count=0,
+    )
+
+    assert health.status is HealthStatus.HEALTHY
+    assert health.worst_observed_status is HealthStatus.HEALTHY
+    assert health.services[0].protocols[0].status is HealthStatus.HEALTHY
+
+
+def test_streaming_health_aggregator_rejects_hls_path_mismatch() -> None:
+    captured_at = datetime(2026, 9, 15, 14, 55, tzinfo=UTC)
+
+    session = ActiveSession(
+        session_id="hls-reader-path-mismatch",
+        protocol=SessionProtocol.HLS,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="127.0.0.1",
+        remote_port=42178,
+        path="IMPACT",
+        connected_since=captured_at,
+        quality=SessionQuality.GOOD,
+    )
+
+    specialized_health = HLSSessionHealth(
+        session_id="hls-reader-path-mismatch",
+        path_name="ENLACE",
+        state="read",
+        effective_delta_bytes=None,
+        effective_bitrate_mbps=None,
+        status=HealthStatus.UNKNOWN,
+        message="HLS evidence belongs to another path.",
+    )
+
+    health = StreamingHealthAggregator().build(
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(session,),
+        ),
+        streaming_health=None,
+        hls_sessions=(specialized_health,),
+    )
+
+    assert health.population == HealthPopulation(
+        healthy_count=1,
+        degraded_count=0,
+        critical_count=0,
+        unknown_count=0,
+    )
+
+    assert health.status is HealthStatus.HEALTHY
+    assert health.services[0].protocols[0].status is HealthStatus.HEALTHY
+
+
+def test_streaming_health_aggregator_ignores_orphan_hls_evidence() -> None:
+    captured_at = datetime(2026, 9, 15, 15, 0, tzinfo=UTC)
+
+    session = ActiveSession(
+        session_id="hls-impact-observed",
+        protocol=SessionProtocol.HLS,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="127.0.0.1",
+        remote_port=42179,
+        path="IMPACT",
+        connected_since=captured_at,
+        quality=SessionQuality.GOOD,
+    )
+
+    orphan_health = HLSSessionHealth(
+        session_id="hls-orphan-1",
+        path_name="ENLACE",
+        state="read",
+        effective_delta_bytes=None,
+        effective_bitrate_mbps=None,
+        status=HealthStatus.UNKNOWN,
+        message="Orphan HLS evidence.",
+    )
+
+    health = StreamingHealthAggregator().build(
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(session,),
+        ),
+        streaming_health=None,
+        hls_sessions=(orphan_health,),
+    )
+
+    assert health.population.total_count == 1
+    assert health.population.healthy_count == 1
+    assert health.status is HealthStatus.HEALTHY
+
+    assert tuple(
+        service.service_id
+        for service in health.services
+    ) == ("IMPACT",)
+
+    assert health.services[0].protocols[0].status is HealthStatus.HEALTHY
+
+
+def test_streaming_health_aggregator_falls_back_on_ambiguous_hls_evidence() -> None:
+    captured_at = datetime(2026, 9, 15, 15, 5, tzinfo=UTC)
+
+    session = ActiveSession(
+        session_id="hls-reader-ambiguous",
+        protocol=SessionProtocol.HLS,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="127.0.0.1",
+        remote_port=42180,
+        path="IMPACT",
+        connected_since=captured_at,
+        quality=SessionQuality.GOOD,
+    )
+
+    first_health = HLSSessionHealth(
+        session_id="hls-reader-ambiguous",
+        path_name="IMPACT",
+        state="read",
+        effective_delta_bytes=None,
+        effective_bitrate_mbps=None,
+        status=HealthStatus.UNKNOWN,
+        message="First HLS candidate.",
+    )
+
+    second_health = HLSSessionHealth(
+        session_id="hls-reader-ambiguous",
+        path_name="IMPACT",
+        state="read",
+        effective_delta_bytes=1_000_000,
+        effective_bitrate_mbps=0.8,
+        status=HealthStatus.HEALTHY,
+        message="Second HLS candidate.",
+    )
+
+    health = StreamingHealthAggregator().build(
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(session,),
+        ),
+        streaming_health=None,
+        hls_sessions=(first_health, second_health),
+    )
+
+    assert health.population == HealthPopulation(
+        healthy_count=1,
+        degraded_count=0,
+        critical_count=0,
+        unknown_count=0,
+    )
+
     assert health.status is HealthStatus.HEALTHY
     assert health.worst_observed_status is HealthStatus.HEALTHY
     assert health.services[0].protocols[0].status is HealthStatus.HEALTHY
