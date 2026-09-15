@@ -3260,3 +3260,144 @@ def test_application_builds_rtsp_health_from_previous_session_snapshot() -> None
 
     assert first_snapshot_input.rtsp_sessions is first_rtsp_health
     assert second_snapshot_input.rtsp_sessions is second_rtsp_health
+
+
+# ============================================================
+# HLS RUNTIME APPLICATION CONTRACT
+# ============================================================
+
+
+def test_application_builds_hls_health_from_previous_session_snapshot() -> None:
+    """HLS health debe usar los mismos snapshots temporales del runtime."""
+    from app.domain.sessions import SessionSnapshot
+    from app.domain.streaming import HLSSessionHealth
+
+    first_captured_at = datetime(
+        2026, 9, 15, 16, 0, tzinfo=timezone.utc
+    )
+    second_captured_at = datetime(
+        2026, 9, 15, 16, 0, 1, tzinfo=timezone.utc
+    )
+
+    media_snapshots = (
+        MediaMTXSnapshot(
+            captured_at=first_captured_at,
+            paths=(),
+            reported_item_count=0,
+            reported_page_count=0,
+        ),
+        MediaMTXSnapshot(
+            captured_at=second_captured_at,
+            paths=(),
+            reported_item_count=0,
+            reported_page_count=0,
+        ),
+    )
+
+    first_session_snapshot = SessionSnapshot(
+        captured_at=first_captured_at,
+        sessions=(),
+    )
+    second_session_snapshot = SessionSnapshot(
+        captured_at=second_captured_at,
+        sessions=(),
+    )
+
+    first_hls_health: tuple[HLSSessionHealth, ...] = (
+        Mock(spec=HLSSessionHealth),
+    )
+    second_hls_health: tuple[HLSSessionHealth, ...] = (
+        Mock(spec=HLSSessionHealth),
+    )
+
+    mediamtx_adapter = Mock()
+    mediamtx_adapter.health.return_value = True
+    mediamtx_adapter.get_snapshot.side_effect = media_snapshots
+
+    session_adapter = Mock()
+    session_adapter.get_snapshot.side_effect = (
+        first_session_snapshot,
+        second_session_snapshot,
+    )
+
+    streaming_service = Mock()
+    streaming_service.compare.return_value = Mock()
+
+    session_service = Mock()
+    session_service.measure.return_value = Mock()
+
+    hls_session_health_service = Mock()
+    hls_session_health_service.build.side_effect = (
+        first_hls_health,
+        second_hls_health,
+    )
+
+    streaming_health_aggregator = Mock()
+    streaming_health_aggregator.build.return_value = Mock()
+
+    dashboard_snapshot_service = Mock()
+    dashboard_snapshot_service.build_snapshot.return_value = Mock(
+        spec=DashboardData
+    )
+
+    system_service = Mock()
+    system_service.get_system_info.return_value = Mock(
+        hostname="server-01"
+    )
+    system_service.get_system_resources.side_effect = (
+        Mock(),
+        Mock(),
+    )
+    system_service.get_network_interface_infos.return_value = ()
+
+    network_telemetry_service = Mock()
+    network_telemetry_service.build.return_value = None
+
+    application = DashboardApplication(
+        mediamtx_adapter=mediamtx_adapter,
+        session_adapter=session_adapter,
+        streaming_service=streaming_service,
+        session_service=session_service,
+        dashboard_service=Mock(),
+        dashboard_snapshot_service=dashboard_snapshot_service,
+        dashboard_renderer=Mock(),
+        system_service=system_service,
+        streaming_health_aggregator=streaming_health_aggregator,
+        hls_session_health_service=hls_session_health_service,
+        network_telemetry_service=network_telemetry_service,
+    )
+
+    application.build_dashboard()
+    application.build_dashboard()
+
+    assert hls_session_health_service.build.call_count == 2
+
+    first_call = hls_session_health_service.build.call_args_list[0]
+    assert first_call.kwargs == {
+        "previous_snapshot": None,
+        "current_snapshot": first_session_snapshot,
+    }
+
+    second_call = hls_session_health_service.build.call_args_list[1]
+    assert second_call.kwargs == {
+        "previous_snapshot": first_session_snapshot,
+        "current_snapshot": second_session_snapshot,
+    }
+
+    assert streaming_health_aggregator.build.call_count == 2
+
+    first_aggregate_call = (
+        streaming_health_aggregator.build.call_args_list[0]
+    )
+    assert (
+        first_aggregate_call.kwargs["hls_sessions"]
+        is first_hls_health
+    )
+
+    second_aggregate_call = (
+        streaming_health_aggregator.build.call_args_list[1]
+    )
+    assert (
+        second_aggregate_call.kwargs["hls_sessions"]
+        is second_hls_health
+    )
