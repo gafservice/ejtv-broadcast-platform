@@ -278,6 +278,7 @@ class MediaMTXSessionAdapter:
                     item,
                     "bytesSent",
                     "sentBytes",
+                    "outboundBytes",
                 )
             ),
             bitrate_receive_mbps=self._safe_optional_float(

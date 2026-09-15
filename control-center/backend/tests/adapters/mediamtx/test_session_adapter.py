@@ -522,6 +522,7 @@ def test_get_hls_snapshot_normalizes_reader() -> None:
     assert session.state == "read"
     assert session.path == "ejtv"
     assert session.remote_ip == "201.192.154.132"
+    assert session.bytes_sent == 29_803_902
 
 
 def test_get_snapshot_aggregates_four_protocols() -> None:
