@@ -150,6 +150,7 @@ def test_run_once_builds_and_renders_dashboard() -> None:
         session_measurement=session_measurement,
         rtmp_connections=(),
         rtsp_sessions=(),
+        hls_sessions=(),
         system_resources=system_resources,
         previous_system_resources=None,
         health=None,
@@ -638,6 +639,7 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         session_measurement=session_measurement,
         rtmp_connections=(),
         rtsp_sessions=(),
+        hls_sessions=(),
         system_resources=system_resources,
         previous_system_resources=None,
         health=effective_streaming_health,
@@ -3401,3 +3403,14 @@ def test_application_builds_hls_health_from_previous_session_snapshot() -> None:
         second_aggregate_call.kwargs["hls_sessions"]
         is second_hls_health
     )
+
+    snapshot_calls = (
+        dashboard_snapshot_service.build_snapshot.call_args_list
+    )
+    assert len(snapshot_calls) == 2
+
+    first_snapshot_input = snapshot_calls[0].args[0]
+    second_snapshot_input = snapshot_calls[1].args[0]
+
+    assert first_snapshot_input.hls_sessions is first_hls_health
+    assert second_snapshot_input.hls_sessions is second_hls_health

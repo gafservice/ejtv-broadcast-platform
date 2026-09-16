@@ -446,6 +446,7 @@ class DashboardApplication:
             "session_measurement": session_measurement,
             "rtmp_connections": rtmp_connections,
             "rtsp_sessions": rtsp_sessions,
+            "hls_sessions": hls_sessions,
             "active_connections_viewport": (
                 self._navigation_state.active_connections
             ),

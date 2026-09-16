@@ -3541,3 +3541,73 @@ def test_build_session_panel_does_not_project_rtsp_publisher_into_outbound() -> 
     )
 
     assert panel.outbound_bitrate_bps == 0
+
+
+def test_build_active_connections_projects_specialized_hls_health() -> None:
+    """Debe proyectar bitrate y health HLS especializados."""
+    from datetime import datetime, timezone
+
+    from app.domain.sessions import (
+        ActiveSession,
+        SessionMeasurement,
+        SessionProtocol,
+        SessionQuality,
+        SessionRole,
+    )
+    from app.domain.streaming import HealthStatus, HLSSessionHealth
+
+    captured_at = datetime(
+        2026,
+        9,
+        15,
+        20,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    session = ActiveSession(
+        session_id="hls-reader-001",
+        protocol=SessionProtocol.HLS,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="200.91.123.60",
+        remote_port=38254,
+        path="enlace",
+        connected_since=captured_at,
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=1,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=0.0,
+        worst_quality=SessionQuality.UNKNOWN,
+        protocols=(SessionProtocol.HLS,),
+    )
+
+    hls_health = HLSSessionHealth(
+        session_id="hls-reader-001",
+        path_name="enlace",
+        state="read",
+        effective_delta_bytes=750000,
+        effective_bitrate_mbps=6.0,
+        status=HealthStatus.HEALTHY,
+        message="HLS reader traffic is healthy.",
+    )
+
+    panel = DashboardService().build_active_connections_panel(
+        measurement=measurement,
+        hls_sessions=(hls_health,),
+    )
+
+    assert panel.connection_count == 1
+    assert panel.connections[0].protocol == "HLS"
+    assert panel.connections[0].health == "HEALTHY"
+    assert panel.connections[0].bitrate_bps == 6_000_000
