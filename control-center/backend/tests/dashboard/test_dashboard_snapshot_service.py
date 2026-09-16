@@ -616,3 +616,100 @@ def test_snapshot_service_transports_hls_health_to_active_connections() -> None:
         result.active_connections.connections[0].bitrate_bps
         == 6_000_000
     )
+
+
+def test_snapshot_service_transports_webrtc_health_to_active_connections() -> None:
+    """Debe transportar WebRTC health hasta CONNECTED CLIENTS."""
+
+    from app.domain.sessions import (
+        ActiveSession,
+        SessionMeasurement,
+        SessionProtocol,
+        SessionQuality,
+        SessionRole,
+    )
+    from app.domain.streaming import HealthStatus, WebRTCSessionHealth
+
+    captured_at = datetime(
+        2026,
+        9,
+        16,
+        14,
+        30,
+        tzinfo=UTC,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=0,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=None,
+        interval_seconds=None,
+        paths=(),
+        total_inbound_bitrate_bps=None,
+        total_outbound_bitrate_bps=None,
+        quality=MeasurementQuality.NOT_AVAILABLE,
+    )
+
+    session = ActiveSession(
+        session_id="webrtc-reader-001",
+        protocol=SessionProtocol.WEBRTC,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="192.168.33.234",
+        remote_port=65184,
+        path="impact",
+        connected_since=captured_at,
+    )
+
+    session_measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=1,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=0.0,
+        worst_quality=SessionQuality.UNKNOWN,
+        protocols=(SessionProtocol.WEBRTC,),
+    )
+
+    webrtc_health = WebRTCSessionHealth(
+        session_id="webrtc-reader-001",
+        path_name="impact",
+        state="read",
+        effective_delta_bytes=750000,
+        effective_bitrate_mbps=6.0,
+        status=HealthStatus.HEALTHY,
+        message="WebRTC reader traffic is healthy.",
+    )
+
+    result = DashboardSnapshotService().build_snapshot(
+        DashboardSnapshotInput(
+            hostname="ejtv-01",
+            mediamtx_online=True,
+            api_online=True,
+            snapshot=snapshot,
+            measurement=measurement,
+            session_measurement=session_measurement,
+            webrtc_sessions=(webrtc_health,),
+        )
+    )
+
+    assert result.active_connections is not None
+    assert result.active_connections.connection_count == 1
+
+    connection = result.active_connections.connections[0]
+
+    assert connection.protocol == "WebRTC"
+    assert connection.health == "HEALTHY"
+    assert connection.bitrate_bps == 6_000_000

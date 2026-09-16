@@ -25,6 +25,7 @@ from app.domain.streaming import (
     MediaMTXSnapshot,
     RTMPConnectionHealth,
     RTSPSessionHealth,
+    WebRTCSessionHealth,
     StreamingHealth,
     StreamingMeasurement,
 )
@@ -52,6 +53,7 @@ class DashboardSnapshotInput:
     rtmp_connections: tuple[RTMPConnectionHealth, ...] = ()
     rtsp_sessions: tuple[RTSPSessionHealth, ...] = ()
     hls_sessions: tuple[HLSSessionHealth, ...] = ()
+    webrtc_sessions: tuple[WebRTCSessionHealth, ...] = ()
     system_resources: SystemResources | None = None
     previous_system_resources: SystemResources | None = None
     health: StreamingHealth | None = None
@@ -124,6 +126,7 @@ class DashboardSnapshotService:
             rtmp_connections=snapshot_input.rtmp_connections,
             rtsp_sessions=snapshot_input.rtsp_sessions,
             hls_sessions=snapshot_input.hls_sessions,
+            webrtc_sessions=snapshot_input.webrtc_sessions,
             system_resources=snapshot_input.system_resources,
             previous_system_resources=(
                 snapshot_input.previous_system_resources

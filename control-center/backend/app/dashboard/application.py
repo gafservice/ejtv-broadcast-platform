@@ -463,6 +463,7 @@ class DashboardApplication:
             "rtmp_connections": rtmp_connections,
             "rtsp_sessions": rtsp_sessions,
             "hls_sessions": hls_sessions,
+            "webrtc_sessions": webrtc_sessions,
             "active_connections_viewport": (
                 self._navigation_state.active_connections
             ),

@@ -3611,3 +3611,137 @@ def test_build_active_connections_projects_specialized_hls_health() -> None:
     assert panel.connections[0].protocol == "HLS"
     assert panel.connections[0].health == "HEALTHY"
     assert panel.connections[0].bitrate_bps == 6_000_000
+
+
+
+def test_build_active_connections_panel_rejects_ambiguous_webrtc_specialized_health() -> None:
+    """No debe proyectar evidencia WebRTC especializada si el match es ambiguo."""
+
+    from app.domain.streaming import HealthStatus, WebRTCSessionHealth
+
+    captured_at = datetime(
+        2026,
+        9,
+        16,
+        15,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    session = ActiveSession(
+        session_id="webrtc-reader-ambiguous-001",
+        protocol=SessionProtocol.WEBRTC,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="192.168.33.234",
+        remote_port=65184,
+        path="impact",
+        connected_since=captured_at,
+        bitrate_send_mbps=9.0,
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=1,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=0.0,
+        worst_quality=SessionQuality.UNKNOWN,
+        protocols=(SessionProtocol.WEBRTC,),
+    )
+
+    first_health = WebRTCSessionHealth(
+        session_id="webrtc-reader-ambiguous-001",
+        path_name="impact",
+        state="read",
+        effective_delta_bytes=750000,
+        effective_bitrate_mbps=6.0,
+        status=HealthStatus.HEALTHY,
+        message="First WebRTC observation.",
+    )
+
+    duplicate_health = WebRTCSessionHealth(
+        session_id="webrtc-reader-ambiguous-001",
+        path_name="impact",
+        state="read",
+        effective_delta_bytes=500000,
+        effective_bitrate_mbps=4.0,
+        status=HealthStatus.DEGRADED,
+        message="Duplicate WebRTC observation.",
+    )
+
+    panel = DashboardService().build_active_connections_panel(
+        measurement=measurement,
+        webrtc_sessions=(
+            first_health,
+            duplicate_health,
+        ),
+    )
+
+    assert panel.connection_count == 1
+
+    connection = panel.connections[0]
+
+    assert connection.protocol == "WebRTC"
+    assert connection.health is None
+    assert connection.bitrate_bps is None
+
+
+def test_build_active_connections_panel_rejects_generic_webrtc_bitrate_without_specialized_health() -> None:
+    """WebRTC sin evidencia especializada debe conservar bitrate N/A."""
+
+    captured_at = datetime(
+        2026,
+        9,
+        16,
+        15,
+        30,
+        tzinfo=timezone.utc,
+    )
+
+    session = ActiveSession(
+        session_id="webrtc-reader-no-health-001",
+        protocol=SessionProtocol.WEBRTC,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="192.168.33.234",
+        remote_port=65185,
+        path="impact",
+        connected_since=captured_at,
+        bitrate_send_mbps=9.0,
+    )
+
+    measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(session,),
+        paths=(),
+        total_sessions=1,
+        reader_count=1,
+        publisher_count=0,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=0.0,
+        total_outbound_bitrate_mbps=9.0,
+        worst_quality=SessionQuality.UNKNOWN,
+        protocols=(SessionProtocol.WEBRTC,),
+    )
+
+    panel = DashboardService().build_active_connections_panel(
+        measurement=measurement,
+        webrtc_sessions=(),
+    )
+
+    assert panel.connection_count == 1
+
+    connection = panel.connections[0]
+
+    assert connection.protocol == "WebRTC"
+    assert connection.health is None
+    assert connection.bitrate_bps is None

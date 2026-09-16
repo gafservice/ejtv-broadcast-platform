@@ -32,6 +32,7 @@ from app.domain.streaming import (
     HLSSessionHealth,
     RTMPConnectionHealth,
     RTSPSessionHealth,
+    WebRTCSessionHealth,
     StreamingHealth,
     StreamingMeasurement,
 )
@@ -270,6 +271,7 @@ class DashboardService:
         rtmp_connections: tuple[RTMPConnectionHealth, ...] = (),
         rtsp_sessions: tuple[RTSPSessionHealth, ...] = (),
         hls_sessions: tuple[HLSSessionHealth, ...] = (),
+        webrtc_sessions: tuple[WebRTCSessionHealth, ...] = (),
         viewport: PanelViewport | None = None,
     ) -> ActiveConnectionsPanelData:
         """Construye los datos del panel CONNECTED CLIENTS."""
@@ -335,6 +337,21 @@ class DashboardService:
                 continue
 
             hls_health_by_key[key] = session_health
+
+        webrtc_health_by_key = {}
+        ambiguous_webrtc_health_keys = set()
+
+        for session_health in webrtc_sessions:
+            key = (
+                session_health.session_id,
+                session_health.path_name,
+            )
+
+            if key in webrtc_health_by_key:
+                ambiguous_webrtc_health_keys.add(key)
+                continue
+
+            webrtc_health_by_key[key] = session_health
 
         connections = tuple(
             ActiveConnectionRow(
@@ -408,9 +425,34 @@ class DashboardService:
                                 is not None
                             )
                             else (
-                                session.effective_bitrate_mbps * 1_000_000
-                                if session.effective_bitrate_mbps is not None
-                                else None
+                                webrtc_health_by_key[
+                                    (session.session_id, session.path)
+                                ].effective_bitrate_mbps
+                                * 1_000_000
+                                if (
+                                    session.protocol.value == "WebRTC"
+                                    and (
+                                        session.session_id,
+                                        session.path,
+                                    ) in webrtc_health_by_key
+                                    and (
+                                        session.session_id,
+                                        session.path,
+                                    ) not in ambiguous_webrtc_health_keys
+                                    and webrtc_health_by_key[
+                                        (session.session_id, session.path)
+                                    ].effective_bitrate_mbps
+                                    is not None
+                                )
+                                else (
+                                    None
+                                    if session.protocol.value == "WebRTC"
+                                    else (
+                                        session.effective_bitrate_mbps * 1_000_000
+                                        if session.effective_bitrate_mbps is not None
+                                        else None
+                                    )
+                                )
                             )
                         )
                     )
@@ -479,7 +521,23 @@ class DashboardService:
                                         session.path,
                                     ) not in ambiguous_hls_health_keys
                                 )
-                                else None
+                                else (
+                                    webrtc_health_by_key[
+                                        (session.session_id, session.path)
+                                    ].status.value
+                                    if (
+                                        session.protocol.value == "WebRTC"
+                                        and (
+                                            session.session_id,
+                                            session.path,
+                                        ) in webrtc_health_by_key
+                                        and (
+                                            session.session_id,
+                                            session.path,
+                                        ) not in ambiguous_webrtc_health_keys
+                                    )
+                                    else None
+                                )
                             )
                         )
                     )
@@ -952,6 +1010,7 @@ class DashboardService:
         rtmp_connections: tuple[RTMPConnectionHealth, ...] = (),
         rtsp_sessions: tuple[RTSPSessionHealth, ...] = (),
         hls_sessions: tuple[HLSSessionHealth, ...] = (),
+        webrtc_sessions: tuple[WebRTCSessionHealth, ...] = (),
         system_resources: SystemResources | None = None,
         previous_system_resources: SystemResources | None = None,
         health: StreamingHealth | None = None,
@@ -1020,6 +1079,7 @@ class DashboardService:
                 rtmp_connections=rtmp_connections,
                 rtsp_sessions=rtsp_sessions,
                 hls_sessions=hls_sessions,
+                webrtc_sessions=webrtc_sessions,
                 viewport=active_connections_viewport,
             )
             if session_measurement is not None
