@@ -47,6 +47,7 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
     rtmp_connection_health_window = Mock()
     rtsp_session_health_service = Mock()
     hls_session_health_service = Mock()
+    webrtc_session_health_service = Mock()
     srt_connection_health_stabilizer = Mock()
     streaming_health_stabilizer = Mock()
 
@@ -183,6 +184,13 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
             patch(
                 "app.dashboard.live_monitor.HLSSessionHealthService",
                 return_value=hls_session_health_service,
+            )
+        )
+
+        webrtc_session_health_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.WebRTCSessionHealthService",
+                return_value=webrtc_session_health_service,
             )
         )
 
@@ -421,6 +429,7 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
     )
     rtsp_session_health_service_class.assert_called_once_with()
     hls_session_health_service_class.assert_called_once_with()
+    webrtc_session_health_service_class.assert_called_once_with()
 
     srt_connection_health_stabilizer_class.assert_called_once_with(
         degradation_seconds=7.5,
@@ -497,6 +506,7 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
         rtmp_connection_health_window=rtmp_connection_health_window,
         rtsp_session_health_service=rtsp_session_health_service,
         hls_session_health_service=hls_session_health_service,
+        webrtc_session_health_service=webrtc_session_health_service,
         streaming_health_stabilizer=streaming_health_stabilizer,
         streaming_health_transition_detector=transition_detector,
         dashboard_snapshot_service=dashboard_snapshot_service,

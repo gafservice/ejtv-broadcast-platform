@@ -296,6 +296,9 @@ def test_get_snapshot_aggregates_supported_protocols() -> None:
     client.get_hls_sessions.return_value = {
         "items": []
     }
+    client.get_webrtc_sessions.return_value = {
+        "items": []
+    }
 
     adapter = MediaMTXSessionAdapter(client)
 
@@ -400,6 +403,9 @@ def test_get_snapshot_aggregates_srt_and_rtsp() -> None:
         "items": []
     }
     client.get_hls_sessions.return_value = {
+        "items": []
+    }
+    client.get_webrtc_sessions.return_value = {
         "items": []
     }
 
@@ -559,6 +565,9 @@ def test_get_snapshot_aggregates_four_protocols() -> None:
             )
         ]
     }
+    client.get_webrtc_sessions.return_value = {
+        "items": []
+    }
 
     adapter = MediaMTXSessionAdapter(
         client=client,
@@ -582,3 +591,132 @@ def test_get_snapshot_aggregates_four_protocols() -> None:
     client.get_rtsp_sessions.assert_called_once_with()
     client.get_rtmp_connections.assert_called_once_with()
     client.get_hls_sessions.assert_called_once_with()
+
+
+# ---------------------------------------------------------------------------
+# WebRTC session normalization contract
+# ---------------------------------------------------------------------------
+
+
+def build_webrtc_item(
+    *,
+    session_id: str = "c5079ffa-7240-4cc1-b8ca-40ac2bd9d191",
+    state: str = "read",
+    path: str = "impact",
+) -> dict[str, object]:
+    """Build a WebRTC session from the observed MediaMTX API contract."""
+
+    return {
+        "id": session_id,
+        "created": "2026-09-16T08:56:02.847597358-06:00",
+        "remoteAddr": "192.168.33.234:65184",
+        "peerConnectionEstablished": True,
+        "localCandidate": "host/udp/127.0.0.1/8189",
+        "remoteCandidate": "prflx/udp/192.168.33.234/63959",
+        "state": state,
+        "path": path,
+        "query": "",
+        "user": "",
+        "userAgent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:155.0) "
+            "Gecko/20100101 Firefox/155.0"
+        ),
+        "inboundBytes": 140_459,
+        "inboundRTPPackets": 0,
+        "inboundRTPPacketsLost": 0,
+        "inboundRTPPacketsJitter": 0,
+        "inboundRTCPPackets": 3_563,
+        "outboundBytes": 346_698_993,
+        "outboundRTPPackets": 291_964,
+        "outboundRTCPPackets": 462,
+        "outboundFramesDiscarded": 0,
+        "bytesReceived": 140_459,
+        "bytesSent": 346_698_993,
+        "rtpPacketsReceived": 0,
+        "rtpPacketsSent": 291_964,
+        "rtpPacketsLost": 0,
+        "rtpPacketsJitter": 0,
+        "rtcpPacketsReceived": 3_563,
+        "rtcpPacketsSent": 462,
+    }
+
+
+def test_get_webrtc_snapshot_normalizes_observed_reader_session() -> None:
+    client = Mock()
+
+    client.get_webrtc_sessions.return_value = {
+        "itemCount": 1,
+        "pageCount": 1,
+        "items": [
+            build_webrtc_item(),
+        ],
+    }
+
+    adapter = MediaMTXSessionAdapter(client=client)
+
+    snapshot = adapter.get_webrtc_snapshot()
+
+    client.get_webrtc_sessions.assert_called_once_with()
+
+    assert snapshot.session_count == 1
+    assert snapshot.reader_count == 1
+    assert snapshot.publisher_count == 0
+
+    session = snapshot.sessions[0]
+
+    assert session.session_id == "c5079ffa-7240-4cc1-b8ca-40ac2bd9d191"
+    assert session.protocol is SessionProtocol.WEBRTC
+    assert session.role is SessionRole.READER
+    assert session.state == "read"
+    assert session.path == "impact"
+    assert session.remote_ip == "192.168.33.234"
+    assert session.remote_port == 65184
+    assert session.user_agent is not None
+
+    # Only normalize counters already supported by ActiveSession.
+    # WebRTC-specific ICE / peer-connection evidence remains outside
+    # the generic session contract until its domain contract is designed.
+    assert session.bytes_received == 140_459
+    assert session.bytes_sent == 346_698_993
+    assert session.packets_received == 0
+    assert session.packets_sent == 291_964
+    assert session.packets_lost == 0
+
+
+def test_get_snapshot_includes_webrtc_sessions() -> None:
+    client = Mock()
+
+    client.get_srt_connections.return_value = {
+        "items": [],
+    }
+    client.get_rtsp_sessions.return_value = {
+        "items": [],
+    }
+    client.get_rtmp_connections.return_value = {
+        "items": [],
+    }
+    client.get_hls_sessions.return_value = {
+        "items": [],
+    }
+    client.get_webrtc_sessions.return_value = {
+        "items": [
+            build_webrtc_item(
+                session_id="webrtc-impact-001",
+            ),
+        ],
+    }
+
+    adapter = MediaMTXSessionAdapter(client=client)
+
+    snapshot = adapter.get_snapshot()
+
+    assert len(snapshot.sessions) == 1
+
+    session = snapshot.sessions[0]
+
+    assert session.session_id == "webrtc-impact-001"
+    assert session.protocol is SessionProtocol.WEBRTC
+    assert session.role is SessionRole.READER
+    assert session.path == "impact"
+
+    client.get_webrtc_sessions.assert_called_once_with()

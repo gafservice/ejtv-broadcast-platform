@@ -8,6 +8,7 @@ from .health import (
     SRTConnectionHealth,
     SRTPathHealth,
     StreamingHealth,
+    WebRTCSessionHealth,
 )
 from .metrics import (
     MeasurementQuality,
@@ -31,6 +32,7 @@ __all__ = [
     "SRTConnectionHealth",
     "SRTPathHealth",
     "StreamingHealth",
+    "WebRTCSessionHealth",
     "MeasurementQuality",
     "StreamingMeasurement",
     "StreamingPathMeasurement",

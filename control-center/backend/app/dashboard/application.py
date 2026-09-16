@@ -68,6 +68,9 @@ from app.services.rtsp_session_health_service import (
 from app.services.hls_session_health_service import (
     HLSSessionHealthService,
 )
+from app.services.webrtc_session_health_service import (
+    WebRTCSessionHealthService,
+)
 from app.services.streaming_health_service import StreamingHealthService
 from app.services.streaming_health_stabilizer import StreamingHealthStabilizer
 from app.services.streaming_health_transition_detector import (
@@ -106,6 +109,7 @@ class DashboardApplication:
         rtmp_connection_health_window: RTMPConnectionHealthWindow | None = None,
         rtsp_session_health_service: RTSPSessionHealthService | None = None,
         hls_session_health_service: HLSSessionHealthService | None = None,
+        webrtc_session_health_service: WebRTCSessionHealthService | None = None,
         streaming_health_transition_detector: (
             StreamingHealthTransitionDetector | None
         ) = None,
@@ -157,6 +161,7 @@ class DashboardApplication:
         self._rtmp_connection_health_window = rtmp_connection_health_window
         self._rtsp_session_health_service = rtsp_session_health_service
         self._hls_session_health_service = hls_session_health_service
+        self._webrtc_session_health_service = webrtc_session_health_service
         self._streaming_health_transition_detector = (
             streaming_health_transition_detector
         )
@@ -340,6 +345,14 @@ class DashboardApplication:
                 current_snapshot=session_snapshot,
             )
 
+        webrtc_sessions = ()
+
+        if self._webrtc_session_health_service is not None:
+            webrtc_sessions = self._webrtc_session_health_service.build(
+                previous_snapshot=self._previous_session_snapshot,
+                current_snapshot=session_snapshot,
+            )
+
         self._latest_platform_health = None
 
         if self._streaming_health_aggregator is not None:
@@ -356,6 +369,9 @@ class DashboardApplication:
 
             if self._hls_session_health_service is not None:
                 aggregate_kwargs["hls_sessions"] = hls_sessions
+
+            if self._webrtc_session_health_service is not None:
+                aggregate_kwargs["webrtc_sessions"] = webrtc_sessions
 
             self._latest_platform_health = (
                 self._streaming_health_aggregator.build(

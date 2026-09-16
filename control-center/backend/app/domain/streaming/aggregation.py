@@ -16,6 +16,7 @@ from app.domain.streaming.health import (
     HealthStatus,
     HLSSessionHealth,
     RTMPConnectionHealth,
+    WebRTCSessionHealth,
     RTSPSessionHealth,
     StreamingHealth,
 )
@@ -367,6 +368,7 @@ class StreamingHealthAggregator:
         rtmp_connections: tuple[RTMPConnectionHealth, ...] = (),
         rtsp_sessions: tuple[RTSPSessionHealth, ...] = (),
         hls_sessions: tuple[HLSSessionHealth, ...] = (),
+        webrtc_sessions: tuple[WebRTCSessionHealth, ...] = (),
     ) -> PlatformHealth:
         """Build platform health from the current observed snapshot."""
 
@@ -400,6 +402,7 @@ class StreamingHealthAggregator:
                 rtmp_connections=rtmp_connections,
                 rtsp_sessions=rtsp_sessions,
                 hls_sessions=hls_sessions,
+                webrtc_sessions=webrtc_sessions,
             )
 
             key = (
@@ -544,6 +547,7 @@ class StreamingHealthAggregator:
         rtmp_connections: tuple[RTMPConnectionHealth, ...],
         rtsp_sessions: tuple[RTSPSessionHealth, ...],
         hls_sessions: tuple[HLSSessionHealth, ...],
+        webrtc_sessions: tuple[WebRTCSessionHealth, ...],
     ) -> HealthStatus:
         if (
             session.protocol is SessionProtocol.SRT
@@ -579,6 +583,15 @@ class StreamingHealthAggregator:
             specialized_status = cls._matching_hls_status(
                 session=session,
                 hls_sessions=hls_sessions,
+            )
+
+            if specialized_status is not None:
+                return specialized_status
+
+        if session.protocol is SessionProtocol.WEBRTC:
+            specialized_status = cls._matching_webrtc_status(
+                session=session,
+                webrtc_sessions=webrtc_sessions,
             )
 
             if specialized_status is not None:
@@ -665,6 +678,27 @@ class StreamingHealthAggregator:
                 hls_session.session_id == session.session_id
                 and session.path is not None
                 and hls_session.path_name == session.path
+            )
+        )
+
+        if len(matches) != 1:
+            return None
+
+        return matches[0].status
+
+    @staticmethod
+    def _matching_webrtc_status(
+        *,
+        session: ActiveSession,
+        webrtc_sessions: tuple[WebRTCSessionHealth, ...],
+    ) -> HealthStatus | None:
+        matches = tuple(
+            webrtc_session
+            for webrtc_session in webrtc_sessions
+            if (
+                webrtc_session.session_id == session.session_id
+                and session.path is not None
+                and webrtc_session.path_name == session.path
             )
         )
 

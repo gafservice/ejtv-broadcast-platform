@@ -2842,3 +2842,297 @@ def test_streaming_health_aggregator_falls_back_on_ambiguous_hls_evidence() -> N
     assert health.status is HealthStatus.HEALTHY
     assert health.worst_observed_status is HealthStatus.HEALTHY
     assert health.services[0].protocols[0].status is HealthStatus.HEALTHY
+
+
+
+# ---------------------------------------------------------------------------
+# WebRTC specialized health aggregation contract
+# ---------------------------------------------------------------------------
+
+
+def test_webrtc_specialized_health_overrides_generic_session_quality() -> None:
+    from datetime import datetime, timezone
+
+    from app.domain.sessions import (
+        ActiveSession,
+        SessionProtocol,
+        SessionQuality,
+        SessionRole,
+        SessionSnapshot,
+    )
+    from app.domain.streaming import (
+        HealthStatus,
+        WebRTCSessionHealth,
+    )
+
+    captured_at = datetime(
+        2026,
+        9,
+        16,
+        16,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    session = ActiveSession(
+        session_id="webrtc-impact-001",
+        remote_ip="192.168.33.234",
+        remote_port=65184,
+        connected_since=datetime(
+            2026,
+            9,
+            16,
+            14,
+            56,
+            2,
+            tzinfo=timezone.utc,
+        ),
+        protocol=SessionProtocol.WEBRTC,
+        role=SessionRole.READER,
+        state="read",
+        path="impact",
+        quality=SessionQuality.CRITICAL,
+    )
+
+    snapshot = SessionSnapshot(
+        captured_at=captured_at,
+        sessions=(session,),
+    )
+
+    specialized_health = WebRTCSessionHealth(
+        session_id="webrtc-impact-001",
+        path_name="impact",
+        state="read",
+        effective_delta_bytes=6_725_238,
+        effective_bitrate_mbps=5.378519294055337,
+        status=HealthStatus.HEALTHY,
+        message="WebRTC reader has observed effective traffic.",
+    )
+
+    health = StreamingHealthAggregator().build(
+        session_snapshot=snapshot,
+        streaming_health=None,
+        webrtc_sessions=(specialized_health,),
+    )
+
+    protocol = health.services[0].protocols[0]
+
+    assert protocol.protocol is SessionProtocol.WEBRTC
+    assert protocol.population.healthy_count == 1
+    assert protocol.population.critical_count == 0
+    assert protocol.status is HealthStatus.HEALTHY
+
+
+def test_webrtc_without_specialized_match_falls_back_to_session_quality() -> None:
+    from datetime import datetime, timezone
+
+    from app.domain.sessions import (
+        ActiveSession,
+        SessionProtocol,
+        SessionQuality,
+        SessionRole,
+        SessionSnapshot,
+    )
+    from app.domain.streaming import HealthStatus
+
+    captured_at = datetime(
+        2026,
+        9,
+        16,
+        16,
+        1,
+        tzinfo=timezone.utc,
+    )
+
+    session = ActiveSession(
+        session_id="webrtc-impact-002",
+        remote_ip="192.168.33.234",
+        remote_port=65184,
+        connected_since=datetime(
+            2026,
+            9,
+            16,
+            14,
+            56,
+            2,
+            tzinfo=timezone.utc,
+        ),
+        protocol=SessionProtocol.WEBRTC,
+        role=SessionRole.READER,
+        state="read",
+        path="impact",
+        quality=SessionQuality.GOOD,
+    )
+
+    snapshot = SessionSnapshot(
+        captured_at=captured_at,
+        sessions=(session,),
+    )
+
+    health = StreamingHealthAggregator().build(
+        session_snapshot=snapshot,
+        streaming_health=None,
+    )
+
+    protocol = health.services[0].protocols[0]
+
+    assert protocol.population.healthy_count == 1
+    assert protocol.status is HealthStatus.HEALTHY
+
+
+def test_webrtc_specialized_health_with_different_path_does_not_match() -> None:
+    from datetime import datetime, timezone
+
+    from app.domain.sessions import (
+        ActiveSession,
+        SessionProtocol,
+        SessionQuality,
+        SessionRole,
+        SessionSnapshot,
+    )
+    from app.domain.streaming import (
+        HealthStatus,
+        WebRTCSessionHealth,
+    )
+
+    captured_at = datetime(
+        2026,
+        9,
+        16,
+        16,
+        2,
+        tzinfo=timezone.utc,
+    )
+
+    session = ActiveSession(
+        session_id="webrtc-impact-003",
+        remote_ip="192.168.33.234",
+        remote_port=65184,
+        connected_since=datetime(
+            2026,
+            9,
+            16,
+            14,
+            56,
+            2,
+            tzinfo=timezone.utc,
+        ),
+        protocol=SessionProtocol.WEBRTC,
+        role=SessionRole.READER,
+        state="read",
+        path="impact",
+        quality=SessionQuality.CRITICAL,
+    )
+
+    snapshot = SessionSnapshot(
+        captured_at=captured_at,
+        sessions=(session,),
+    )
+
+    orphan_health = WebRTCSessionHealth(
+        session_id="webrtc-impact-003",
+        path_name="other-path",
+        state="read",
+        effective_delta_bytes=1000,
+        effective_bitrate_mbps=1.0,
+        status=HealthStatus.HEALTHY,
+        message="Different WebRTC path.",
+    )
+
+    health = StreamingHealthAggregator().build(
+        session_snapshot=snapshot,
+        streaming_health=None,
+        webrtc_sessions=(orphan_health,),
+    )
+
+    protocol = health.services[0].protocols[0]
+
+    assert protocol.population.critical_count == 1
+    assert protocol.population.healthy_count == 0
+    assert protocol.status is HealthStatus.CRITICAL
+
+
+def test_webrtc_ambiguous_specialized_matches_fall_back_to_session_quality() -> None:
+    from datetime import datetime, timezone
+
+    from app.domain.sessions import (
+        ActiveSession,
+        SessionProtocol,
+        SessionQuality,
+        SessionRole,
+        SessionSnapshot,
+    )
+    from app.domain.streaming import (
+        HealthStatus,
+        WebRTCSessionHealth,
+    )
+
+    captured_at = datetime(
+        2026,
+        9,
+        16,
+        16,
+        3,
+        tzinfo=timezone.utc,
+    )
+
+    session = ActiveSession(
+        session_id="webrtc-impact-004",
+        remote_ip="192.168.33.234",
+        remote_port=65184,
+        connected_since=datetime(
+            2026,
+            9,
+            16,
+            14,
+            56,
+            2,
+            tzinfo=timezone.utc,
+        ),
+        protocol=SessionProtocol.WEBRTC,
+        role=SessionRole.READER,
+        state="read",
+        path="impact",
+        quality=SessionQuality.CRITICAL,
+    )
+
+    snapshot = SessionSnapshot(
+        captured_at=captured_at,
+        sessions=(session,),
+    )
+
+    first_health = WebRTCSessionHealth(
+        session_id="webrtc-impact-004",
+        path_name="impact",
+        state="read",
+        effective_delta_bytes=1000,
+        effective_bitrate_mbps=1.0,
+        status=HealthStatus.HEALTHY,
+        message="First WebRTC health observation.",
+    )
+
+    second_health = WebRTCSessionHealth(
+        session_id="webrtc-impact-004",
+        path_name="impact",
+        state="read",
+        effective_delta_bytes=None,
+        effective_bitrate_mbps=None,
+        status=HealthStatus.UNKNOWN,
+        message="Second WebRTC health observation.",
+    )
+
+    health = StreamingHealthAggregator().build(
+        session_snapshot=snapshot,
+        streaming_health=None,
+        webrtc_sessions=(
+            first_health,
+            second_health,
+        ),
+    )
+
+    protocol = health.services[0].protocols[0]
+
+    assert protocol.population.critical_count == 1
+    assert protocol.population.healthy_count == 0
+    assert protocol.population.unknown_count == 0
+    assert protocol.status is HealthStatus.CRITICAL

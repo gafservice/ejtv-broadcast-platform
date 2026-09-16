@@ -40,6 +40,7 @@ class MediaMTXSessionAdapter:
         rtsp_snapshot = self.get_rtsp_snapshot()
         rtmp_snapshot = self.get_rtmp_snapshot()
         hls_snapshot = self.get_hls_snapshot()
+        webrtc_snapshot = self.get_webrtc_snapshot()
 
         return SessionSnapshot(
             captured_at=datetime.now(UTC),
@@ -48,6 +49,7 @@ class MediaMTXSessionAdapter:
                 *rtsp_snapshot.sessions,
                 *rtmp_snapshot.sessions,
                 *hls_snapshot.sessions,
+                *webrtc_snapshot.sessions,
             ),
         )
 
@@ -121,6 +123,18 @@ class MediaMTXSessionAdapter:
             protocol=SessionProtocol.HLS,
         )
 
+
+    def get_webrtc_snapshot(self) -> SessionSnapshot:
+        """Obtiene y normaliza las sesiones WebRTC de MediaMTX."""
+
+        payload = self._client.get_webrtc_sessions()
+
+        return self._parse_collection(
+            payload=payload,
+            protocol=SessionProtocol.WEBRTC,
+        )
+
+
     def _parse_collection(
         self,
         *,
@@ -187,6 +201,8 @@ class MediaMTXSessionAdapter:
                 item,
                 "packetsReceived",
                 "recvPackets",
+                "rtpPacketsReceived",
+                "inboundRTPPackets",
             )
         )
         packets_sent = self._safe_int(
@@ -194,6 +210,8 @@ class MediaMTXSessionAdapter:
                 item,
                 "packetsSent",
                 "sentPackets",
+                "rtpPacketsSent",
+                "outboundRTPPackets",
             )
         )
 
