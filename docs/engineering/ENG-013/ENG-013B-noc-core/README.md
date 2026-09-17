@@ -115,4 +115,39 @@ Health y bitrate especializado en `CONNECTED CLIENTS`, la corrección de
 tráfico outbound en `ACTIVE CLIENTS`, la prevención de doble conteo, la
 validación física con sesiones RTSP reales y la regresión completa del
 backend. RTSP queda funcionalmente cerrado para el alcance actual de
-ENG-013B; la siguiente especialización planificada es HLS Health.
+ENG-013B.
+
+### `10-HLS-HEALTH-EVIDENCE.md`
+
+Evidencia de implementación y validación de HLS Health dentro de ENG-013B.
+Documenta `HLSSessionHealth`, evaluación temporal de lectores mediante
+progresión de tráfico outbound, semántica demand-driven de HLS,
+integración con `StreamingHealthAggregator`, `PlatformHealth` y Dashboard,
+proyección en `CONNECTED CLIENTS`, validación física LL-HLS sobre `impact`
+y preservación explícita de `UNKNOWN` cuando la evidencia temporal es
+insuficiente.
+
+### `11-WEBRTC-HEALTH-EVIDENCE.md`
+
+Evidencia de implementación y validación de WebRTC Health dentro de
+ENG-013B. Documenta `WebRTCSessionHealth`, evaluación temporal según
+dirección READER/PUBLISHER, integración multiprotocolo, propagación al
+Dashboard y `CONNECTED CLIENTS`, sesiones WebRTC reales con
+PeerConnection establecida sobre `impact`, validación temporal de tráfico
+y la frontera semántica que evita interpretar contadores RTP inbound como
+QoE del navegador sin evidencia direccional suficiente.
+
+### `12-ENG-013B-CLOSURE-EVIDENCE.md`
+
+Evidencia consolidada para el cierre formal de ENG-013B.
+
+Resume la trazabilidad de Node Health, Stream Health temporal,
+transiciones, Events, Alarms, Aggregation, Platform Health, Dashboard y
+las especializaciones SRT, RTMP, RTSP, HLS y WebRTC.
+
+El documento conserva explícitamente las fronteras arquitectónicas entre
+Health, Expected Presence, Media/Track Health, Events, Alarms y
+History/Evidence.
+
+El cierre definitivo requiere regresión completa final, revisión del diff,
+commit, push y verificación de sincronización con origin.

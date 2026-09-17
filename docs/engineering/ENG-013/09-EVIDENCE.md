@@ -166,3 +166,114 @@ en verde.
 
 El cierre formal queda pendiente únicamente de revisión final del diff,
 commit, push y verificación de sincronización con origin.
+
+## RTSP / HLS / WebRTC Health completion
+
+### RTSP Health
+
+Documento:
+
+`ENG-013B-noc-core/09-RTSP-HEALTH-EVIDENCE.md`
+
+Cubre la especialización `RTSPSessionHealth`, evaluación temporal,
+integración multiprotocolo, Dashboard, `CONNECTED CLIENTS`, tráfico
+outbound y validación física RTSP.
+
+### HLS Health
+
+Documento:
+
+`ENG-013B-noc-core/10-HLS-HEALTH-EVIDENCE.md`
+
+Cubre:
+
+- `HLSSessionHealth`;
+- evaluación temporal de HLS READER mediante `bytes_sent`;
+- lifecycle HLS demand-driven;
+- integración con `StreamingHealthAggregator`;
+- Platform Health y Dashboard;
+- proyección en `CONNECTED CLIENTS`;
+- LL-HLS físico sobre `impact`;
+- sesión `hlsSession` real;
+- progresión temporal de `lastRequest` y tráfico outbound;
+- preservación de `UNKNOWN`;
+- frontera entre tráfico observado y bitrate audiovisual.
+
+Validación especializada de cierre:
+
+    19 passed
+
+### WebRTC Health
+
+Documento:
+
+`ENG-013B-noc-core/11-WEBRTC-HEALTH-EVIDENCE.md`
+
+Cubre:
+
+- `WebRTCSessionHealth`;
+- READER mediante `bytes_sent`;
+- PUBLISHER mediante `bytes_received`;
+- continuidad temporal de identidad;
+- integración multiprotocolo;
+- Platform Health;
+- Dashboard y `CONNECTED CLIENTS`;
+- PeerConnections físicas establecidas;
+- correlación con lectores de `impact`;
+- tráfico temporal WebRTC real;
+- frontera semántica de RTP loss/jitter respecto del QoE del navegador.
+
+Validación especializada de cierre:
+
+    21 passed
+
+## ENG-013B — Closure Candidate
+
+Documento:
+
+`ENG-013B-noc-core/12-ENG-013B-CLOSURE-EVIDENCE.md`
+
+La secuencia funcional multiprotocolo definida por el contrato está
+completa:
+
+    SRT -> RTMP -> RTSP -> HLS -> WebRTC
+
+La evidencia consolidada cubre:
+
+- Node Health;
+- Stream Health temporal;
+- Health transitions;
+- Events;
+- Alarms;
+- Aggregation;
+- Platform Health;
+- Dashboard;
+- SRT;
+- RTMP;
+- RTSP;
+- HLS;
+- WebRTC;
+- validación física;
+- runtime operacional;
+- History/Evidence.
+
+Estado:
+
+    CLOSURE CANDIDATE
+
+Regresión completa final:
+
+    3394 passed
+    0 failed
+    1 warning
+    68.75 seconds
+    pytest_rc=0
+
+Pendiente:
+
+- revisión final del diff;
+- commit;
+- push;
+- verificación de sincronización con origin.
+
+ENG-014 permanece fuera de alcance hasta el cierre formal de ENG-013B.
