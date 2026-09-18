@@ -454,14 +454,21 @@ before using long-running PCR progression operationally.
 
 It is independent from AudioTrackObservation.
 
-Candidate evidence includes, when available:
+The first implemented video-track slice may preserve descriptive
+evidence including:
 
+    availability
     codec
     profile
     level
     width
     height
     frame_rate
+    gop
+
+Additional candidate evidence remains valid for later observation
+slices, including:
+
     bitrate
     packet_count
     frame_count
@@ -470,12 +477,110 @@ Candidate evidence includes, when available:
     last_timestamp
     observed_span
     maximum_packet_gap
-    GOP / keyframe interval evidence
 
 Fields unavailable from a given observer may remain absent according to
-the final implementation representation.
+the implementation representation.
 
-Contract 1 does not define acceptable values for any of these fields.
+### 11.1 Frame-rate evidence
+
+Frame rate is descriptive evidence.
+
+When an observer provides frame rate as a rational value, the domain
+must preserve that rational representation without requiring an
+imprecise floating-point conversion.
+
+Conceptually:
+
+    FrameRateObservation
+      numerator
+      denominator
+
+Both values are integers.
+
+The numerator must not be negative.
+
+The denominator must be strictly positive.
+
+Contract 1 does not define an expected frame rate or tolerance.
+
+For example, an observed value of `30000/1001` is evidence only. It is
+not inherently healthy or unhealthy.
+
+### 11.2 GOPObservation
+
+GOP / keyframe evidence is represented separately from generic
+video-track metadata.
+
+Conceptually:
+
+    GOPObservation
+      availability
+      observed_frame_count
+      keyframe_count
+      i_frame_count
+      p_frame_count
+      b_frame_count
+      interval_count
+      minimum_interval
+      maximum_interval
+      average_interval
+      median_interval
+      minimum_frames_per_interval
+      maximum_frames_per_interval
+      average_frames_per_interval
+      median_frames_per_interval
+
+`GOPObservation` contains observed evidence only.
+
+Counts must not be negative.
+
+When interval statistics are present, temporal values must not be
+negative.
+
+When both minimum and maximum interval values are present, minimum must
+not exceed maximum.
+
+Average and median interval values, when present together with minimum
+or maximum evidence, must remain within the observed range.
+
+Frames-per-interval evidence follows the same intrinsic ordering
+principle.
+
+The observation does not define an `outlier` concept. Determining
+whether an interval is exceptional requires an evaluation policy or
+expected profile.
+
+The observation also does not equate an ffprobe-reported key frame with
+a codec-specific random-access type such as HEVC IDR or CRA unless a
+future observer provides that deeper bitstream evidence explicitly.
+
+### 11.3 Physical evidence boundary
+
+Physical ENG-013C inspections against real ENLACE and EJTV inputs
+demonstrated that GOP evidence cannot be reduced to one configured or
+assumed duration.
+
+Observed evidence included predominantly approximately 2.002-second,
+60-frame keyframe intervals, while separate ENLACE observation windows
+also contained longer reported-keyframe intervals.
+
+Those measurements justify preserving interval distribution evidence.
+
+They do not establish:
+
+- an expected GOP duration;
+- an acceptable GOP tolerance;
+- whether a longer interval is unhealthy;
+- whether B-frames are required or forbidden;
+- whether two services must use the same GOP structure;
+- whether every reported key frame is an HEVC IDR.
+
+Those conclusions belong to ExpectedMediaProfile and later evaluation
+contracts.
+
+### 11.4 Health boundary
+
+Contract 1 does not define acceptable values for video-track evidence.
 
 In particular:
 
@@ -484,12 +589,13 @@ In particular:
 - 1920x1080 is not inherently healthy;
 - 30 fps is not inherently healthy;
 - 6 Mbps is not inherently healthy;
-- a 2 second GOP is not inherently healthy.
+- a 2 second GOP is not inherently healthy;
+- a 4 or 6 second observed keyframe interval is not inherently
+  unhealthy.
 
 Such interpretations require an expected profile or later evaluation
 contract.
 
----
 
 ## 12. AudioTrackObservation
 

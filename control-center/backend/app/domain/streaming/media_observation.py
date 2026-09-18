@@ -420,11 +420,196 @@ class ContainerObservation:
 
 
 @dataclass(frozen=True, slots=True)
+class FrameRateObservation:
+    """Observed rational video frame-rate evidence."""
+
+    numerator: int
+    denominator: int
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.numerator, int)
+            or isinstance(self.numerator, bool)
+        ):
+            raise TypeError(
+                "FrameRateObservation.numerator must be an int"
+            )
+
+        if (
+            not isinstance(self.denominator, int)
+            or isinstance(self.denominator, bool)
+        ):
+            raise TypeError(
+                "FrameRateObservation.denominator must be an int"
+            )
+
+        if self.numerator < 0:
+            raise ValueError(
+                "FrameRateObservation.numerator must not be negative"
+            )
+
+        if self.denominator <= 0:
+            raise ValueError(
+                "FrameRateObservation.denominator must be positive"
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class GOPObservation:
+    """Observed GOP and reported-keyframe distribution evidence."""
+
+    availability: EvidenceAvailability
+
+    observed_frame_count: int = 0
+    keyframe_count: int = 0
+    i_frame_count: int = 0
+    p_frame_count: int = 0
+    b_frame_count: int = 0
+    interval_count: int = 0
+
+    minimum_interval: float | None = None
+    maximum_interval: float | None = None
+    average_interval: float | None = None
+    median_interval: float | None = None
+
+    minimum_frames_per_interval: float | None = None
+    maximum_frames_per_interval: float | None = None
+    average_frames_per_interval: float | None = None
+    median_frames_per_interval: float | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(
+            self.availability,
+            EvidenceAvailability,
+        ):
+            raise TypeError(
+                "GOPObservation.availability must be "
+                "EvidenceAvailability"
+            )
+
+        count_fields = (
+            "observed_frame_count",
+            "keyframe_count",
+            "i_frame_count",
+            "p_frame_count",
+            "b_frame_count",
+            "interval_count",
+        )
+
+        for field_name in count_fields:
+            _validate_non_negative_int(
+                getattr(self, field_name),
+                f"GOPObservation.{field_name}",
+            )
+
+        statistical_fields = (
+            "minimum_interval",
+            "maximum_interval",
+            "average_interval",
+            "median_interval",
+            "minimum_frames_per_interval",
+            "maximum_frames_per_interval",
+            "average_frames_per_interval",
+            "median_frames_per_interval",
+        )
+
+        for field_name in statistical_fields:
+            value = getattr(self, field_name)
+
+            if value is None:
+                continue
+
+            if (
+                not isinstance(value, (int, float))
+                or isinstance(value, bool)
+            ):
+                raise TypeError(
+                    f"GOPObservation.{field_name} must be "
+                    "a number or None"
+                )
+
+            if value < 0:
+                raise ValueError(
+                    f"GOPObservation.{field_name} must not be negative"
+                )
+
+        self._validate_range(
+            minimum=self.minimum_interval,
+            maximum=self.maximum_interval,
+            average=self.average_interval,
+            median=self.median_interval,
+            label="interval",
+        )
+
+        self._validate_range(
+            minimum=self.minimum_frames_per_interval,
+            maximum=self.maximum_frames_per_interval,
+            average=self.average_frames_per_interval,
+            median=self.median_frames_per_interval,
+            label="frames_per_interval",
+        )
+
+    @staticmethod
+    def _validate_range(
+        *,
+        minimum: float | None,
+        maximum: float | None,
+        average: float | None,
+        median: float | None,
+        label: str,
+    ) -> None:
+        if (
+            minimum is not None
+            and maximum is not None
+            and minimum > maximum
+        ):
+            raise ValueError(
+                f"GOPObservation minimum {label} must not exceed "
+                f"maximum {label}"
+            )
+
+        if minimum is not None:
+            if average is not None and average < minimum:
+                raise ValueError(
+                    f"GOPObservation average {label} must not be "
+                    f"below minimum {label}"
+                )
+
+            if median is not None and median < minimum:
+                raise ValueError(
+                    f"GOPObservation median {label} must not be "
+                    f"below minimum {label}"
+                )
+
+        if maximum is not None:
+            if average is not None and average > maximum:
+                raise ValueError(
+                    f"GOPObservation average {label} must not exceed "
+                    f"maximum {label}"
+                )
+
+            if median is not None and median > maximum:
+                raise ValueError(
+                    f"GOPObservation median {label} must not exceed "
+                    f"maximum {label}"
+                )
+
+
+@dataclass(frozen=True, slots=True)
 class VideoTrackObservation:
     """Observed video-track evidence."""
 
     availability: EvidenceAvailability
+
     codec: str | None = None
+    profile: str | None = None
+    level: str | None = None
+
+    width: int | None = None
+    height: int | None = None
+
+    frame_rate: FrameRateObservation | None = None
+    gop: GOPObservation | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(
@@ -436,19 +621,82 @@ class VideoTrackObservation:
                 "EvidenceAvailability"
             )
 
-        if self.codec is not None:
-            normalized = self.codec.strip()
+        for field_name in (
+            "codec",
+            "profile",
+            "level",
+        ):
+            value = getattr(self, field_name)
+
+            if value is None:
+                continue
+
+            if not isinstance(value, str):
+                raise TypeError(
+                    f"VideoTrackObservation.{field_name} must be "
+                    "a str or None"
+                )
+
+            normalized = value.strip()
 
             if not normalized:
                 raise ValueError(
-                    "VideoTrackObservation.codec must not be "
+                    f"VideoTrackObservation.{field_name} must not be "
                     "blank when present"
                 )
 
             object.__setattr__(
                 self,
-                "codec",
+                field_name,
                 normalized,
+            )
+
+        for field_name in (
+            "width",
+            "height",
+        ):
+            value = getattr(self, field_name)
+
+            if value is None:
+                continue
+
+            if (
+                not isinstance(value, int)
+                or isinstance(value, bool)
+            ):
+                raise TypeError(
+                    f"VideoTrackObservation.{field_name} must be "
+                    "an int or None"
+                )
+
+            if value <= 0:
+                raise ValueError(
+                    f"VideoTrackObservation.{field_name} must be "
+                    "positive when present"
+                )
+
+        if (
+            self.frame_rate is not None
+            and not isinstance(
+                self.frame_rate,
+                FrameRateObservation,
+            )
+        ):
+            raise TypeError(
+                "VideoTrackObservation.frame_rate must be "
+                "FrameRateObservation or None"
+            )
+
+        if (
+            self.gop is not None
+            and not isinstance(
+                self.gop,
+                GOPObservation,
+            )
+        ):
+            raise TypeError(
+                "VideoTrackObservation.gop must be "
+                "GOPObservation or None"
             )
 
 
