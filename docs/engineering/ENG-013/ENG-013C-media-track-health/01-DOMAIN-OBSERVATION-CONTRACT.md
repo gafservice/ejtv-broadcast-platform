@@ -407,16 +407,28 @@ PCR evidence is temporal container evidence.
 
 Conceptually it may include:
 
+    availability
     pid
     sample_count
     first_pcr
     last_pcr
     pcr_span
-    arrival_span
     minimum_delta
     maximum_delta
     average_delta
     median_delta
+
+`PCRObservation` represents sender-PCR clock evidence.
+
+Local packet-arrival timing is a distinct observation domain and must
+not be collapsed into PCR progression. Therefore local arrival-gap
+statistics, local arrival span and derived PCR-versus-arrival span
+differences are intentionally deferred from the first PCR slice.
+
+For MPEG-TS program topology, PCR evidence belongs to the observed
+program that declares the corresponding `pcr_pid`. This preserves
+correct semantics for transport streams containing more than one
+program.
 
 Only evidence actually produced by the observer may be populated.
 

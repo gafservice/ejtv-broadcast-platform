@@ -94,6 +94,124 @@ class MPEGTSStreamObservation:
 
 
 @dataclass(frozen=True, slots=True)
+class PCRObservation:
+    """Observed sender-PCR clock evidence for one MPEG-TS program."""
+
+    availability: EvidenceAvailability
+    pid: int
+    sample_count: int
+
+    first_pcr: float | None = None
+    last_pcr: float | None = None
+    pcr_span: float | None = None
+
+    minimum_delta: float | None = None
+    maximum_delta: float | None = None
+    average_delta: float | None = None
+    median_delta: float | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(
+            self.availability,
+            EvidenceAvailability,
+        ):
+            raise TypeError(
+                "PCRObservation.availability must be "
+                "EvidenceAvailability"
+            )
+
+        _validate_mpegts_pid(
+            self.pid,
+            "PCRObservation.pid",
+        )
+
+        _validate_non_negative_int(
+            self.sample_count,
+            "PCRObservation.sample_count",
+        )
+
+        temporal_fields = (
+            "first_pcr",
+            "last_pcr",
+            "pcr_span",
+            "minimum_delta",
+            "maximum_delta",
+            "average_delta",
+            "median_delta",
+        )
+
+        for field_name in temporal_fields:
+            value = getattr(self, field_name)
+
+            if value is None:
+                continue
+
+            if (
+                not isinstance(value, (int, float))
+                or isinstance(value, bool)
+            ):
+                raise TypeError(
+                    f"PCRObservation.{field_name} must be "
+                    "a number or None"
+                )
+
+            if value < 0:
+                raise ValueError(
+                    f"PCRObservation.{field_name} must not be negative"
+                )
+
+        if (
+            self.minimum_delta is not None
+            and self.maximum_delta is not None
+            and self.minimum_delta > self.maximum_delta
+        ):
+            raise ValueError(
+                "PCRObservation.minimum_delta must not exceed "
+                "maximum_delta"
+            )
+
+        if (
+            self.average_delta is not None
+            and self.minimum_delta is not None
+            and self.average_delta < self.minimum_delta
+        ):
+            raise ValueError(
+                "PCRObservation.average_delta must not be below "
+                "minimum_delta"
+            )
+
+        if (
+            self.average_delta is not None
+            and self.maximum_delta is not None
+            and self.average_delta > self.maximum_delta
+        ):
+            raise ValueError(
+                "PCRObservation.average_delta must not exceed "
+                "maximum_delta"
+            )
+
+        if (
+            self.median_delta is not None
+            and self.minimum_delta is not None
+            and self.median_delta < self.minimum_delta
+        ):
+            raise ValueError(
+                "PCRObservation.median_delta must not be below "
+                "minimum_delta"
+            )
+
+        if (
+            self.median_delta is not None
+            and self.maximum_delta is not None
+            and self.median_delta > self.maximum_delta
+        ):
+            raise ValueError(
+                "PCRObservation.median_delta must not exceed "
+                "maximum_delta"
+            )
+
+
+@dataclass(frozen=True, slots=True)
 class MPEGTSProgramObservation:
     """Observed MPEG-TS program topology."""
 
@@ -101,6 +219,7 @@ class MPEGTSProgramObservation:
     pmt_pid: int
     pcr_pid: int
     streams: tuple[MPEGTSStreamObservation, ...]
+    pcr: PCRObservation | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -139,6 +258,19 @@ class MPEGTSProgramObservation:
                 "MPEGTSProgramObservation.streams must contain only "
                 "MPEGTSStreamObservation objects"
             )
+
+        if self.pcr is not None:
+            if not isinstance(self.pcr, PCRObservation):
+                raise TypeError(
+                    "MPEGTSProgramObservation.pcr must be "
+                    "PCRObservation or None"
+                )
+
+            if self.pcr.pid != self.pcr_pid:
+                raise ValueError(
+                    "MPEGTSProgramObservation.pcr.pid must match "
+                    "pcr_pid"
+                )
 
 
 @dataclass(frozen=True, slots=True)
