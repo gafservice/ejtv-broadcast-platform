@@ -601,11 +601,29 @@ contract.
 
 `AudioTrackObservation` represents observed audio-track evidence.
 
-Candidate evidence includes, when available:
+It is independent from `VideoTrackObservation`.
 
+The first implemented audio-track slice may preserve descriptive
+evidence including:
+
+    availability
     codec
+    profile
     sample_rate
     channels
+    channel_layout
+
+Descriptive string evidence must not be blank when present.
+
+`sample_rate` and `channels`, when present, must be strictly positive
+integers.
+
+Fields unavailable from a given observer may remain absent. Availability
+does not require every optional descriptive field to be populated.
+
+Additional candidate evidence remains valid for later observation
+slices, including:
+
     bitrate
     packet_count
     first_timestamp
@@ -613,10 +631,17 @@ Candidate evidence includes, when available:
     observed_span
     maximum_packet_gap
 
-Contract 1 does not define acceptable audio codec, bitrate, sample rate,
-channel count or temporal threshold.
+Contract 1 does not define acceptable audio codec, profile, bitrate,
+sample rate, channel count, channel layout or temporal threshold.
 
-An absent AudioTrackObservation does not by itself mean failure.
+For example, observed AAC LC, 48000 Hz, two-channel stereo evidence is
+descriptive evidence only. It is not inherently healthy or unhealthy.
+
+An absent `AudioTrackObservation` does not by itself mean failure.
+
+Whether audio is required, which codec is expected, or which audio
+parameters are acceptable belongs to `ExpectedMediaProfile` and later
+evaluation contracts.
 
 ---
 

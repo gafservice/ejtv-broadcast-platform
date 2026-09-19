@@ -706,6 +706,10 @@ class AudioTrackObservation:
 
     availability: EvidenceAvailability
     codec: str | None = None
+    profile: str | None = None
+    sample_rate: int | None = None
+    channels: int | None = None
+    channel_layout: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(
@@ -717,20 +721,56 @@ class AudioTrackObservation:
                 "EvidenceAvailability"
             )
 
-        if self.codec is not None:
-            normalized = self.codec.strip()
+        for field_name in (
+            "codec",
+            "profile",
+            "channel_layout",
+        ):
+            value = getattr(self, field_name)
+
+            if value is None:
+                continue
+
+            if not isinstance(value, str):
+                raise TypeError(
+                    f"AudioTrackObservation.{field_name} must be "
+                    "str or None"
+                )
+
+            normalized = value.strip()
 
             if not normalized:
                 raise ValueError(
-                    "AudioTrackObservation.codec must not be "
+                    f"AudioTrackObservation.{field_name} must not be "
                     "blank when present"
                 )
 
             object.__setattr__(
                 self,
-                "codec",
+                field_name,
                 normalized,
             )
+
+        for field_name in (
+            "sample_rate",
+            "channels",
+        ):
+            value = getattr(self, field_name)
+
+            if value is None:
+                continue
+
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise TypeError(
+                    f"AudioTrackObservation.{field_name} must be "
+                    "int or None"
+                )
+
+            if value <= 0:
+                raise ValueError(
+                    f"AudioTrackObservation.{field_name} must be "
+                    "strictly positive when present"
+                )
 
 
 @dataclass(frozen=True, slots=True)
