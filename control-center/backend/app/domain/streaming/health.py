@@ -35,6 +35,8 @@ class SRTConnectionHealth:
     send_rate_mbps: float | None = None
     link_capacity_mbps: float | None = None
     link_utilization_percent: float | None = None
+    remote_address: str | None = None
+    role: str | None = None
 
     def __post_init__(self) -> None:
         """Valida y normaliza la información de la conexión."""

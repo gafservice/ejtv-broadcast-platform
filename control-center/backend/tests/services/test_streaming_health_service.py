@@ -583,3 +583,58 @@ srt_conns_ms_rtt{id="conn-1",path="enlace",state="read"} 5
 
     assert health.paths[0].connections[0].status is HealthStatus.UNKNOWN
     assert health.status is HealthStatus.UNKNOWN
+
+
+def test_srt_health_preserves_correlated_session_operational_context():
+    """SRT Health conserva REMOTE y ROLE de la sesión correlacionada."""
+
+    from app.domain.sessions import (
+        ActiveSession,
+        SessionProtocol,
+        SessionQuality,
+        SessionRole,
+        SessionSnapshot,
+    )
+
+    session_snapshot = SessionSnapshot(
+        captured_at=CAPTURED_AT,
+        sessions=(
+            ActiveSession(
+                session_id="conn-context",
+                protocol=SessionProtocol.SRT,
+                role=SessionRole.READER,
+                state="read",
+                remote_ip="203.0.113.25",
+                remote_port=9000,
+                path="ejtv",
+                connected_since=CAPTURED_AT,
+                rtt_ms=5.0,
+                packet_loss_rate=0.0,
+                retransmission_rate=0.0,
+                packets_sent=100_000,
+                packets_lost=0,
+                packets_retransmitted=0,
+                quality=SessionQuality.EXCELLENT,
+            ),
+        ),
+    )
+
+    metrics_snapshot = MediaMTXMetricsParser().parse(
+        """
+srt_conns_ms_rtt{id="conn-context",path="ejtv",state="read"} 5
+"""
+    )
+
+    health = StreamingHealthService().build(
+        snapshot=metrics_snapshot,
+        captured_at=CAPTURED_AT,
+        session_snapshot=session_snapshot,
+    )
+
+    connection = health.paths[0].connections[0]
+
+    assert connection.connection_id == "conn-context"
+    assert connection.path_name == "ejtv"
+
+    assert connection.remote_address == "203.0.113.25:9000"
+    assert connection.role == "READER"

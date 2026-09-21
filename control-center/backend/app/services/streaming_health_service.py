@@ -77,6 +77,14 @@ class StreamingHealthService:
                 temporal_session_evidence=(
                     previous_session_snapshot is not None
                 ),
+                session=(
+                    self._find_srt_session(
+                        session_snapshot=session_snapshot,
+                        connection_id=connection_id,
+                    )
+                    if session_snapshot is not None
+                    else None
+                ),
             )
             for (
                 connection_id,
@@ -165,6 +173,7 @@ class StreamingHealthService:
         metrics: dict[str, float],
         session_quality: SessionQuality | None = None,
         temporal_session_evidence: bool = False,
+        session: ActiveSession | None = None,
     ) -> SRTConnectionHealth:
         """Construye la salud de una conexión individual."""
 
@@ -213,6 +222,19 @@ class StreamingHealthService:
             link_utilization_percent=(
                 link_utilization_percent
             ),
+            remote_address=(
+                f"{session.remote_ip}:{session.remote_port}"
+                if session is not None
+                and session.remote_ip is not None
+                and session.remote_port is not None
+                else None
+            ),
+            role=(
+                session.role.value
+                if session is not None
+                else None
+            ),
+
         )
 
     def _build_path(

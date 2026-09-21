@@ -62,12 +62,94 @@ class StreamingHealthTransitionEventFactory:
             source=source,
             title=self._title(transition),
             description=self._description(transition),
-            attributes={
-                "previous": transition.previous.status.value,
-                "current": transition.current.status.value,
-                "transition": transition.kind.value,
-            },
+            attributes=self._attributes(transition),
         )
+
+    @classmethod
+    def _attributes(
+        cls,
+        transition: StreamingHealthTransition,
+    ) -> dict[str, str]:
+        """Build durable attributes for one stream-health transition."""
+
+        attributes = {
+            "previous": transition.previous.status.value,
+            "current": transition.current.status.value,
+            "transition": transition.kind.value,
+        }
+
+        cause = cls._single_connection_cause(transition)
+
+        if cause is None:
+            return attributes
+
+        previous_connection, current_connection = cause
+
+        attributes.update(
+            {
+                "protocol": "SRT",
+                "path": current_connection.path_name,
+                "connection_id": current_connection.connection_id,
+                "connection_state": current_connection.state,
+                "cause_previous": previous_connection.status.value,
+                "cause_current": current_connection.status.value,
+            }
+        )
+
+        if current_connection.remote_address is not None:
+            attributes["remote_address"] = (
+                current_connection.remote_address
+            )
+
+        if current_connection.role is not None:
+            attributes["role"] = current_connection.role
+
+        return attributes
+
+    @staticmethod
+    def _single_connection_cause(
+        transition: StreamingHealthTransition,
+    ):
+        """Return one changed SRT connection when attribution is unique."""
+
+        previous_connections = {
+            connection.connection_id: connection
+            for path in transition.previous.paths
+            for connection in path.connections
+        }
+
+        current_connections = {
+            connection.connection_id: connection
+            for path in transition.current.paths
+            for connection in path.connections
+        }
+
+        changed = tuple(
+            (
+                previous_connection,
+                current_connections[connection_id],
+            )
+            for connection_id, previous_connection
+            in previous_connections.items()
+            if connection_id in current_connections
+            and (
+                previous_connection.status
+                is not current_connections[connection_id].status
+            )
+        )
+
+        if len(changed) != 1:
+            return None
+
+        previous_connection, current_connection = changed[0]
+
+        if (
+            previous_connection.path_name
+            != current_connection.path_name
+        ):
+            return None
+
+        return previous_connection, current_connection
 
     @staticmethod
     def _event_id() -> str:
