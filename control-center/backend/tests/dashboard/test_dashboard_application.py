@@ -265,6 +265,21 @@ def test_run_once_uses_previous_snapshot_on_second_execution() -> None:
         second_session_measurement,
     )
 
+    metrics_client = Mock()
+    metrics_client.get_metrics_text.return_value = ""
+
+    metrics_parser = Mock()
+    metrics_snapshot = Mock()
+    metrics_parser.parse.return_value = metrics_snapshot
+
+    streaming_health_service = Mock()
+    first_streaming_health = Mock()
+    second_streaming_health = Mock()
+    streaming_health_service.build.side_effect = (
+        first_streaming_health,
+        second_streaming_health,
+    )
+
     dashboard_service = Mock()
     dashboard_service.build_dashboard_from_measurement.side_effect = (
         first_dashboard_data,
@@ -319,6 +334,9 @@ def test_run_once_uses_previous_snapshot_on_second_execution() -> None:
         dashboard_renderer=dashboard_renderer,
         system_service=system_service,
         network_telemetry_service=network_telemetry_service,
+        metrics_client=metrics_client,
+        metrics_parser=metrics_parser,
+        streaming_health_service=streaming_health_service,
     )
 
     first_result = application.run_once()
@@ -349,6 +367,23 @@ def test_run_once_uses_previous_snapshot_on_second_execution() -> None:
 
     assert session_service.measure.call_args_list[1].args == (
         second_session_snapshot,
+    )
+
+    assert streaming_health_service.build.call_count == 2
+
+    first_health_call = streaming_health_service.build.call_args_list[0]
+    second_health_call = streaming_health_service.build.call_args_list[1]
+
+    assert first_health_call.kwargs["session_snapshot"] is (
+        first_session_snapshot
+    )
+    assert first_health_call.kwargs["previous_session_snapshot"] is None
+
+    assert second_health_call.kwargs["session_snapshot"] is (
+        second_session_snapshot
+    )
+    assert second_health_call.kwargs["previous_session_snapshot"] is (
+        first_session_snapshot
     )
 
     assert (
@@ -625,6 +660,7 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         snapshot=metrics_snapshot,
         captured_at=captured_at,
         session_snapshot=session_snapshot,
+        previous_session_snapshot=None,
     )
 
     streaming_health_stabilizer.stabilize.assert_called_once_with(

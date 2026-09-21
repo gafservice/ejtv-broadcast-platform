@@ -321,3 +321,265 @@ srt_conns_ms_rtt{id="conn-1",path="enlace",state="read"} 5
 
     assert health.paths[0].connections[0].status is HealthStatus.HEALTHY
     assert health.status is HealthStatus.HEALTHY
+
+
+def test_srt_temporal_quality_uses_packet_deltas() -> None:
+    """SRT Health debe evaluar pérdida/retransmisión del intervalo."""
+    from datetime import timedelta
+
+    from app.domain.sessions import (
+        ActiveSession,
+        SessionProtocol,
+        SessionRole,
+        SessionSnapshot,
+    )
+
+    previous_at = CAPTURED_AT
+    current_at = CAPTURED_AT + timedelta(seconds=1)
+    connected_since = CAPTURED_AT - timedelta(minutes=10)
+
+    previous = SessionSnapshot(
+        captured_at=previous_at,
+        sessions=(
+            ActiveSession(
+                session_id="conn-1",
+                protocol=SessionProtocol.SRT,
+                role=SessionRole.READER,
+                state="read",
+                remote_ip="203.0.113.10",
+                remote_port=9000,
+                path="enlace",
+                connected_since=connected_since,
+                packets_sent=100_000,
+                packets_lost=1_000,
+                packets_retransmitted=500,
+            ),
+        ),
+    )
+
+    current = SessionSnapshot(
+        captured_at=current_at,
+        sessions=(
+            ActiveSession(
+                session_id="conn-1",
+                protocol=SessionProtocol.SRT,
+                role=SessionRole.READER,
+                state="read",
+                remote_ip="203.0.113.10",
+                remote_port=9000,
+                path="enlace",
+                connected_since=connected_since,
+                rtt_ms=5.0,
+                packets_sent=110_000,
+                packets_lost=1_600,
+                packets_retransmitted=500,
+            ),
+        ),
+    )
+
+    metrics_snapshot = MediaMTXMetricsParser().parse(
+        """
+srt_conns_ms_rtt{id="conn-1",path="enlace",state="read"} 5
+"""
+    )
+
+    health = StreamingHealthService().build(
+        snapshot=metrics_snapshot,
+        captured_at=current_at,
+        previous_session_snapshot=previous,
+        session_snapshot=current,
+    )
+
+    # Intervalo:
+    # sent = 10_000
+    # loss = 600 = 6 %
+    # retrans = 0 %
+    # => CRITICAL por pérdida.
+    assert health.paths[0].connections[0].status is HealthStatus.CRITICAL
+    assert health.status is HealthStatus.CRITICAL
+
+
+def test_srt_temporal_quality_first_observation_is_unknown() -> None:
+    """Sin snapshot anterior no existe evidencia temporal SRT suficiente."""
+    from datetime import timedelta
+
+    from app.domain.sessions import (
+        ActiveSession,
+        SessionProtocol,
+        SessionRole,
+        SessionSnapshot,
+    )
+
+    current = SessionSnapshot(
+        captured_at=CAPTURED_AT,
+        sessions=(
+            ActiveSession(
+                session_id="conn-1",
+                protocol=SessionProtocol.SRT,
+                role=SessionRole.READER,
+                state="read",
+                remote_ip="203.0.113.10",
+                remote_port=9000,
+                path="enlace",
+                connected_since=CAPTURED_AT - timedelta(minutes=1),
+                rtt_ms=5.0,
+                packets_sent=100_000,
+                packets_lost=100,
+                packets_retransmitted=100,
+            ),
+        ),
+    )
+
+    metrics_snapshot = MediaMTXMetricsParser().parse(
+        """
+srt_conns_ms_rtt{id="conn-1",path="enlace",state="read"} 5
+"""
+    )
+
+    health = StreamingHealthService().build(
+        snapshot=metrics_snapshot,
+        captured_at=CAPTURED_AT,
+        previous_session_snapshot=None,
+        session_snapshot=current,
+    )
+
+    assert health.paths[0].connections[0].status is HealthStatus.UNKNOWN
+    assert health.status is HealthStatus.UNKNOWN
+
+
+def test_srt_temporal_quality_reconnection_is_unknown() -> None:
+    """Una reconexión SRT no debe mezclar contadores de dos sesiones."""
+    from datetime import timedelta
+
+    from app.domain.sessions import (
+        ActiveSession,
+        SessionProtocol,
+        SessionRole,
+        SessionSnapshot,
+    )
+
+    previous = SessionSnapshot(
+        captured_at=CAPTURED_AT,
+        sessions=(
+            ActiveSession(
+                session_id="conn-1",
+                protocol=SessionProtocol.SRT,
+                role=SessionRole.READER,
+                state="read",
+                remote_ip="203.0.113.10",
+                remote_port=9000,
+                path="enlace",
+                connected_since=CAPTURED_AT - timedelta(minutes=10),
+                packets_sent=1_000_000,
+                packets_lost=10_000,
+            ),
+        ),
+    )
+
+    current_at = CAPTURED_AT + timedelta(seconds=1)
+
+    current = SessionSnapshot(
+        captured_at=current_at,
+        sessions=(
+            ActiveSession(
+                session_id="conn-1",
+                protocol=SessionProtocol.SRT,
+                role=SessionRole.READER,
+                state="read",
+                remote_ip="203.0.113.10",
+                remote_port=9000,
+                path="enlace",
+                connected_since=current_at,
+                rtt_ms=5.0,
+                packets_sent=100,
+                packets_lost=10,
+            ),
+        ),
+    )
+
+    metrics_snapshot = MediaMTXMetricsParser().parse(
+        """
+srt_conns_ms_rtt{id="conn-1",path="enlace",state="read"} 5
+"""
+    )
+
+    health = StreamingHealthService().build(
+        snapshot=metrics_snapshot,
+        captured_at=current_at,
+        previous_session_snapshot=previous,
+        session_snapshot=current,
+    )
+
+    assert health.paths[0].connections[0].status is HealthStatus.UNKNOWN
+    assert health.status is HealthStatus.UNKNOWN
+
+
+def test_srt_temporal_quality_counter_reset_is_unknown() -> None:
+    """Un retroceso de contadores SRT invalida la evidencia temporal."""
+    from datetime import timedelta
+
+    from app.domain.sessions import (
+        ActiveSession,
+        SessionProtocol,
+        SessionRole,
+        SessionSnapshot,
+    )
+
+    connected_since = CAPTURED_AT - timedelta(minutes=10)
+
+    previous = SessionSnapshot(
+        captured_at=CAPTURED_AT,
+        sessions=(
+            ActiveSession(
+                session_id="conn-1",
+                protocol=SessionProtocol.SRT,
+                role=SessionRole.READER,
+                state="read",
+                remote_ip="203.0.113.10",
+                remote_port=9000,
+                path="enlace",
+                connected_since=connected_since,
+                packets_sent=100_000,
+                packets_lost=1_000,
+                packets_retransmitted=500,
+            ),
+        ),
+    )
+
+    current_at = CAPTURED_AT + timedelta(seconds=1)
+
+    current = SessionSnapshot(
+        captured_at=current_at,
+        sessions=(
+            ActiveSession(
+                session_id="conn-1",
+                protocol=SessionProtocol.SRT,
+                role=SessionRole.READER,
+                state="read",
+                remote_ip="203.0.113.10",
+                remote_port=9000,
+                path="enlace",
+                connected_since=connected_since,
+                rtt_ms=5.0,
+                packets_sent=90_000,
+                packets_lost=900,
+                packets_retransmitted=400,
+            ),
+        ),
+    )
+
+    metrics_snapshot = MediaMTXMetricsParser().parse(
+        """
+srt_conns_ms_rtt{id="conn-1",path="enlace",state="read"} 5
+"""
+    )
+
+    health = StreamingHealthService().build(
+        snapshot=metrics_snapshot,
+        captured_at=current_at,
+        previous_session_snapshot=previous,
+        session_snapshot=current,
+    )
+
+    assert health.paths[0].connections[0].status is HealthStatus.UNKNOWN
+    assert health.status is HealthStatus.UNKNOWN

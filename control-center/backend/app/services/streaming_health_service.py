@@ -13,9 +13,12 @@ from app.adapters.mediamtx.metrics_parser import (
     PrometheusSample,
 )
 from app.domain.sessions import (
+    ActiveSession,
     SessionProtocol,
     SessionQuality,
+    SessionRole,
     SessionSnapshot,
+    evaluate_session_quality,
 )
 from app.domain.streaming.health import (
     HealthStatus,
@@ -47,6 +50,7 @@ class StreamingHealthService:
         snapshot: MediaMTXMetricsSnapshot,
         captured_at: datetime,
         session_snapshot: SessionSnapshot | None = None,
+        previous_session_snapshot: SessionSnapshot | None = None,
     ) -> StreamingHealth:
         """Construye el estado de salud a partir de un snapshot."""
 
@@ -65,9 +69,13 @@ class StreamingHealthService:
                 path_name=path_name,
                 state=state,
                 metrics=metrics,
-                session_quality=self._find_srt_session_quality(
+                session_quality=self._resolve_effective_srt_session_quality(
+                    previous_session_snapshot=previous_session_snapshot,
                     session_snapshot=session_snapshot,
                     connection_id=connection_id,
+                ),
+                temporal_session_evidence=(
+                    previous_session_snapshot is not None
                 ),
             )
             for (
@@ -156,6 +164,7 @@ class StreamingHealthService:
         state: str,
         metrics: dict[str, float],
         session_quality: SessionQuality | None = None,
+        temporal_session_evidence: bool = False,
     ) -> SRTConnectionHealth:
         """Construye la salud de una conexión individual."""
 
@@ -181,11 +190,14 @@ class StreamingHealthService:
             link_capacity_mbps=link_capacity_mbps,
         )
 
-        status = (
-            self._health_status_from_session_quality(session_quality)
-            if session_quality is not None
-            else self._classify_connection(rtt_ms=rtt_ms)
-        )
+        if session_quality is not None:
+            status = self._health_status_from_session_quality(
+                session_quality
+            )
+        elif temporal_session_evidence:
+            status = HealthStatus.UNKNOWN
+        else:
+            status = self._classify_connection(rtt_ms=rtt_ms)
 
         return SRTConnectionHealth(
             connection_id=connection_id,
@@ -272,21 +284,140 @@ class StreamingHealthService:
             message=self._build_path_message(status),
         )
 
-    @staticmethod
-    def _find_srt_session_quality(
+    @classmethod
+    def _resolve_effective_srt_session_quality(
+        cls,
         *,
+        previous_session_snapshot: SessionSnapshot | None,
         session_snapshot: SessionSnapshot | None,
         connection_id: str,
     ) -> SessionQuality | None:
+        """Selecciona calidad temporal o legado según evidencia disponible."""
+
+        if previous_session_snapshot is not None:
+            return cls._resolve_srt_session_quality(
+                previous_session_snapshot=previous_session_snapshot,
+                session_snapshot=session_snapshot,
+                connection_id=connection_id,
+            )
+
         if session_snapshot is None:
             return None
+
+        session = cls._find_srt_session(
+            session_snapshot=session_snapshot,
+            connection_id=connection_id,
+        )
+
+        if session is None:
+            return None
+
+        return session.quality
+
+    @classmethod
+    def _resolve_srt_session_quality(
+        cls,
+        *,
+        previous_session_snapshot: SessionSnapshot | None,
+        session_snapshot: SessionSnapshot | None,
+        connection_id: str,
+    ) -> SessionQuality | None:
+        """Evalúa calidad SRT usando deltas entre capturas compatibles."""
+
+        if (
+            previous_session_snapshot is None
+            or session_snapshot is None
+        ):
+            return None
+
+        interval_seconds = (
+            session_snapshot.captured_at
+            - previous_session_snapshot.captured_at
+        ).total_seconds()
+
+        if interval_seconds <= 0:
+            return None
+
+        current = cls._find_srt_session(
+            session_snapshot=session_snapshot,
+            connection_id=connection_id,
+        )
+        previous = cls._find_srt_session(
+            session_snapshot=previous_session_snapshot,
+            connection_id=connection_id,
+        )
+
+        if current is None or previous is None:
+            return None
+
+        if (
+            current.path != previous.path
+            or current.role is not previous.role
+            or current.connected_since != previous.connected_since
+        ):
+            return None
+
+        if current.role is not SessionRole.READER:
+            return None
+
+        if (
+            current.packets_sent is None
+            or previous.packets_sent is None
+            or current.packets_lost is None
+            or previous.packets_lost is None
+        ):
+            return None
+
+        delta_sent = current.packets_sent - previous.packets_sent
+        delta_lost = current.packets_lost - previous.packets_lost
+
+        if delta_sent <= 0 or delta_lost < 0:
+            return None
+
+        delta_retransmitted: int | None = None
+
+        if (
+            current.packets_retransmitted is not None
+            and previous.packets_retransmitted is not None
+        ):
+            candidate_delta = (
+                current.packets_retransmitted
+                - previous.packets_retransmitted
+            )
+
+            if candidate_delta < 0:
+                return None
+
+            delta_retransmitted = candidate_delta
+
+        packet_loss_rate = delta_lost * 100.0 / delta_sent
+
+        retransmission_rate = (
+            delta_retransmitted * 100.0 / delta_sent
+            if delta_retransmitted is not None
+            else None
+        )
+
+        return evaluate_session_quality(
+            rtt_ms=current.rtt_ms,
+            packet_loss_rate=packet_loss_rate,
+            retransmission_rate=retransmission_rate,
+        )
+
+    @staticmethod
+    def _find_srt_session(
+        *,
+        session_snapshot: SessionSnapshot,
+        connection_id: str,
+    ) -> ActiveSession | None:
+        """Busca una sesión SRT concreta dentro del snapshot."""
 
         for session in session_snapshot.sessions:
             if (
                 session.protocol is SessionProtocol.SRT
                 and session.session_id == connection_id
             ):
-                return session.quality
+                return session
 
         return None
 

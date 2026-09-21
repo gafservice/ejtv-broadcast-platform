@@ -730,3 +730,69 @@ def test_srt_health_reset_without_connection_id_clears_all_state() -> None:
 
     assert result_2 is connection_2_degraded
     assert result_2.status is HealthStatus.DEGRADED
+
+
+def test_degraded_and_critical_share_degradation_confirmation_window() -> None:
+    """DEGRADED/CRITICAL deben compartir una ventana de deterioro continua."""
+
+    stabilizer = SRTConnectionHealthStabilizer(
+        degradation_seconds=10.0,
+        recovery_seconds=5.0,
+    )
+
+    healthy = make_health(
+        HealthStatus.HEALTHY,
+        message="SRT connection healthy.",
+    )
+
+    degraded_1 = make_health(
+        HealthStatus.DEGRADED,
+        message="SRT connection degraded.",
+    )
+
+    critical_5 = make_health(
+        HealthStatus.CRITICAL,
+        message="SRT connection critical.",
+    )
+
+    degraded_9 = make_health(
+        HealthStatus.DEGRADED,
+        message="SRT connection degraded again.",
+    )
+
+    critical_11 = make_health(
+        HealthStatus.CRITICAL,
+        message="SRT connection still unhealthy.",
+    )
+
+    stabilizer.stabilize(
+        healthy,
+        observed_at=BASE_TIME,
+    )
+
+    result_1 = stabilizer.stabilize(
+        degraded_1,
+        observed_at=BASE_TIME + timedelta(seconds=1),
+    )
+    assert result_1.status is HealthStatus.HEALTHY
+
+    result_5 = stabilizer.stabilize(
+        critical_5,
+        observed_at=BASE_TIME + timedelta(seconds=5),
+    )
+    assert result_5.status is HealthStatus.HEALTHY
+
+    result_9 = stabilizer.stabilize(
+        degraded_9,
+        observed_at=BASE_TIME + timedelta(seconds=9),
+    )
+    assert result_9.status is HealthStatus.HEALTHY
+
+    result_11 = stabilizer.stabilize(
+        critical_11,
+        observed_at=BASE_TIME + timedelta(seconds=11),
+    )
+
+    # La conexión lleva 10 segundos continuamente no saludable.
+    # Cambiar DEGRADED <-> CRITICAL no debe reiniciar esa ventana.
+    assert result_11.status is HealthStatus.CRITICAL

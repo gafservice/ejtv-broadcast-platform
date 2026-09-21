@@ -114,8 +114,24 @@ class SRTConnectionHealthStabilizer:
             else self._degradation_delay
         )
 
+        same_degradation_family = (
+            state.candidate_status
+            in {
+                HealthStatus.DEGRADED,
+                HealthStatus.CRITICAL,
+            }
+            and health.status
+            in {
+                HealthStatus.DEGRADED,
+                HealthStatus.CRITICAL,
+            }
+        )
+
         if (
-            state.candidate_status is not health.status
+            (
+                state.candidate_status is not health.status
+                and not same_degradation_family
+            )
             or state.candidate_since is None
         ):
             state.candidate_status = health.status
@@ -136,6 +152,9 @@ class SRTConnectionHealthStabilizer:
                     f"current observation: {health.message}"
                 ),
             )
+
+        if same_degradation_family:
+            state.candidate_status = health.status
 
         if (
             observed_at - state.candidate_since

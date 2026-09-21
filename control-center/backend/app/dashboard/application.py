@@ -740,6 +740,7 @@ class DashboardApplication:
             snapshot=metrics_snapshot,
             captured_at=captured_at,
             session_snapshot=session_snapshot,
+            previous_session_snapshot=self._previous_session_snapshot,
         )
 
         if self._streaming_health_stabilizer is None:
