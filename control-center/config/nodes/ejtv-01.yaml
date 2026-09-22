@@ -40,3 +40,27 @@ session_policies:
     reconnect_timeout_seconds: 10
     window_seconds: 60
     threshold: 3
+
+media_profiles:
+  - profile_id: impact-main
+    service_id: impact
+    path_name: impact
+
+    video:
+      presence: required
+      codec: h264
+      profile: Main
+      level: "40"
+      width: 1920
+      height: 1080
+      frame_rate:
+        numerator: 30
+        denominator: 1
+
+    audio:
+      presence: required
+      codec: aac
+      profile: LC
+      sample_rate: 48000
+      channels: 2
+      channel_layout: stereo
