@@ -87,6 +87,12 @@ from app.noc.runtime.session_alarm_runtime import (
 from app.noc.runtime.session_observation_runtime import (
     SessionObservationRuntime,
 )
+from app.noc.runtime.media_operational_cycle_runtime import (
+    MediaOperationalCycleRuntime,
+)
+from app.noc.runtime.media_operational_runtime import (
+    MediaOperationalRuntime,
+)
 from app.noc.runtime.session_operational_runtime import (
     SessionOperationalRuntime,
 )
@@ -165,6 +171,12 @@ from app.services.identity_administration_service import (
 )
 from app.services.authorization_service import AuthorizationService
 from app.services.geoip_service import GeoIPService
+from app.services.media_health_transition_detector import (
+    MediaHealthTransitionDetector,
+)
+from app.services.media_health_transition_event_service import (
+    MediaHealthTransitionEventService,
+)
 from app.services.media_health_stabilizer import (
     MediaHealthStabilizer,
 )
@@ -766,6 +778,38 @@ def get_session_observation_runtime() -> SessionObservationRuntime:
     )
 
 @lru_cache
+def get_media_health_transition_event_service(
+) -> MediaHealthTransitionEventService:
+    """Build the shared Media Health transition event service."""
+
+    return MediaHealthTransitionEventService(
+        event_service=get_event_service(),
+    )
+
+
+@lru_cache
+def get_media_operational_runtime() -> MediaOperationalRuntime:
+    """Build the stateful Media Health operational runtime."""
+
+    return MediaOperationalRuntime(
+        transition_detector=MediaHealthTransitionDetector(),
+        transition_event_service=(
+            get_media_health_transition_event_service()
+        ),
+    )
+
+
+@lru_cache
+def get_media_operational_cycle_runtime(
+) -> MediaOperationalCycleRuntime:
+    """Build the Media Health operational cycle coordinator."""
+
+    return MediaOperationalCycleRuntime(
+        operational_runtime=get_media_operational_runtime(),
+    )
+
+
+@lru_cache
 def get_media_observation_runtime() -> MediaObservationRuntime:
     """Build the operational physical Media Health runtime."""
 
@@ -799,6 +843,9 @@ def get_media_observation_runtime() -> MediaObservationRuntime:
         ),
         observer=observer,
         stabilizer=stabilizer,
+        operational_cycle_runtime=(
+            get_media_operational_cycle_runtime()
+        ),
     )
 
 

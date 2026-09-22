@@ -86,6 +86,20 @@ class MediaObservationRuntimeResult:
     ]
 
 
+
+class MediaOperationalCycleProcessor(Protocol):
+    """Operational consumer of one completed media cycle."""
+
+    def process_cycle(
+        self,
+        *,
+        node_id: NodeId,
+        instance_id: NodeInstanceId,
+        observation_result: MediaObservationRuntimeResult,
+    ) -> None:
+        ...
+
+
 class MediaObservationRuntime:
     """Coordinate one automatic media observation cycle."""
 
@@ -96,11 +110,13 @@ class MediaObservationRuntime:
         source_resolver: MediaObservationSourceResolver,
         observer: MediaObserver,
         stabilizer: MediaHealthStabilizer,
+        operational_cycle_runtime: MediaOperationalCycleProcessor,
     ) -> None:
         self._profiles = profiles
         self._source_resolver = source_resolver
         self._observer = observer
         self._stabilizer = stabilizer
+        self._operational_cycle_runtime = operational_cycle_runtime
 
         self._media_evaluator = MediaEvaluator()
         self._health_evaluator = MediaHealthEvaluator()
@@ -188,7 +204,15 @@ class MediaObservationRuntime:
                 )
             )
 
-        return MediaObservationRuntimeResult(
+        result = MediaObservationRuntimeResult(
             observed_at=observed_at,
             profiles=tuple(results),
         )
+
+        self._operational_cycle_runtime.process_cycle(
+            node_id=node_id,
+            instance_id=instance_id,
+            observation_result=result,
+        )
+
+        return result

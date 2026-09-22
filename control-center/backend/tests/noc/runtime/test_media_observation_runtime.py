@@ -1,5 +1,6 @@
 import pytest
 from datetime import datetime, timezone
+from unittest.mock import Mock
 
 from app.domain.streaming.expected_media_profile import (
     ExpectedMediaProfile,
@@ -93,6 +94,7 @@ def test_run_once_composes_one_resolvable_media_profile() -> None:
             degradation_seconds=10.0,
             recovery_seconds=5.0,
         ),
+        operational_cycle_runtime=_InertOperationalCycleRuntime(),
     )
 
     result = runtime.run_once(
@@ -194,6 +196,7 @@ def test_run_once_with_no_profiles_returns_empty_cycle() -> None:
             degradation_seconds=10.0,
             recovery_seconds=5.0,
         ),
+        operational_cycle_runtime=_InertOperationalCycleRuntime(),
     )
 
     result = runtime.run_once(
@@ -291,6 +294,7 @@ def test_run_once_processes_multiple_profiles_in_order() -> None:
             degradation_seconds=10.0,
             recovery_seconds=5.0,
         ),
+        operational_cycle_runtime=_InertOperationalCycleRuntime(),
     )
 
     result = runtime.run_once(
@@ -376,6 +380,7 @@ def test_run_once_skips_service_wide_profile_without_physical_path() -> None:
             degradation_seconds=10.0,
             recovery_seconds=5.0,
         ),
+        operational_cycle_runtime=_InertOperationalCycleRuntime(),
     )
 
     result = runtime.run_once(
@@ -460,6 +465,7 @@ def test_run_once_receives_runtime_owner_identity_per_cycle() -> None:
             degradation_seconds=10.0,
             recovery_seconds=5.0,
         ),
+        operational_cycle_runtime=_InertOperationalCycleRuntime(),
     )
 
     result = runtime.run_once(
@@ -486,6 +492,17 @@ def test_run_once_receives_runtime_owner_identity_per_cycle() -> None:
         == instance_id
     )
 
+class _InertOperationalCycleRuntime:
+    def process_cycle(
+        self,
+        *,
+        node_id,
+        instance_id,
+        observation_result,
+    ) -> None:
+        return None
+
+
 class _SchedulingObserver:
     """Observer unused by scheduling tests with empty profiles."""
 
@@ -508,6 +525,7 @@ def test_run_forever_rejects_non_positive_interval() -> None:
             degradation_seconds=10,
             recovery_seconds=5,
         ),
+        operational_cycle_runtime=_InertOperationalCycleRuntime(),
     )
 
     observed_at = datetime(
@@ -562,6 +580,7 @@ def test_run_forever_executes_run_once_off_event_loop(
             degradation_seconds=10,
             recovery_seconds=5,
         ),
+        operational_cycle_runtime=_InertOperationalCycleRuntime(),
     )
 
     observed_at = datetime(
@@ -671,3 +690,154 @@ def test_run_forever_executes_run_once_off_event_loop(
 
     assert sleep_calls == [30.0]
 
+
+
+
+def test_run_once_forwards_complete_result_to_operational_cycle_runtime():
+    observed_at = datetime(
+        2026,
+        9,
+        22,
+        19,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    node_id = NodeId(
+        id="node-a",
+        name="node-a",
+        display_name="Node A",
+        created_at=observed_at,
+    )
+    instance_id = NodeInstanceId(
+        "streaming-primary"
+    )
+
+    profile = ExpectedMediaProfile(
+        profile_id="impact-main",
+        service_id="impact",
+        path_name="impact",
+        video=None,
+        audio=None,
+        container=None,
+    )
+
+    source_resolver = Mock()
+    source_resolver.resolve.return_value = (
+        "rtsp://127.0.0.1:8554/impact"
+    )
+
+    observation = InputMediaObservation(
+        node_id=node_id,
+        instance_id=instance_id,
+        service_id="impact",
+        path_name="impact",
+        observed_at=observed_at,
+        container=None,
+        video=None,
+        audio=None,
+    )
+
+    observer = Mock()
+    observer.observe.return_value = observation
+
+    stabilizer = Mock()
+    stabilized_health = Mock()
+    stabilizer.update.return_value = stabilized_health
+
+    operational_cycle_runtime = Mock()
+
+    runtime = MediaObservationRuntime(
+        profiles=(profile,),
+        source_resolver=source_resolver,
+        observer=observer,
+        stabilizer=stabilizer,
+        operational_cycle_runtime=operational_cycle_runtime,
+    )
+
+    result = runtime.run_once(
+        node_id=node_id,
+        instance_id=instance_id,
+        observed_at=observed_at,
+    )
+
+    operational_cycle_runtime.process_cycle.assert_called_once_with(
+        node_id=node_id,
+        instance_id=instance_id,
+        observation_result=result,
+    )
+
+
+def test_run_once_propagates_operational_cycle_failure():
+    observed_at = datetime(
+        2026,
+        9,
+        22,
+        19,
+        5,
+        tzinfo=timezone.utc,
+    )
+
+    node_id = NodeId(
+        id="node-a",
+        name="node-a",
+        display_name="Node A",
+        created_at=observed_at,
+    )
+    instance_id = NodeInstanceId(
+        "streaming-primary"
+    )
+
+    profile = ExpectedMediaProfile(
+        profile_id="impact-main",
+        service_id="impact",
+        path_name="impact",
+        video=None,
+        audio=None,
+        container=None,
+    )
+
+    source_resolver = Mock()
+    source_resolver.resolve.return_value = (
+        "rtsp://127.0.0.1:8554/impact"
+    )
+
+    observation = InputMediaObservation(
+        node_id=node_id,
+        instance_id=instance_id,
+        service_id="impact",
+        path_name="impact",
+        observed_at=observed_at,
+        container=None,
+        video=None,
+        audio=None,
+    )
+
+    observer = Mock()
+    observer.observe.return_value = observation
+
+    stabilizer = Mock()
+    stabilizer.update.return_value = Mock()
+
+    operational_cycle_runtime = Mock()
+    operational_cycle_runtime.process_cycle.side_effect = RuntimeError(
+        "synthetic operational cycle failure"
+    )
+
+    runtime = MediaObservationRuntime(
+        profiles=(profile,),
+        source_resolver=source_resolver,
+        observer=observer,
+        stabilizer=stabilizer,
+        operational_cycle_runtime=operational_cycle_runtime,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="synthetic operational cycle failure",
+    ):
+        runtime.run_once(
+            node_id=node_id,
+            instance_id=instance_id,
+            observed_at=observed_at,
+        )

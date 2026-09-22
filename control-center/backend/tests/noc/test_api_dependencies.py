@@ -864,3 +864,74 @@ def test_media_observation_runtime_marks_ffprobe_as_internal_observer(
     observer_class.assert_called_once_with(
         probe=runner,
     )
+
+
+
+
+def test_media_operational_composition_root_is_shared_and_wired():
+    from app.api import dependencies
+
+    dependencies.get_media_observation_runtime.cache_clear()
+    dependencies.get_media_operational_cycle_runtime.cache_clear()
+    dependencies.get_media_operational_runtime.cache_clear()
+    dependencies.get_media_health_transition_event_service.cache_clear()
+    dependencies.get_event_service.cache_clear()
+
+    event_service = (
+        dependencies.get_media_health_transition_event_service()
+    )
+    operational_runtime = dependencies.get_media_operational_runtime()
+    cycle_runtime = dependencies.get_media_operational_cycle_runtime()
+
+    dependencies.get_media_observation_runtime.cache_clear()
+    observation_runtime = dependencies.get_media_observation_runtime()
+
+    assert (
+        dependencies.get_media_health_transition_event_service()
+        is event_service
+    )
+    assert (
+        dependencies.get_media_operational_runtime()
+        is operational_runtime
+    )
+    assert (
+        dependencies.get_media_operational_cycle_runtime()
+        is cycle_runtime
+    )
+    assert (
+        dependencies.get_media_observation_runtime()
+        is observation_runtime
+    )
+
+    assert (
+        event_service._event_service
+        is dependencies.get_event_service()
+    )
+
+    assert (
+        operational_runtime._transition_event_service
+        is event_service
+    )
+
+    assert (
+        cycle_runtime.operational_runtime
+        is operational_runtime
+    )
+
+    assert (
+        observation_runtime._operational_cycle_runtime
+        is cycle_runtime
+    )
+
+
+def test_media_operational_runtime_preserves_identity_state_across_factory_calls():
+    from app.api import dependencies
+
+    first = dependencies.get_media_operational_runtime()
+    second = dependencies.get_media_operational_runtime()
+
+    assert first is second
+    assert (
+        first._previous_health_by_identity
+        is second._previous_health_by_identity
+    )
