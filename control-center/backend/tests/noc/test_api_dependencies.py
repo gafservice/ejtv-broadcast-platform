@@ -753,3 +753,54 @@ def test_managed_history_dependencies_share_history_database() -> None:
 
     assert managed._database is database
     assert historical._database is database
+
+
+def test_media_observation_source_resolver_dependency_composition() -> None:
+    from app.api.dependencies import (
+        get_media_observation_source_resolver,
+    )
+    from app.core.config import get_settings
+    from app.noc.services.media_observation_source_resolver import (
+        MediaObservationSourceResolver,
+    )
+
+    get_media_observation_source_resolver.cache_clear()
+    get_settings.cache_clear()
+
+    try:
+        settings = get_settings()
+        resolver = get_media_observation_source_resolver()
+
+        assert isinstance(
+            resolver,
+            MediaObservationSourceResolver,
+        )
+
+        assert (
+            resolver.resolve(path_name="feed-a")
+            == (
+                f"{settings.media_observation_rtsp_base_url}"
+                "/feed-a"
+            )
+        )
+
+        assert (
+            get_media_observation_source_resolver()
+            is resolver
+        )
+    finally:
+        get_media_observation_source_resolver.cache_clear()
+        get_settings.cache_clear()
+
+
+def test_media_observation_runtime_factory_is_available() -> None:
+    from app.api import dependencies
+
+    factory = getattr(
+        dependencies,
+        "get_media_observation_runtime",
+        None,
+    )
+
+    assert factory is not None
+    assert callable(factory)

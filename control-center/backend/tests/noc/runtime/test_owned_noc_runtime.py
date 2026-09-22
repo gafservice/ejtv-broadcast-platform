@@ -46,6 +46,9 @@ async def _exercise_owned_runtime_startup() -> None:
     session_observation = Mock()
     session_observation.run_forever = AsyncMock()
 
+    media_observation = Mock()
+    media_observation.run_forever = AsyncMock()
+
     call_order: list[str] = []
 
     managed_history_bootstrap.ensure_anchor.side_effect = (
@@ -117,6 +120,15 @@ async def _exercise_owned_runtime_startup() -> None:
             return_value=session_observation,
         ),
         patch(
+            "app.main.get_media_observation_runtime",
+            return_value=media_observation,
+        ),
+        patch.object(
+            __import__("app.main", fromlist=["settings"]).settings,
+            "media_observation_interval_seconds",
+            7.25,
+        ),
+        patch(
             "app.main.initialize_noc_runtime_info",
         ),
         patch(
@@ -139,6 +151,10 @@ async def _exercise_owned_runtime_startup() -> None:
                 in call_order
             )
 
+            # Let background tasks created by _owned_noc_runtime()
+            # start before context shutdown cancels them.
+            await asyncio.sleep(0)
+
     assert (
         call_order.index("managed-history-anchor")
         < call_order.index("continuity")
@@ -157,6 +173,13 @@ async def _exercise_owned_runtime_startup() -> None:
     assert (
         call_order.index("recent-reconciliation")
         < call_order.index("mature-catch-up")
+    )
+
+
+    media_observation.run_forever.assert_awaited_once_with(
+        node_id=node_id,
+        instance_id=instance_id,
+        interval_seconds=7.25,
     )
 
     managed_history_bootstrap.ensure_anchor.assert_called_once_with(

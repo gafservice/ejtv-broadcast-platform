@@ -6,6 +6,10 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.adapters.linux.linux_system_adapter import LinuxSystemAdapter
+from app.adapters.media.ffprobe_media_observer import (
+    FFprobeMediaObserver,
+)
+from app.adapters.media.ffprobe_runner import FFprobeRunner
 from app.adapters.mediamtx.adapter import MediaMTXAdapter
 from app.adapters.mediamtx.client import MediaMTXClient
 from app.adapters.mediamtx.session_adapter import MediaMTXSessionAdapter
@@ -68,8 +72,14 @@ from app.noc.domain.node_session_policy_config import (
 from app.noc.infrastructure.node_network_policy_loader import (
     NodeNetworkPolicyLoader,
 )
+from app.noc.infrastructure.node_media_profile_loader import (
+    NodeMediaProfileLoader,
+)
 from app.noc.infrastructure.node_session_policy_loader import (
     NodeSessionPolicyLoader,
+)
+from app.noc.runtime.media_observation_runtime import (
+    MediaObservationRuntime,
 )
 from app.noc.runtime.session_alarm_runtime import (
     SessionAlarmRuntime,
@@ -132,6 +142,9 @@ from app.noc.services.managed_history_bootstrap_service import (
 from app.noc.services.heartbeat_service import HeartbeatService
 from app.noc.services.capacity_service import CapacityService
 from app.noc.services.metric_service import MetricService
+from app.noc.services.media_observation_source_resolver import (
+    MediaObservationSourceResolver,
+)
 from app.noc.services.snapshot_service import SnapshotService
 from app.noc.runtime.telemetry_refresh import (
     TelemetryRefreshService,
@@ -148,6 +161,9 @@ from app.services.identity_administration_service import (
 )
 from app.services.authorization_service import AuthorizationService
 from app.services.geoip_service import GeoIPService
+from app.services.media_health_stabilizer import (
+    MediaHealthStabilizer,
+)
 from app.services.streaming_service import StreamingService
 from app.services.system_service import SystemService
 
@@ -734,3 +750,50 @@ def get_session_observation_runtime() -> SessionObservationRuntime:
         streaming_service=get_streaming_service(),
         operational_runtime=get_session_operational_runtime(),
     )
+
+@lru_cache
+def get_media_observation_runtime() -> MediaObservationRuntime:
+    """Build the operational physical Media Health runtime."""
+
+    settings = get_settings()
+
+    profiles = NodeMediaProfileLoader().load(
+        settings.node_network_policy_path,
+    )
+
+    runner = FFprobeRunner()
+
+    observer = FFprobeMediaObserver(
+        probe=runner,
+    )
+
+    stabilizer = MediaHealthStabilizer(
+        degradation_seconds=(
+            settings.media_health_degradation_seconds
+        ),
+        recovery_seconds=(
+            settings.media_health_recovery_seconds
+        ),
+    )
+
+    return MediaObservationRuntime(
+        profiles=profiles,
+        source_resolver=(
+            get_media_observation_source_resolver()
+        ),
+        observer=observer,
+        stabilizer=stabilizer,
+    )
+
+
+@lru_cache
+def get_media_observation_source_resolver(
+) -> MediaObservationSourceResolver:
+    """Build the shared physical media observation source resolver."""
+
+    settings = get_settings()
+
+    return MediaObservationSourceResolver(
+        rtsp_base_url=settings.media_observation_rtsp_base_url
+    )
+

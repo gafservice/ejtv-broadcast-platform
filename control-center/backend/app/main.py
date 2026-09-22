@@ -19,6 +19,7 @@ from app.api.dependencies import (
     get_system_service,
     get_telemetry_observation_runtime,
     get_session_observation_runtime,
+    get_media_observation_runtime,
 )
 from app.api.router import api_router
 from app.core.config import get_settings
@@ -121,6 +122,17 @@ async def _owned_noc_runtime(
         name="noc-session-observation",
     )
 
+    media_observation_task = asyncio.create_task(
+        get_media_observation_runtime().run_forever(
+            node_id=node_id,
+            instance_id=node_instance_id,
+            interval_seconds=(
+                settings.media_observation_interval_seconds
+            ),
+        ),
+        name="noc-media-observation",
+    )
+
     daily_history_task = asyncio.create_task(
         get_daily_history_maintenance_runtime().run_forever(
             node_id=node_id,
@@ -134,6 +146,7 @@ async def _owned_noc_runtime(
     finally:
         telemetry_task.cancel()
         session_observation_task.cancel()
+        media_observation_task.cancel()
         daily_history_task.cancel()
 
         with suppress(asyncio.CancelledError):
@@ -141,6 +154,9 @@ async def _owned_noc_runtime(
 
         with suppress(asyncio.CancelledError):
             await session_observation_task
+
+        with suppress(asyncio.CancelledError):
+            await media_observation_task
 
         with suppress(asyncio.CancelledError):
             await daily_history_task

@@ -48,6 +48,29 @@ class Settings(BaseSettings):
         gt=0,
     )
 
+    media_observation_rtsp_base_url: str = (
+        "rtsp://127.0.0.1:8554"
+    )
+
+    # ------------------------------------------------------------------
+    # Media Health
+    # ------------------------------------------------------------------
+
+    media_health_degradation_seconds: float = Field(
+        default=10.0,
+        ge=0,
+    )
+
+    media_observation_interval_seconds: float = Field(
+        default=5.0,
+        gt=0,
+    )
+
+    media_health_recovery_seconds: float = Field(
+        default=5.0,
+        ge=0,
+    )
+
     # ------------------------------------------------------------------
     # Stream Health
     # ------------------------------------------------------------------
