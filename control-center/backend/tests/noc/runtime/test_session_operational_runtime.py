@@ -14,9 +14,14 @@ from app.domain.streaming.metrics import (
 )
 from app.domain.streaming.models import (
     MediaMTXSnapshot,
+    MediaPath,
+    MediaPathStatus,
+    MediaReader,
+    MediaSource,
 )
 from app.noc.domain.critical_path_policy import CriticalPathPolicy
 from app.noc.domain.expected_session_policy import ExpectedSessionPolicy
+from app.noc.services.expected_session_evaluator import ExpectedSessionState
 from app.noc.domain.node import Node
 from app.noc.domain.node_id import NodeId
 from app.noc.domain.node_type import NodeType
@@ -32,6 +37,9 @@ from app.noc.runtime.session_operational_runtime import (
     SessionOperationalRuntimeResult,
 )
 from app.noc.services.alarm_service import AlarmService
+from app.noc.services.critical_path_reader_evaluator import (
+    CriticalPathReaderState,
+)
 from app.noc.services.critical_path_no_readers_alarm_service import (
     CriticalPathNoReadersAlarmService,
 )
@@ -47,6 +55,9 @@ from app.noc.services.expected_session_alarm_service import (
 )
 from app.noc.services.reconnect_flapping_alarm_service import (
     ReconnectFlappingAlarmService,
+)
+from app.noc.services.session_operational_projector import (
+    SessionOperationalProjector,
 )
 from app.noc.services.session_transition_event_service import (
     SessionTransitionEventService,
@@ -144,6 +155,9 @@ def build_context():
             transition_event_service
         ),
         alarm_runtime=alarm_runtime,
+        operational_projector=SessionOperationalProjector(
+            internal_observer_user_agent="EBP-MediaObserver/1",
+        ),
     )
 
     return (
@@ -315,3 +329,207 @@ def test_first_snapshot_is_baseline_for_transitions() -> None:
         node.node_id,
         instance.instance_id,
     ) == ()
+
+
+def test_internal_observer_is_not_operational_client_or_reader_demand() -> None:
+    (
+        node,
+        instance,
+        event_service,
+        _,
+        runtime,
+    ) = build_context()
+
+    previous = snapshot()
+
+    internal_observer = ActiveSession(
+        session_id="internal-observer",
+        protocol=SessionProtocol.RTSP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="127.0.0.1",
+        remote_port=50000,
+        path="critical",
+        connected_since=TIMESTAMP,
+        user_agent="EBP-MediaObserver/1",
+    )
+
+    current = snapshot(
+        internal_observer,
+    )
+
+    critical_path = MediaPath(
+        name="critical",
+        configuration_name="critical",
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type="srtSource",
+        ),
+        readers=(
+            MediaReader(
+                reader_type="rtspSession",
+                reader_id="internal-observer",
+            ),
+        ),
+    )
+
+    raw_media_snapshot = MediaMTXSnapshot(
+        captured_at=TIMESTAMP,
+        paths=(critical_path,),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    result = runtime.process(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        previous=previous,
+        current=current,
+        media_snapshot=raw_media_snapshot,
+        streaming_measurement=streaming_measurement(),
+        timestamp=TIMESTAMP,
+    )
+
+    assert result.transitions == ()
+    assert result.event_result.events == ()
+
+    assert event_service.list_all(
+        node.node_id,
+        instance.instance_id,
+    ) == ()
+
+    assert len(
+        result.alarm_result.critical_path_results
+    ) == 1
+
+    assert (
+        result.alarm_result
+        .critical_path_results[0]
+        .stabilization
+        .evaluation
+        .state
+        is CriticalPathReaderState.NO_READERS
+    )
+
+    assert critical_path.reader_count == 1
+
+
+def test_internal_observer_disconnect_is_not_operational_transition() -> None:
+    (
+        node,
+        instance,
+        event_service,
+        _,
+        runtime,
+    ) = build_context()
+
+    internal_observer = ActiveSession(
+        session_id="internal-observer-disconnect",
+        protocol=SessionProtocol.RTSP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="127.0.0.1",
+        remote_port=50000,
+        path="critical",
+        connected_since=TIMESTAMP,
+        user_agent="EBP-MediaObserver/1",
+    )
+
+    previous = snapshot(
+        internal_observer,
+    )
+
+    current = snapshot()
+
+    result = runtime.process(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        previous=previous,
+        current=current,
+        media_snapshot=media_snapshot(),
+        streaming_measurement=streaming_measurement(),
+        timestamp=TIMESTAMP,
+    )
+
+    assert result.transitions == ()
+    assert result.event_result.transitions == ()
+    assert result.event_result.events == ()
+    assert result.event_result.receipts == ()
+
+    assert event_service.list_all(
+        node.node_id,
+        instance.instance_id,
+    ) == ()
+
+
+def test_internal_observer_does_not_satisfy_expected_session_policy() -> None:
+    (
+        node,
+        instance,
+        event_service,
+        _,
+        runtime,
+    ) = build_context()
+
+    internal_observer = ActiveSession(
+        session_id="internal-observer-expected",
+        protocol=SessionProtocol.RTSP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="127.0.0.1",
+        remote_port=50000,
+        path="critical",
+        connected_since=TIMESTAMP,
+        user_agent="EBP-MediaObserver/1",
+    )
+
+    runtime._alarm_runtime._expected_session_policies = (
+        ExpectedSessionPolicy(
+            policy_id="internal-must-not-satisfy",
+            protocol=SessionProtocol.RTSP,
+            role=SessionRole.READER,
+            path="critical",
+            missing_grace_period=timedelta(seconds=0),
+        ),
+    )
+
+    result = runtime.process(
+        node_id=node.node_id,
+        instance_id=instance.instance_id,
+        previous=snapshot(),
+        current=snapshot(
+            internal_observer,
+        ),
+        media_snapshot=media_snapshot(),
+        streaming_measurement=streaming_measurement(),
+        timestamp=TIMESTAMP,
+    )
+
+    assert result.transitions == ()
+    assert result.event_result.events == ()
+
+    assert event_service.list_all(
+        node.node_id,
+        instance.instance_id,
+    ) == ()
+
+    assert len(
+        result.alarm_result.expected_session_results
+    ) == 1
+
+    expected_result = (
+        result.alarm_result.expected_session_results[0]
+    )
+
+    assert (
+        expected_result.stabilization.evaluation.state
+        is ExpectedSessionState.MISSING
+    )
+
+    assert (
+        expected_result.stabilization.evaluation.matching_sessions
+        == ()
+    )

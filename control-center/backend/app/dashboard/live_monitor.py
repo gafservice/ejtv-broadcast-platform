@@ -82,6 +82,10 @@ from app.noc.current_state.sqlite_node_health_diagnostic_repository import (
 from app.noc.services.history_query_service import (
     HistoryQueryService,
 )
+from app.noc.services.session_operational_projector import (
+    INTERNAL_MEDIA_OBSERVER_USER_AGENT,
+    SessionOperationalProjector,
+)
 
 
 def build_dashboard_application() -> DashboardApplication:
@@ -113,6 +117,10 @@ def build_dashboard_application() -> DashboardApplication:
         geoip_service,
     )
     session_service = SessionService()
+
+    operational_projector = SessionOperationalProjector(
+        internal_observer_user_agent=INTERNAL_MEDIA_OBSERVER_USER_AGENT,
+    )
 
     #
     # Prometheus Metrics
@@ -268,6 +276,7 @@ def build_dashboard_application() -> DashboardApplication:
         session_adapter=session_adapter,
         streaming_service=streaming_service,
         session_service=session_service,
+        operational_projector=operational_projector,
         dashboard_service=dashboard_service,
         dashboard_renderer=dashboard_renderer,
         system_service=system_service,

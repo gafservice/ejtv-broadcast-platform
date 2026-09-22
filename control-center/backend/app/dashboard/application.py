@@ -54,6 +54,7 @@ from app.noc.current_state.repository import (
 from app.noc.services.alarm_service import AlarmService
 from app.noc.services.event_service import EventService
 from app.noc.services.history_query_service import HistoryQueryService
+from app.noc.services.session_operational_projector import SessionOperationalProjector
 from app.services.network_telemetry_service import (
     NetworkTelemetryService,
 )
@@ -131,6 +132,7 @@ class DashboardApplication:
         navigation_controller: DashboardNavigationController | None = None,
         key_parser: DashboardKeyParser | None = None,
         keyboard_input: PosixKeyboardInput | None = None,
+        operational_projector: SessionOperationalProjector | None = None,
     ) -> None:
         self._mediamtx_adapter = mediamtx_adapter
         self._session_adapter = session_adapter
@@ -206,6 +208,8 @@ class DashboardApplication:
             if keyboard_input is not None
             else PosixKeyboardInput()
         )
+
+        self._operational_projector = operational_projector
 
         self._previous_snapshot: MediaMTXSnapshot | None = None
         self._previous_session_snapshot: SessionSnapshot | None = None
@@ -297,6 +301,14 @@ class DashboardApplication:
         snapshot = self._mediamtx_adapter.get_snapshot()
 
         session_snapshot = self._session_adapter.get_snapshot()
+
+        if self._operational_projector is not None:
+            session_snapshot, snapshot = (
+                self._operational_projector.project(
+                    session_snapshot=session_snapshot,
+                    media_snapshot=snapshot,
+                )
+            )
 
         measurement = self._streaming_service.compare(
             self._previous_snapshot,

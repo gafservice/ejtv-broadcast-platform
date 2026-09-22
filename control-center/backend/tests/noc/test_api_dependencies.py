@@ -32,6 +32,7 @@ from app.api.dependencies import (
     get_session_transition_event_service,
     get_session_alarm_runtime,
     get_session_operational_runtime,
+    get_session_operational_projector,
     get_streaming_service,
     get_session_observation_runtime,
     get_telemetry_refresh_service,
@@ -64,6 +65,9 @@ from app.noc.runtime.session_alarm_runtime import (
 )
 from app.noc.runtime.session_observation_runtime import (
     SessionObservationRuntime,
+)
+from app.noc.services.session_operational_projector import (
+    SessionOperationalProjector,
 )
 from app.noc.runtime.session_operational_runtime import (
     SessionOperationalRuntime,
@@ -100,6 +104,7 @@ def clear_noc_dependency_caches() -> None:
     get_node_health_diagnostic_repository.cache_clear()
     get_streaming_service.cache_clear()
     get_session_operational_runtime.cache_clear()
+    get_session_operational_projector.cache_clear()
     get_session_alarm_runtime.cache_clear()
     get_session_transition_event_service.cache_clear()
     get_node_session_policy_config.cache_clear()
@@ -804,3 +809,58 @@ def test_media_observation_runtime_factory_is_available() -> None:
 
     assert factory is not None
     assert callable(factory)
+
+
+def test_session_operational_runtime_uses_shared_projector() -> None:
+    runtime = get_session_operational_runtime()
+    projector = get_session_operational_projector()
+
+    assert isinstance(
+        projector,
+        SessionOperationalProjector,
+    )
+    assert runtime._operational_projector is projector
+
+
+def test_media_observation_runtime_marks_ffprobe_as_internal_observer(
+    monkeypatch,
+) -> None:
+    """Physical Media observer must emit the canonical internal identity."""
+    from unittest.mock import Mock
+
+    from app.api import dependencies
+    from app.noc.services.session_operational_projector import (
+        INTERNAL_MEDIA_OBSERVER_USER_AGENT,
+    )
+
+    runner = Mock()
+    runner_class = Mock(return_value=runner)
+
+    observer = Mock()
+    observer_class = Mock(return_value=observer)
+
+    monkeypatch.setattr(
+        dependencies,
+        "FFprobeRunner",
+        runner_class,
+    )
+    monkeypatch.setattr(
+        dependencies,
+        "FFprobeMediaObserver",
+        observer_class,
+    )
+
+    dependencies.get_media_observation_runtime.cache_clear()
+
+    try:
+        dependencies.get_media_observation_runtime()
+    finally:
+        dependencies.get_media_observation_runtime.cache_clear()
+
+    runner_class.assert_called_once_with(
+        user_agent=INTERNAL_MEDIA_OBSERVER_USER_AGENT,
+    )
+
+    observer_class.assert_called_once_with(
+        probe=runner,
+    )

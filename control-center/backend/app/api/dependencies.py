@@ -111,6 +111,10 @@ from app.noc.services.reconnect_flapping_alarm_service import (
 from app.noc.services.reconnect_flapping_evaluator import (
     ReconnectFlappingEvaluator,
 )
+from app.noc.services.session_operational_projector import (
+    INTERNAL_MEDIA_OBSERVER_USER_AGENT,
+    SessionOperationalProjector,
+)
 from app.noc.services.session_transition_event_service import (
     SessionTransitionEventService,
 )
@@ -722,6 +726,15 @@ def get_session_alarm_runtime() -> SessionAlarmRuntime:
 
 
 @lru_cache
+def get_session_operational_projector() -> SessionOperationalProjector:
+    """Build the shared operational session projection boundary."""
+
+    return SessionOperationalProjector(
+        internal_observer_user_agent=INTERNAL_MEDIA_OBSERVER_USER_AGENT,
+    )
+
+
+@lru_cache
 def get_session_operational_runtime() -> SessionOperationalRuntime:
     """Construye el coordinador operacional de sesiones."""
 
@@ -730,6 +743,7 @@ def get_session_operational_runtime() -> SessionOperationalRuntime:
             get_session_transition_event_service()
         ),
         alarm_runtime=get_session_alarm_runtime(),
+        operational_projector=get_session_operational_projector(),
     )
 
 
@@ -761,7 +775,9 @@ def get_media_observation_runtime() -> MediaObservationRuntime:
         settings.node_network_policy_path,
     )
 
-    runner = FFprobeRunner()
+    runner = FFprobeRunner(
+        user_agent=INTERNAL_MEDIA_OBSERVER_USER_AGENT,
+    )
 
     observer = FFprobeMediaObserver(
         probe=runner,

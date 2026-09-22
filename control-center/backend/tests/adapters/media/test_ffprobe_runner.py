@@ -130,3 +130,45 @@ def test_runner_does_not_hide_timeout() -> None:
 
     with pytest.raises(subprocess.TimeoutExpired):
         runner("rtsp://example/impact")
+
+
+def test_runner_places_explicit_user_agent_before_rtsp_source() -> None:
+    """Internal observer identity must be emitted as an input option."""
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append((command, kwargs))
+        return Completed(
+            stdout='{"streams":[]}',
+        )
+
+    runner = FFprobeRunner(
+        executable="/usr/bin/ffprobe",
+        timeout_seconds=8.0,
+        user_agent="EBP-MediaObserver/1",
+        run=run,
+    )
+
+    runner("rtsp://127.0.0.1:8554/impact")
+
+    assert len(calls) == 1
+
+    command, _ = calls[0]
+
+    assert command == [
+        "/usr/bin/ffprobe",
+        "-v",
+        "error",
+        "-print_format",
+        "json",
+        "-show_streams",
+        "-user_agent",
+        "EBP-MediaObserver/1",
+        "rtsp://127.0.0.1:8554/impact",
+    ]
+
+    assert command[-3:] == [
+        "-user_agent",
+        "EBP-MediaObserver/1",
+        "rtsp://127.0.0.1:8554/impact",
+    ]

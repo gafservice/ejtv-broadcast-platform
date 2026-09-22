@@ -3593,3 +3593,398 @@ def test_application_builds_webrtc_health_from_previous_session_snapshot() -> No
         second_aggregate_call.kwargs["webrtc_sessions"]
         is second_webrtc_health
     )
+
+# ============================================================
+# INTERNAL OBSERVER — OPERATIONAL DASHBOARD PROJECTION
+# ============================================================
+
+
+def test_dashboard_excludes_internal_observer_from_operational_sessions() -> None:
+    """Internal media observers must not appear as operational clients."""
+    from datetime import datetime, timezone
+
+    from app.domain.sessions import (
+        ActiveSession,
+        SessionProtocol,
+        SessionRole,
+        SessionSnapshot,
+    )
+    from app.domain.streaming.models import (
+        MediaMTXSnapshot,
+        MediaPath,
+        MediaPathStatus,
+        MediaReader,
+        MediaSource,
+    )
+    from app.noc.services.session_operational_projector import (
+        SessionOperationalProjector,
+    )
+
+    captured_at = datetime(
+        2026,
+        9,
+        22,
+        17,
+        30,
+        tzinfo=timezone.utc,
+    )
+
+    internal_session = ActiveSession(
+        session_id="internal-observer",
+        protocol=SessionProtocol.RTSP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="127.0.0.1",
+        remote_port=40000,
+        path="impact",
+        connected_since=captured_at,
+        user_agent="EBP-MediaObserver/1",
+    )
+
+    operational_session = ActiveSession(
+        session_id="real-client",
+        protocol=SessionProtocol.WEBRTC,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="192.168.33.234",
+        remote_port=50000,
+        path="impact",
+        connected_since=captured_at,
+    )
+
+    raw_session_snapshot = SessionSnapshot(
+        captured_at=captured_at,
+        sessions=(
+            internal_session,
+            operational_session,
+        ),
+    )
+
+    raw_media_snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(
+            MediaPath(
+                name="impact",
+                configuration_name="impact",
+                status=MediaPathStatus.ACTIVE,
+                ready=True,
+                available=True,
+                online=True,
+                source=MediaSource(
+                    source_type="srtSource",
+                ),
+                readers=(
+                    MediaReader(
+                        reader_type="rtspSession",
+                        reader_id="internal-observer",
+                    ),
+                    MediaReader(
+                        reader_type="webrtcSession",
+                        reader_id="real-client",
+                    ),
+                ),
+            ),
+        ),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    mediamtx_adapter = Mock()
+    mediamtx_adapter.health.return_value = True
+    mediamtx_adapter.get_snapshot.return_value = raw_media_snapshot
+
+    session_adapter = Mock()
+    session_adapter.get_snapshot.return_value = raw_session_snapshot
+
+    streaming_service = Mock()
+    streaming_service.compare.return_value = Mock()
+
+    session_service = Mock()
+    session_service.measure.return_value = Mock()
+
+    dashboard_service = Mock()
+    dashboard_service.build_dashboard_from_measurement.return_value = Mock(
+        spec=DashboardData
+    )
+
+    dashboard_renderer = Mock()
+    dashboard_renderer.render.return_value = Mock(spec=Layout)
+
+    system_service = Mock()
+    system_service.get_system_info.return_value = Mock(
+        hostname="server-01"
+    )
+    system_service.get_system_resources.return_value = Mock()
+    system_service.get_network_interface_infos.return_value = ()
+
+    network_telemetry_service = Mock()
+    network_telemetry_service.build.return_value = None
+
+    operational_projector = SessionOperationalProjector(
+        internal_observer_user_agent="EBP-MediaObserver/1",
+    )
+
+    application = DashboardApplication(
+        mediamtx_adapter=mediamtx_adapter,
+        session_adapter=session_adapter,
+        streaming_service=streaming_service,
+        session_service=session_service,
+        dashboard_service=dashboard_service,
+        dashboard_renderer=dashboard_renderer,
+        system_service=system_service,
+        network_telemetry_service=network_telemetry_service,
+        operational_projector=operational_projector,
+    )
+
+    application.run_once()
+
+    measured_snapshot = session_service.measure.call_args.args[0]
+
+    assert measured_snapshot is not raw_session_snapshot
+    assert tuple(
+        session.session_id
+        for session in measured_snapshot.sessions
+    ) == ("real-client",)
+
+    # Raw physical evidence must remain untouched.
+    assert tuple(
+        session.session_id
+        for session in raw_session_snapshot.sessions
+    ) == (
+        "internal-observer",
+        "real-client",
+    )
+
+    assert raw_media_snapshot.paths[0].reader_count == 2
+
+
+def test_dashboard_temporal_services_receive_only_operational_snapshots() -> None:
+    """Internal observer appearance must not enter temporal session history."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.domain.sessions import (
+        ActiveSession,
+        SessionProtocol,
+        SessionRole,
+        SessionSnapshot,
+    )
+    from app.domain.streaming.models import (
+        MediaMTXSnapshot,
+        MediaPath,
+        MediaPathStatus,
+        MediaReader,
+        MediaSource,
+    )
+    from app.noc.services.session_operational_projector import (
+        SessionOperationalProjector,
+    )
+
+    first_at = datetime(
+        2026,
+        9,
+        22,
+        18,
+        0,
+        tzinfo=timezone.utc,
+    )
+    second_at = first_at + timedelta(seconds=5)
+
+    real_first = ActiveSession(
+        session_id="real-client",
+        protocol=SessionProtocol.WEBRTC,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="192.168.33.234",
+        remote_port=50000,
+        path="impact",
+        connected_since=first_at,
+    )
+
+    real_second = ActiveSession(
+        session_id="real-client",
+        protocol=SessionProtocol.WEBRTC,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="192.168.33.234",
+        remote_port=50000,
+        path="impact",
+        connected_since=first_at,
+    )
+
+    internal_second = ActiveSession(
+        session_id="internal-observer",
+        protocol=SessionProtocol.RTSP,
+        role=SessionRole.READER,
+        state="read",
+        remote_ip="127.0.0.1",
+        remote_port=40000,
+        path="impact",
+        connected_since=second_at,
+        user_agent="EBP-MediaObserver/1",
+    )
+
+    session_first = SessionSnapshot(
+        captured_at=first_at,
+        sessions=(real_first,),
+    )
+
+    session_second = SessionSnapshot(
+        captured_at=second_at,
+        sessions=(
+            real_second,
+            internal_second,
+        ),
+    )
+
+    media_first = MediaMTXSnapshot(
+        captured_at=first_at,
+        paths=(
+            MediaPath(
+                name="impact",
+                configuration_name="impact",
+                status=MediaPathStatus.ACTIVE,
+                ready=True,
+                available=True,
+                online=True,
+                source=MediaSource(
+                    source_type="srtSource",
+                ),
+                readers=(
+                    MediaReader(
+                        reader_type="webrtcSession",
+                        reader_id="real-client",
+                    ),
+                ),
+            ),
+        ),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    media_second = MediaMTXSnapshot(
+        captured_at=second_at,
+        paths=(
+            MediaPath(
+                name="impact",
+                configuration_name="impact",
+                status=MediaPathStatus.ACTIVE,
+                ready=True,
+                available=True,
+                online=True,
+                source=MediaSource(
+                    source_type="srtSource",
+                ),
+                readers=(
+                    MediaReader(
+                        reader_type="webrtcSession",
+                        reader_id="real-client",
+                    ),
+                    MediaReader(
+                        reader_type="rtspSession",
+                        reader_id="internal-observer",
+                    ),
+                ),
+            ),
+        ),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    mediamtx_adapter = Mock()
+    mediamtx_adapter.health.return_value = True
+    mediamtx_adapter.get_snapshot.side_effect = (
+        media_first,
+        media_second,
+    )
+
+    session_adapter = Mock()
+    session_adapter.get_snapshot.side_effect = (
+        session_first,
+        session_second,
+    )
+
+    streaming_service = Mock()
+    streaming_service.compare.return_value = Mock()
+
+    session_service = Mock()
+    session_service.measure.return_value = Mock()
+
+    rtsp_service = Mock()
+    rtsp_service.build.return_value = ()
+
+    dashboard_service = Mock()
+    dashboard_service.build_dashboard_from_measurement.return_value = Mock(
+        spec=DashboardData
+    )
+
+    dashboard_renderer = Mock()
+    dashboard_renderer.render.return_value = Mock(spec=Layout)
+
+    system_service = Mock()
+    system_service.get_system_info.return_value = Mock(
+        hostname="server-01"
+    )
+    system_service.get_system_resources.return_value = Mock()
+    system_service.get_network_interface_infos.return_value = ()
+
+    network_telemetry_service = Mock()
+    network_telemetry_service.build.return_value = None
+
+    application = DashboardApplication(
+        mediamtx_adapter=mediamtx_adapter,
+        session_adapter=session_adapter,
+        streaming_service=streaming_service,
+        session_service=session_service,
+        dashboard_service=dashboard_service,
+        dashboard_renderer=dashboard_renderer,
+        system_service=system_service,
+        network_telemetry_service=network_telemetry_service,
+        rtsp_session_health_service=rtsp_service,
+        operational_projector=SessionOperationalProjector(
+            internal_observer_user_agent="EBP-MediaObserver/1",
+        ),
+    )
+
+    application.run_once()
+    application.run_once()
+
+    assert rtsp_service.build.call_count == 2
+
+    first_call = rtsp_service.build.call_args_list[0].kwargs
+    second_call = rtsp_service.build.call_args_list[1].kwargs
+
+    assert first_call["previous_snapshot"] is None
+
+    first_current = first_call["current_snapshot"]
+
+    assert tuple(
+        session.session_id
+        for session in first_current.sessions
+    ) == ("real-client",)
+
+    second_previous = second_call["previous_snapshot"]
+    second_current = second_call["current_snapshot"]
+
+    assert tuple(
+        session.session_id
+        for session in second_previous.sessions
+    ) == ("real-client",)
+
+    assert tuple(
+        session.session_id
+        for session in second_current.sessions
+    ) == ("real-client",)
+
+    # Temporal continuity must use the projected first cycle.
+    assert second_previous is first_current
+
+    # RAW evidence remains physically different in cycle two.
+    assert tuple(
+        session.session_id
+        for session in session_second.sessions
+    ) == (
+        "real-client",
+        "internal-observer",
+    )
+
+    assert media_second.paths[0].reader_count == 2

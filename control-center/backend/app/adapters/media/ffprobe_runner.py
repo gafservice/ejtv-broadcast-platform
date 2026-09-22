@@ -19,6 +19,7 @@ class FFprobeRunner:
         *,
         executable: str = "/usr/bin/ffprobe",
         timeout_seconds: float = 8.0,
+        user_agent: str | None = None,
         run: Run = subprocess.run,
     ) -> None:
         if not executable:
@@ -29,11 +30,23 @@ class FFprobeRunner:
                 "timeout_seconds must be positive"
             )
 
+        if user_agent is not None:
+            if not isinstance(user_agent, str):
+                raise TypeError("user_agent must be a str or None")
+
+            user_agent = user_agent.strip()
+
+            if not user_agent:
+                raise ValueError(
+                    "user_agent must not be empty"
+                )
+
         if not callable(run):
             raise TypeError("run must be callable")
 
         self._executable = executable
         self._timeout_seconds = timeout_seconds
+        self._user_agent = user_agent
         self._run = run
 
     def __call__(
@@ -50,8 +63,17 @@ class FFprobeRunner:
             "-print_format",
             "json",
             "-show_streams",
-            source,
         ]
+
+        if self._user_agent is not None:
+            command.extend(
+                [
+                    "-user_agent",
+                    self._user_agent,
+                ]
+            )
+
+        command.append(source)
 
         result = self._run(
             command,

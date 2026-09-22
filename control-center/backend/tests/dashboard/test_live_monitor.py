@@ -4,6 +4,7 @@ from contextlib import ExitStack
 from unittest.mock import ANY, Mock, call, patch
 
 from app.dashboard.live_monitor import build_dashboard_application
+from app.noc.services.session_operational_projector import INTERNAL_MEDIA_OBSERVER_USER_AGENT
 
 
 def test_build_dashboard_application_composes_shared_read_dependencies() -> None:
@@ -38,6 +39,7 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
     session_client = Mock()
     session_adapter = Mock()
     session_service = Mock()
+    operational_projector = Mock()
 
     metrics_client = Mock()
     metrics_parser = Mock()
@@ -127,6 +129,13 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
             patch(
                 "app.dashboard.live_monitor.SessionService",
                 return_value=session_service,
+            )
+        )
+
+        operational_projector_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.SessionOperationalProjector",
+                return_value=operational_projector,
             )
         )
 
@@ -417,6 +426,12 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
     )
     session_service_class.assert_called_once_with()
 
+    operational_projector_class.assert_called_once_with(
+        internal_observer_user_agent=(
+            INTERNAL_MEDIA_OBSERVER_USER_AGENT
+        ),
+    )
+
     metrics_client_class.assert_called_once_with(
         metrics_http_client
     )
@@ -495,6 +510,7 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
         session_adapter=session_adapter,
         streaming_service=streaming_service,
         session_service=session_service,
+        operational_projector=operational_projector,
         dashboard_service=dashboard_service,
         dashboard_renderer=dashboard_renderer,
         system_service=system_service,
@@ -1067,3 +1083,32 @@ def test_build_dashboard_application_composes_stream_health_event_runtime() -> N
         kwargs["streaming_health_transition_event_service"]
         is stream_event_service
     )
+
+
+def test_build_dashboard_application_uses_canonical_operational_projector(
+    monkeypatch,
+) -> None:
+    """Dashboard composition must use the canonical observer identity."""
+    from unittest.mock import Mock
+
+    from app.dashboard import live_monitor
+
+    projector = Mock()
+
+    projector_class = Mock(return_value=projector)
+
+    monkeypatch.setattr(
+        live_monitor,
+        "SessionOperationalProjector",
+        projector_class,
+    )
+
+    application = live_monitor.build_dashboard_application()
+
+    projector_class.assert_called_once_with(
+        internal_observer_user_agent=(
+            live_monitor.INTERNAL_MEDIA_OBSERVER_USER_AGENT
+        ),
+    )
+
+    assert application._operational_projector is projector

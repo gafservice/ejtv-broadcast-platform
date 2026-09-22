@@ -28,6 +28,9 @@ from app.noc.runtime.session_alarm_runtime import (
     SessionAlarmRuntime,
     SessionAlarmRuntimeResult,
 )
+from app.noc.services.session_operational_projector import (
+    SessionOperationalProjector,
+)
 from app.noc.services.session_transition_detector import (
     SessionTransition,
     SessionTransitionDetector,
@@ -56,6 +59,7 @@ class SessionOperationalRuntime:
         transition_event_service: SessionTransitionEventService,
         alarm_runtime: SessionAlarmRuntime,
         detector: SessionTransitionDetector | None = None,
+        operational_projector: SessionOperationalProjector | None = None,
     ) -> None:
         if not isinstance(
             transition_event_service,
@@ -86,10 +90,23 @@ class SessionOperationalRuntime:
                 "SessionTransitionDetector or None"
             )
 
+        if (
+            operational_projector is not None
+            and not isinstance(
+                operational_projector,
+                SessionOperationalProjector,
+            )
+        ):
+            raise TypeError(
+                "operational_projector must be a "
+                "SessionOperationalProjector or None"
+            )
+
         self._transition_event_service = (
             transition_event_service
         )
         self._alarm_runtime = alarm_runtime
+        self._operational_projector = operational_projector
         self._detector = (
             detector
             if detector is not None
@@ -123,9 +140,30 @@ class SessionOperationalRuntime:
             timestamp=timestamp,
         )
 
+        operational_previous = previous
+        operational_current = current
+        operational_media_snapshot = media_snapshot
+
+        if self._operational_projector is not None:
+            if previous is not None:
+                operational_previous, _ = (
+                    self._operational_projector.project(
+                        session_snapshot=previous,
+                        media_snapshot=media_snapshot,
+                    )
+                )
+
+            (
+                operational_current,
+                operational_media_snapshot,
+            ) = self._operational_projector.project(
+                session_snapshot=current,
+                media_snapshot=media_snapshot,
+            )
+
         transitions = self._detector.detect(
-            previous,
-            current,
+            operational_previous,
+            operational_current,
         )
 
         event_result = (
@@ -140,8 +178,8 @@ class SessionOperationalRuntime:
         alarm_result = self._alarm_runtime.process(
             node_id=node_id,
             instance_id=instance_id,
-            session_snapshot=current,
-            media_snapshot=media_snapshot,
+            session_snapshot=operational_current,
+            media_snapshot=operational_media_snapshot,
             streaming_measurement=streaming_measurement,
             transitions=transitions,
             timestamp=timestamp,
