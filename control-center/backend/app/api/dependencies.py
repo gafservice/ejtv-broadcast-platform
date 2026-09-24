@@ -16,6 +16,11 @@ from app.adapters.mediamtx.session_adapter import MediaMTXSessionAdapter
 from app.adapters.mediamtx.session_client import MediaMTXSessionClient
 from app.core.http import HttpClient
 from app.core.config import get_settings
+from app.noc.current_state.media_health_current_state_resolver import MediaHealthCurrentStateResolver
+from app.noc.current_state.media_health_freshness import MediaHealthFreshnessPolicy
+from app.noc.runtime.signal_health_operational_runtime import SignalHealthOperationalRuntime
+from app.services.source_transport_health_evaluator import SourceTransportHealthEvaluator
+from app.domain.streaming.signal_health import SignalHealthEvaluator
 from app.infrastructure.persistence.audit.sqlalchemy_audit_repository import (
     SQLAlchemyAuditRepository,
 )
@@ -383,6 +388,64 @@ def get_node_health_diagnostic_repository(
 
     return SQLiteNodeHealthDiagnosticRepository(
         get_noc_history_database()
+    )
+
+
+@lru_cache
+def get_media_health_freshness_policy(
+) -> MediaHealthFreshnessPolicy:
+    """Build the shared Media Health freshness policy."""
+
+    settings = get_settings()
+
+    return MediaHealthFreshnessPolicy(
+        max_age_seconds=(
+            settings.media_health_freshness_max_age_seconds
+        )
+    )
+
+
+@lru_cache
+def get_media_health_current_state_resolver(
+) -> MediaHealthCurrentStateResolver:
+    """Build the shared Media Health current-state resolver."""
+
+    return MediaHealthCurrentStateResolver(
+        freshness_policy=get_media_health_freshness_policy()
+    )
+
+
+@lru_cache
+def get_source_transport_health_evaluator(
+) -> SourceTransportHealthEvaluator:
+    """Build the shared Source Transport Health evaluator."""
+
+    return SourceTransportHealthEvaluator()
+
+
+@lru_cache
+def get_signal_health_evaluator(
+) -> SignalHealthEvaluator:
+    """Build the shared Signal Health evaluator."""
+
+    return SignalHealthEvaluator()
+
+
+@lru_cache
+def get_signal_health_operational_runtime(
+) -> SignalHealthOperationalRuntime:
+    """Build the shared Signal Health operational runtime."""
+
+    return SignalHealthOperationalRuntime(
+        source_transport_health_evaluator=(
+            get_source_transport_health_evaluator()
+        ),
+        signal_health_evaluator=(
+            get_signal_health_evaluator()
+        ),
+        media_health_current_state_resolver=(
+            get_media_health_current_state_resolver()
+        ),
     )
 
 
@@ -783,11 +846,24 @@ def get_streaming_service() -> StreamingService:
 def get_session_observation_runtime() -> SessionObservationRuntime:
     """Construye el observador periódico propiedad del Runtime Owner."""
 
+    settings = get_settings()
+
+    media_profiles = NodeMediaProfileLoader().load(
+        settings.node_network_policy_path,
+    )
+
     return SessionObservationRuntime(
         mediamtx_adapter=get_mediamtx_adapter(),
         session_adapter=get_mediamtx_session_adapter(),
         streaming_service=get_streaming_service(),
         operational_runtime=get_session_operational_runtime(),
+        media_profiles=media_profiles,
+        media_health_current_state_repository=(
+            get_media_health_current_state_repository()
+        ),
+        signal_health_operational_runtime=(
+            get_signal_health_operational_runtime()
+        ),
     )
 
 @lru_cache

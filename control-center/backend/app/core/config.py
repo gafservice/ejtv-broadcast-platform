@@ -71,6 +71,11 @@ class Settings(BaseSettings):
         ge=0,
     )
 
+    media_health_freshness_max_age_seconds: float = Field(
+        default=16.0,
+        gt=0,
+    )
+
     # ------------------------------------------------------------------
     # Stream Health
     # ------------------------------------------------------------------

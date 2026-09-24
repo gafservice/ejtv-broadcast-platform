@@ -22,11 +22,18 @@ from app.adapters.mediamtx.session_adapter import MediaMTXSessionAdapter
 from app.domain.sessions import SessionSnapshot
 from app.domain.streaming import MediaMTXSnapshot
 from app.domain.streaming.metrics import StreamingMeasurement
+from app.domain.streaming.expected_media_profile import ExpectedMediaProfile
+from app.noc.current_state.media_health_current_state import (
+    MediaHealthCurrentStateRepository,
+)
 from app.noc.domain.node_id import NodeId
 from app.noc.domain.node_instance import NodeInstanceId
 from app.noc.runtime.session_operational_runtime import (
     SessionOperationalRuntime,
     SessionOperationalRuntimeResult,
+)
+from app.noc.runtime.signal_health_operational_runtime import (
+    SignalHealthOperationalRuntime,
 )
 from app.services.streaming_service import StreamingService
 
@@ -51,6 +58,13 @@ class SessionObservationRuntime:
         session_adapter: MediaMTXSessionAdapter,
         streaming_service: StreamingService,
         operational_runtime: SessionOperationalRuntime,
+        media_profiles: tuple[ExpectedMediaProfile, ...] = (),
+        media_health_current_state_repository: (
+            MediaHealthCurrentStateRepository | None
+        ) = None,
+        signal_health_operational_runtime: (
+            SignalHealthOperationalRuntime | None
+        ) = None,
     ) -> None:
         if not isinstance(mediamtx_adapter, MediaMTXAdapter):
             raise TypeError(
@@ -79,10 +93,41 @@ class SessionObservationRuntime:
                 "SessionOperationalRuntime"
             )
 
+        signal_dependencies = (
+            media_health_current_state_repository,
+            signal_health_operational_runtime,
+        )
+
+        if media_profiles and any(
+            dependency is None
+            for dependency in signal_dependencies
+        ):
+            raise ValueError(
+                "media_profiles require both "
+                "media_health_current_state_repository and "
+                "signal_health_operational_runtime"
+            )
+
+        if not media_profiles and any(
+            dependency is not None
+            for dependency in signal_dependencies
+        ):
+            raise ValueError(
+                "Signal Health dependencies require media_profiles"
+            )
+
         self._mediamtx_adapter = mediamtx_adapter
         self._session_adapter = session_adapter
         self._streaming_service = streaming_service
         self._operational_runtime = operational_runtime
+
+        self._media_profiles = tuple(media_profiles)
+        self._media_health_current_state_repository = (
+            media_health_current_state_repository
+        )
+        self._signal_health_operational_runtime = (
+            signal_health_operational_runtime
+        )
 
         self._previous_media_snapshot: MediaMTXSnapshot | None = None
         self._previous_session_snapshot: SessionSnapshot | None = None
@@ -112,6 +157,31 @@ class SessionObservationRuntime:
             streaming_measurement=streaming_measurement,
             timestamp=session_snapshot.captured_at,
         )
+
+        if self._media_profiles:
+            repository = (
+                self._media_health_current_state_repository
+            )
+            signal_runtime = (
+                self._signal_health_operational_runtime
+            )
+
+            assert repository is not None
+            assert signal_runtime is not None
+
+            for profile in self._media_profiles:
+                media_current_state = repository.latest(
+                    profile_id=profile.profile_id,
+                    service_id=profile.service_id,
+                    path_name=profile.path_name,
+                )
+
+                signal_runtime.process_current_state(
+                    profile=profile,
+                    media_current_state=media_current_state,
+                    media_snapshot=media_snapshot,
+                    measurement=streaming_measurement,
+                )
 
         self._previous_media_snapshot = media_snapshot
         self._previous_session_snapshot = session_snapshot
