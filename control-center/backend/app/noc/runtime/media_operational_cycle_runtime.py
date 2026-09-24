@@ -16,6 +16,10 @@ is propagated and later profiles in that cycle are not processed.
 
 from __future__ import annotations
 
+from app.noc.current_state.media_health_current_state import (
+    MediaHealthCurrentState,
+    MediaHealthCurrentStateRepository,
+)
 from app.noc.domain.node_id import NodeId
 from app.noc.domain.node_instance import NodeInstanceId
 from app.noc.runtime.media_observation_runtime import (
@@ -33,6 +37,7 @@ class MediaOperationalCycleRuntime:
         self,
         *,
         operational_runtime: MediaOperationalRuntime,
+        current_state_repository: MediaHealthCurrentStateRepository,
     ) -> None:
         if not isinstance(
             operational_runtime,
@@ -43,7 +48,17 @@ class MediaOperationalCycleRuntime:
                 "MediaOperationalRuntime"
             )
 
+        if not isinstance(
+            current_state_repository,
+            MediaHealthCurrentStateRepository,
+        ):
+            raise TypeError(
+                "current_state_repository must implement "
+                "MediaHealthCurrentStateRepository"
+            )
+
         self._operational_runtime = operational_runtime
+        self._current_state_repository = current_state_repository
 
     @property
     def operational_runtime(
@@ -83,9 +98,21 @@ class MediaOperationalCycleRuntime:
             )
 
         for profile_result in observation_result.profiles:
+            health = profile_result.stabilized_health
+
+            self._current_state_repository.save(
+                state=MediaHealthCurrentState(
+                    profile_id=health.profile_id,
+                    service_id=health.service_id,
+                    path_name=health.path_name,
+                    observed_at=observation_result.observed_at,
+                    health=health,
+                )
+            )
+
             self._operational_runtime.process_health(
                 node_id=node_id,
                 instance_id=instance_id,
-                health=profile_result.stabilized_health,
+                health=health,
                 observed_at=observation_result.observed_at,
             )

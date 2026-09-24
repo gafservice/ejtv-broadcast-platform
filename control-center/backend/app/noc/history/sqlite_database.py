@@ -16,7 +16,7 @@ import sqlite3
 from pathlib import Path
 
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 class SQLiteHistoryDatabase:
@@ -100,6 +100,14 @@ class SQLiteHistoryDatabase:
                     3,
                 )
                 current_version = 3
+
+            if current_version == 3:
+                self._migrate_v4(connection)
+                self._set_version(
+                    connection,
+                    4,
+                )
+                current_version = 4
 
             if current_version != SCHEMA_VERSION:
                 raise RuntimeError(
@@ -313,6 +321,32 @@ class SQLiteHistoryDatabase:
                 PRIMARY KEY (
                     node_id,
                     instance_id
+                )
+            );
+            """
+        )
+
+
+    @staticmethod
+    def _migrate_v4(
+        connection: sqlite3.Connection,
+    ) -> None:
+        """Add durable current state for stabilized Media Health."""
+
+        connection.executescript(
+            """
+            CREATE TABLE media_health_current_state (
+                profile_id TEXT NOT NULL,
+                service_id TEXT NOT NULL,
+                path_name TEXT NOT NULL,
+
+                observed_at TEXT NOT NULL,
+                health_json TEXT NOT NULL,
+
+                PRIMARY KEY (
+                    profile_id,
+                    service_id,
+                    path_name
                 )
             );
             """

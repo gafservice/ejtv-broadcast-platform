@@ -57,6 +57,9 @@ from app.noc.history.sqlite_managed_history_repository import (
 from app.noc.current_state.sqlite_node_health_diagnostic_repository import (
     SQLiteNodeHealthDiagnosticRepository,
 )
+from app.noc.current_state.sqlite_media_health_current_state_repository import (
+    SQLiteMediaHealthCurrentStateRepository,
+)
 from app.noc.history.evidence_day_sealer import (
     EvidenceDaySealer,
 )
@@ -379,6 +382,16 @@ def get_node_health_diagnostic_repository(
     """Construye el repositorio compartido de diagnóstico de salud."""
 
     return SQLiteNodeHealthDiagnosticRepository(
+        get_noc_history_database()
+    )
+
+
+@lru_cache
+def get_media_health_current_state_repository(
+) -> SQLiteMediaHealthCurrentStateRepository:
+    """Construye el current state compartido de Media Health."""
+
+    return SQLiteMediaHealthCurrentStateRepository(
         get_noc_history_database()
     )
 
@@ -806,6 +819,9 @@ def get_media_operational_cycle_runtime(
 
     return MediaOperationalCycleRuntime(
         operational_runtime=get_media_operational_runtime(),
+        current_state_repository=(
+            get_media_health_current_state_repository()
+        ),
     )
 
 

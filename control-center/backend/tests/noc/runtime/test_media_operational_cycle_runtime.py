@@ -9,6 +9,9 @@ import pytest
 
 from app.domain.streaming.health import HealthStatus
 from app.domain.streaming.media_health import MediaHealth
+from app.noc.current_state.media_health_current_state import (
+    MediaHealthCurrentStateRepository,
+)
 from app.noc.domain.node_id import NodeId
 from app.noc.domain.node_instance import NodeInstanceId
 from app.noc.runtime.media_observation_runtime import (
@@ -95,7 +98,10 @@ def test_process_cycle_forwards_each_stabilized_health_in_order():
     operational_runtime.process_health = Mock()
 
     cycle_runtime = MediaOperationalCycleRuntime(
-        operational_runtime=operational_runtime
+        operational_runtime=operational_runtime,
+        current_state_repository=Mock(
+            spec=MediaHealthCurrentStateRepository
+        ),
     )
 
     node_id = make_node_id()
@@ -174,7 +180,10 @@ def test_process_cycle_with_no_profiles_does_nothing():
     operational_runtime.process_health = Mock()
 
     cycle_runtime = MediaOperationalCycleRuntime(
-        operational_runtime=operational_runtime
+        operational_runtime=operational_runtime,
+        current_state_repository=Mock(
+            spec=MediaHealthCurrentStateRepository
+        ),
     )
 
     cycle_runtime.process_cycle(
@@ -205,7 +214,10 @@ def test_process_cycle_is_fail_fast_per_profile():
     )
 
     cycle_runtime = MediaOperationalCycleRuntime(
-        operational_runtime=operational_runtime
+        operational_runtime=operational_runtime,
+        current_state_repository=Mock(
+            spec=MediaHealthCurrentStateRepository
+        ),
     )
 
     node_id = make_node_id()
@@ -274,7 +286,10 @@ def test_process_cycle_validates_arguments():
     operational_runtime = make_operational_runtime()
 
     cycle_runtime = MediaOperationalCycleRuntime(
-        operational_runtime=operational_runtime
+        operational_runtime=operational_runtime,
+        current_state_repository=Mock(
+            spec=MediaHealthCurrentStateRepository
+        ),
     )
 
     node_id = make_node_id()
@@ -323,5 +338,8 @@ def test_constructor_requires_operational_runtime():
         match="operational_runtime",
     ):
         MediaOperationalCycleRuntime(
-            operational_runtime=None
+            operational_runtime=None,
+            current_state_repository=Mock(
+                spec=MediaHealthCurrentStateRepository
+            ),
         )
