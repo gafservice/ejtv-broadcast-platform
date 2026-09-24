@@ -176,6 +176,13 @@ class SessionObservationRuntime:
                     path_name=profile.path_name,
                 )
 
+                if (
+                    media_current_state is not None
+                    and media_current_state.observed_at
+                    > media_snapshot.captured_at
+                ):
+                    media_current_state = None
+
                 signal_runtime.process_current_state(
                     profile=profile,
                     media_current_state=media_current_state,

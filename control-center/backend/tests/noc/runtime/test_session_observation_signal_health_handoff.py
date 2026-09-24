@@ -372,3 +372,153 @@ def test_signal_handoff_does_not_recalculate_streaming_measurement():
     )
 
     streaming_service.compare.assert_called_once()
+
+def test_future_media_current_state_is_not_handed_to_signal_health() -> None:
+    """A session snapshot must not consume Media Health from its future."""
+
+    from datetime import timedelta
+
+    from app.domain.streaming.media_health import MediaHealth
+    from app.noc.current_state.media_health_current_state import (
+        MediaHealthCurrentState,
+    )
+
+    repository = Mock(
+        spec=MediaHealthCurrentStateRepository
+    )
+
+    future_state = MediaHealthCurrentState(
+        profile_id="impact-main",
+        service_id="impact",
+        path_name="impact",
+        observed_at=NOW + timedelta(microseconds=1),
+        health=MediaHealth(
+            profile_id="impact-main",
+            service_id="impact",
+            path_name="impact",
+            status=HealthStatus.HEALTHY,
+        ),
+    )
+
+    repository.latest.return_value = future_state
+
+    signal_runtime = Mock(
+        spec=SignalHealthOperationalRuntime
+    )
+    signal_runtime.process_current_state.return_value = (
+        _signal_health()
+    )
+
+    (
+        runtime,
+        _,
+        _,
+        _,
+        _,
+        media_snapshot,
+        measurement,
+    ) = _build_runtime(
+        repository=repository,
+        signal_runtime=signal_runtime,
+    )
+
+    runtime.run_once(
+        node_id=NODE_ID,
+        instance_id=INSTANCE_ID,
+    )
+
+    repository.latest.assert_called_once_with(
+        profile_id="impact-main",
+        service_id="impact",
+        path_name="impact",
+    )
+
+    signal_runtime.process_current_state.assert_called_once()
+
+    call = signal_runtime.process_current_state.call_args
+
+    assert call.kwargs["profile"] == _profile()
+
+    assert call.kwargs["media_current_state"] is None
+
+    assert (
+        call.kwargs["media_snapshot"]
+        is media_snapshot
+    )
+
+    assert (
+        call.kwargs["measurement"]
+        is measurement
+    )
+
+
+def test_equal_timestamp_media_current_state_is_handed_to_signal_health() -> None:
+    """Media Health observed exactly at snapshot time belongs to that cycle."""
+
+    from app.domain.streaming.media_health import MediaHealth
+    from app.noc.current_state.media_health_current_state import (
+        MediaHealthCurrentState,
+    )
+
+    repository = Mock(
+        spec=MediaHealthCurrentStateRepository
+    )
+
+    current_state = MediaHealthCurrentState(
+        profile_id="impact-main",
+        service_id="impact",
+        path_name="impact",
+        observed_at=NOW,
+        health=MediaHealth(
+            profile_id="impact-main",
+            service_id="impact",
+            path_name="impact",
+            status=HealthStatus.HEALTHY,
+        ),
+    )
+
+    repository.latest.return_value = current_state
+
+    signal_runtime = Mock(
+        spec=SignalHealthOperationalRuntime
+    )
+    signal_runtime.process_current_state.return_value = (
+        _signal_health()
+    )
+
+    (
+        runtime,
+        _,
+        _,
+        _,
+        _,
+        media_snapshot,
+        measurement,
+    ) = _build_runtime(
+        repository=repository,
+        signal_runtime=signal_runtime,
+    )
+
+    runtime.run_once(
+        node_id=NODE_ID,
+        instance_id=INSTANCE_ID,
+    )
+
+    signal_runtime.process_current_state.assert_called_once()
+
+    call = signal_runtime.process_current_state.call_args
+
+    assert (
+        call.kwargs["media_current_state"]
+        is current_state
+    )
+
+    assert (
+        call.kwargs["media_snapshot"]
+        is media_snapshot
+    )
+
+    assert (
+        call.kwargs["measurement"]
+        is measurement
+    )
