@@ -22,6 +22,7 @@ from app.adapters.mediamtx.session_adapter import MediaMTXSessionAdapter
 from app.domain.sessions import SessionSnapshot
 from app.domain.streaming import MediaMTXSnapshot
 from app.domain.streaming.metrics import StreamingMeasurement
+from app.domain.streaming.signal_health import SignalHealth
 from app.domain.streaming.expected_media_profile import ExpectedMediaProfile
 from app.noc.current_state.media_health_current_state import (
     MediaHealthCurrentStateRepository,
@@ -34,6 +35,12 @@ from app.noc.runtime.session_operational_runtime import (
 )
 from app.noc.runtime.signal_health_operational_runtime import (
     SignalHealthOperationalRuntime,
+)
+from app.services.signal_health_transition_detector import (
+    SignalHealthTransitionDetector,
+)
+from app.services.signal_health_transition_event_service import (
+    SignalHealthTransitionEventService,
 )
 from app.services.streaming_service import StreamingService
 
@@ -64,6 +71,12 @@ class SessionObservationRuntime:
         ) = None,
         signal_health_operational_runtime: (
             SignalHealthOperationalRuntime | None
+        ) = None,
+        signal_health_transition_detector: (
+            SignalHealthTransitionDetector | None
+        ) = None,
+        signal_health_transition_event_service: (
+            SignalHealthTransitionEventService | None
         ) = None,
     ) -> None:
         if not isinstance(mediamtx_adapter, MediaMTXAdapter):
@@ -116,6 +129,31 @@ class SessionObservationRuntime:
                 "Signal Health dependencies require media_profiles"
             )
 
+        signal_event_dependencies = (
+            signal_health_transition_detector,
+            signal_health_transition_event_service,
+        )
+
+        if any(
+            dependency is None
+            for dependency in signal_event_dependencies
+        ) and any(
+            dependency is not None
+            for dependency in signal_event_dependencies
+        ):
+            raise ValueError(
+                "Signal Health transition detector and event service "
+                "must be configured together"
+            )
+
+        if not media_profiles and any(
+            dependency is not None
+            for dependency in signal_event_dependencies
+        ):
+            raise ValueError(
+                "Signal Health event dependencies require media_profiles"
+            )
+
         self._mediamtx_adapter = mediamtx_adapter
         self._session_adapter = session_adapter
         self._streaming_service = streaming_service
@@ -128,9 +166,18 @@ class SessionObservationRuntime:
         self._signal_health_operational_runtime = (
             signal_health_operational_runtime
         )
+        self._signal_health_transition_detector = (
+            signal_health_transition_detector
+        )
+        self._signal_health_transition_event_service = (
+            signal_health_transition_event_service
+        )
 
         self._previous_media_snapshot: MediaMTXSnapshot | None = None
         self._previous_session_snapshot: SessionSnapshot | None = None
+        self._previous_signal_health_by_identity: dict[
+            tuple[str, str, str | None], SignalHealth
+        ] = {}
 
     def run_once(
         self,
@@ -169,6 +216,10 @@ class SessionObservationRuntime:
             assert repository is not None
             assert signal_runtime is not None
 
+            pending_signal_health_by_identity: dict[
+                tuple[str, str, str | None], SignalHealth
+            ] = {}
+
             for profile in self._media_profiles:
                 media_current_state = repository.latest(
                     profile_id=profile.profile_id,
@@ -183,12 +234,54 @@ class SessionObservationRuntime:
                 ):
                     media_current_state = None
 
-                signal_runtime.process_current_state(
-                    profile=profile,
-                    media_current_state=media_current_state,
-                    media_snapshot=media_snapshot,
-                    measurement=streaming_measurement,
+                current_signal_health = (
+                    signal_runtime.process_current_state(
+                        profile=profile,
+                        media_current_state=media_current_state,
+                        media_snapshot=media_snapshot,
+                        measurement=streaming_measurement,
+                    )
                 )
+
+                detector = (
+                    self._signal_health_transition_detector
+                )
+                event_service = (
+                    self._signal_health_transition_event_service
+                )
+
+                if detector is not None and event_service is not None:
+                    identity = (
+                        current_signal_health.profile_id,
+                        current_signal_health.service_id,
+                        current_signal_health.path_name,
+                    )
+
+                    previous_signal_health = (
+                        self._previous_signal_health_by_identity.get(
+                            identity
+                        )
+                    )
+
+                    transition = detector.detect(
+                        previous_signal_health,
+                        current_signal_health,
+                    )
+
+                    event_service.process_transition(
+                        node_id=node_id,
+                        instance_id=instance_id,
+                        transition=transition,
+                        timestamp=session_snapshot.captured_at,
+                    )
+
+                    pending_signal_health_by_identity[
+                        identity
+                    ] = current_signal_health
+
+            self._previous_signal_health_by_identity.update(
+                pending_signal_health_by_identity
+            )
 
         self._previous_media_snapshot = media_snapshot
         self._previous_session_snapshot = session_snapshot

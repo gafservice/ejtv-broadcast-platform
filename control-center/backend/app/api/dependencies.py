@@ -19,6 +19,12 @@ from app.core.config import get_settings
 from app.noc.current_state.media_health_current_state_resolver import MediaHealthCurrentStateResolver
 from app.noc.current_state.media_health_freshness import MediaHealthFreshnessPolicy
 from app.noc.runtime.signal_health_operational_runtime import SignalHealthOperationalRuntime
+from app.services.signal_health_transition_detector import (
+    SignalHealthTransitionDetector,
+)
+from app.services.signal_health_transition_event_service import (
+    SignalHealthTransitionEventService,
+)
 from app.services.source_transport_health_evaluator import SourceTransportHealthEvaluator
 from app.domain.streaming.signal_health import SignalHealthEvaluator
 from app.infrastructure.persistence.audit.sqlalchemy_audit_repository import (
@@ -450,6 +456,23 @@ def get_signal_health_operational_runtime(
 
 
 @lru_cache
+def get_signal_health_transition_detector(
+) -> SignalHealthTransitionDetector:
+    """Build the shared Signal Health transition detector."""
+
+    return SignalHealthTransitionDetector()
+
+
+@lru_cache
+def get_signal_health_transition_event_service(
+) -> SignalHealthTransitionEventService:
+    """Build the shared Signal Health transition event service."""
+
+    return SignalHealthTransitionEventService(
+        event_service=get_event_service(),
+    )
+
+@lru_cache
 def get_media_health_current_state_repository(
 ) -> SQLiteMediaHealthCurrentStateRepository:
     """Construye el current state compartido de Media Health."""
@@ -863,6 +886,12 @@ def get_session_observation_runtime() -> SessionObservationRuntime:
         ),
         signal_health_operational_runtime=(
             get_signal_health_operational_runtime()
+        ),
+        signal_health_transition_detector=(
+            get_signal_health_transition_detector()
+        ),
+        signal_health_transition_event_service=(
+            get_signal_health_transition_event_service()
         ),
     )
 

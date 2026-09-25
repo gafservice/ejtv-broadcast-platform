@@ -248,6 +248,8 @@ def test_session_observation_runtime_receives_signal_health_handoff(
     operational_runtime = object()
     current_state_repository = object()
     signal_runtime = object()
+    signal_transition_detector = object()
+    signal_transition_event_service = object()
 
     monkeypatch.setattr(
         dependencies,
@@ -278,6 +280,16 @@ def test_session_observation_runtime_receives_signal_health_handoff(
         dependencies,
         "get_signal_health_operational_runtime",
         lambda: signal_runtime,
+    )
+    monkeypatch.setattr(
+        dependencies,
+        "get_signal_health_transition_detector",
+        lambda: signal_transition_detector,
+    )
+    monkeypatch.setattr(
+        dependencies,
+        "get_signal_health_transition_event_service",
+        lambda: signal_transition_event_service,
     )
 
     loader = Mock()
@@ -317,6 +329,8 @@ def test_session_observation_runtime_receives_signal_health_handoff(
             media_profiles,
             media_health_current_state_repository,
             signal_health_operational_runtime,
+            signal_health_transition_detector,
+            signal_health_transition_event_service,
         ):
             captured["mediamtx_adapter"] = mediamtx_adapter
             captured["session_adapter"] = session_adapter
@@ -329,6 +343,12 @@ def test_session_observation_runtime_receives_signal_health_handoff(
             captured[
                 "signal_health_operational_runtime"
             ] = signal_health_operational_runtime
+            captured[
+                "signal_health_transition_detector"
+            ] = signal_health_transition_detector
+            captured[
+                "signal_health_transition_event_service"
+            ] = signal_health_transition_event_service
 
     monkeypatch.setattr(
         dependencies,
@@ -366,6 +386,16 @@ def test_session_observation_runtime_receives_signal_health_handoff(
     assert (
         captured["signal_health_operational_runtime"]
         is signal_runtime
+    )
+
+    assert (
+        captured["signal_health_transition_detector"]
+        is signal_transition_detector
+    )
+
+    assert (
+        captured["signal_health_transition_event_service"]
+        is signal_transition_event_service
     )
 
     assert (
