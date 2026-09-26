@@ -18,10 +18,13 @@ persistence, events, alarms, dashboard rendering or runtime process ownership.
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Protocol
+
+logger = logging.getLogger(__name__)
 
 from app.domain.streaming.expected_media_profile import (
     ExpectedMediaProfile,
@@ -138,12 +141,19 @@ class MediaObservationRuntime:
         while True:
             observed_at = datetime.now(timezone.utc)
 
-            await asyncio.to_thread(
-                self.run_once,
-                node_id=node_id,
-                instance_id=instance_id,
-                observed_at=observed_at,
-            )
+            try:
+                await asyncio.to_thread(
+                    self.run_once,
+                    node_id=node_id,
+                    instance_id=instance_id,
+                    observed_at=observed_at,
+                )
+            except Exception:
+                logger.exception(
+                    "Media observation cycle failed; "
+                    "retrying in %.1f seconds",
+                    interval_seconds,
+                )
 
             await asyncio.sleep(interval_seconds)
 

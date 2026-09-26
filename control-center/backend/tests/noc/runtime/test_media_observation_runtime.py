@@ -841,3 +841,87 @@ def test_run_once_propagates_operational_cycle_failure():
             instance_id=instance_id,
             observed_at=observed_at,
         )
+
+
+def test_run_forever_retries_after_run_once_failure(
+    monkeypatch,
+) -> None:
+    import asyncio
+
+    runtime = MediaObservationRuntime(
+        profiles=(),
+        source_resolver=MediaObservationSourceResolver(
+            rtsp_base_url="rtsp://media-node.internal:8554"
+        ),
+        observer=_SchedulingObserver(),
+        stabilizer=MediaHealthStabilizer(
+            degradation_seconds=10,
+            recovery_seconds=5,
+        ),
+        operational_cycle_runtime=_InertOperationalCycleRuntime(),
+    )
+
+    observed_at = datetime(
+        2026,
+        9,
+        26,
+        1,
+        40,
+        tzinfo=timezone.utc,
+    )
+
+    node_id = NodeId(
+        id="node-a",
+        name="node-a",
+        display_name="Node A",
+        created_at=observed_at,
+    )
+
+    instance_id = NodeInstanceId(
+        "instance-a"
+    )
+
+    calls = []
+
+    def failing_then_cancelled_run_once(
+        *,
+        node_id,
+        instance_id,
+        observed_at,
+    ):
+        calls.append(observed_at)
+
+        if len(calls) == 1:
+            raise RuntimeError(
+                "synthetic media observation failure"
+            )
+
+        raise asyncio.CancelledError
+
+    runtime.run_once = failing_then_cancelled_run_once
+
+    sleep_calls = []
+
+    async def fake_sleep(seconds):
+        sleep_calls.append(seconds)
+
+    monkeypatch.setattr(
+        asyncio,
+        "sleep",
+        fake_sleep,
+    )
+
+    async def scenario() -> None:
+        with pytest.raises(
+            asyncio.CancelledError
+        ):
+            await runtime.run_forever(
+                node_id=node_id,
+                instance_id=instance_id,
+                interval_seconds=30.0,
+            )
+
+    asyncio.run(scenario())
+
+    assert len(calls) == 2
+    assert sleep_calls == [30.0]

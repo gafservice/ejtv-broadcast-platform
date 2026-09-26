@@ -42,6 +42,9 @@ from app.services.signal_health_transition_detector import (
 from app.services.signal_health_transition_event_service import (
     SignalHealthTransitionEventService,
 )
+from app.services.signal_health_transition_alarm_service import (
+    SignalHealthTransitionAlarmService,
+)
 from app.services.streaming_service import StreamingService
 
 
@@ -77,6 +80,9 @@ class SessionObservationRuntime:
         ) = None,
         signal_health_transition_event_service: (
             SignalHealthTransitionEventService | None
+        ) = None,
+        signal_health_transition_alarm_service: (
+            SignalHealthTransitionAlarmService | None
         ) = None,
     ) -> None:
         if not isinstance(mediamtx_adapter, MediaMTXAdapter):
@@ -172,6 +178,9 @@ class SessionObservationRuntime:
         self._signal_health_transition_event_service = (
             signal_health_transition_event_service
         )
+        self._signal_health_transition_alarm_service = (
+            signal_health_transition_alarm_service
+        )
 
         self._previous_media_snapshot: MediaMTXSnapshot | None = None
         self._previous_session_snapshot: SessionSnapshot | None = None
@@ -249,6 +258,9 @@ class SessionObservationRuntime:
                 event_service = (
                     self._signal_health_transition_event_service
                 )
+                alarm_service = (
+                    self._signal_health_transition_alarm_service
+                )
 
                 if detector is not None and event_service is not None:
                     identity = (
@@ -274,6 +286,14 @@ class SessionObservationRuntime:
                         transition=transition,
                         timestamp=session_snapshot.captured_at,
                     )
+
+                    if alarm_service is not None:
+                        alarm_service.process_transition(
+                            node_id=node_id,
+                            instance_id=instance_id,
+                            transition=transition,
+                            timestamp=session_snapshot.captured_at,
+                        )
 
                     pending_signal_health_by_identity[
                         identity

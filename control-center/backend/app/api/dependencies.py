@@ -25,6 +25,9 @@ from app.services.signal_health_transition_detector import (
 from app.services.signal_health_transition_event_service import (
     SignalHealthTransitionEventService,
 )
+from app.services.signal_health_transition_alarm_service import (
+    SignalHealthTransitionAlarmService,
+)
 from app.services.source_transport_health_evaluator import SourceTransportHealthEvaluator
 from app.domain.streaming.signal_health import SignalHealthEvaluator
 from app.infrastructure.persistence.audit.sqlalchemy_audit_repository import (
@@ -473,6 +476,16 @@ def get_signal_health_transition_event_service(
     )
 
 @lru_cache
+def get_signal_health_transition_alarm_service(
+) -> SignalHealthTransitionAlarmService:
+    """Build the Signal Health transition alarm coordinator."""
+
+    return SignalHealthTransitionAlarmService(
+        alarm_service=get_alarm_service(),
+    )
+
+
+@lru_cache
 def get_media_health_current_state_repository(
 ) -> SQLiteMediaHealthCurrentStateRepository:
     """Construye el current state compartido de Media Health."""
@@ -892,6 +905,9 @@ def get_session_observation_runtime() -> SessionObservationRuntime:
         ),
         signal_health_transition_event_service=(
             get_signal_health_transition_event_service()
+        ),
+        signal_health_transition_alarm_service=(
+            get_signal_health_transition_alarm_service()
         ),
     )
 

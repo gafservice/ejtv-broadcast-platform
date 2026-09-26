@@ -250,6 +250,7 @@ def test_session_observation_runtime_receives_signal_health_handoff(
     signal_runtime = object()
     signal_transition_detector = object()
     signal_transition_event_service = object()
+    signal_transition_alarm_service = object()
 
     monkeypatch.setattr(
         dependencies,
@@ -291,6 +292,11 @@ def test_session_observation_runtime_receives_signal_health_handoff(
         "get_signal_health_transition_event_service",
         lambda: signal_transition_event_service,
     )
+    monkeypatch.setattr(
+        dependencies,
+        "get_signal_health_transition_alarm_service",
+        lambda: signal_transition_alarm_service,
+    )
 
     loader = Mock()
     loader.load.return_value = profiles
@@ -331,6 +337,7 @@ def test_session_observation_runtime_receives_signal_health_handoff(
             signal_health_operational_runtime,
             signal_health_transition_detector,
             signal_health_transition_event_service,
+            signal_health_transition_alarm_service,
         ):
             captured["mediamtx_adapter"] = mediamtx_adapter
             captured["session_adapter"] = session_adapter
@@ -349,6 +356,9 @@ def test_session_observation_runtime_receives_signal_health_handoff(
             captured[
                 "signal_health_transition_event_service"
             ] = signal_health_transition_event_service
+            captured[
+                "signal_health_transition_alarm_service"
+            ] = signal_health_transition_alarm_service
 
     monkeypatch.setattr(
         dependencies,
@@ -396,6 +406,10 @@ def test_session_observation_runtime_receives_signal_health_handoff(
     assert (
         captured["signal_health_transition_event_service"]
         is signal_transition_event_service
+    )
+    assert (
+        captured["signal_health_transition_alarm_service"]
+        is signal_transition_alarm_service
     )
 
     assert (
