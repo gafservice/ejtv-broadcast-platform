@@ -73,6 +73,20 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
     dashboard_application = Mock()
 
     with ExitStack() as stack:
+        capacity_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.CapacityService"
+            )
+        )
+        capacity_service = capacity_service_class.return_value
+
+        capacity_provider_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.SystemCapacityProvider"
+            )
+        )
+        capacity_provider = capacity_provider_class.return_value
+
         stack.enter_context(
             patch(
                 "app.dashboard.live_monitor.get_settings",
@@ -382,6 +396,54 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
             stream_event_service_class.return_value
         )
 
+        metric_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.MetricService",
+            )
+        )
+        metric_service = metric_service_class.return_value
+
+        health_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.HealthService",
+            )
+        )
+        health_service = health_service_class.return_value
+
+        snapshot_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.SnapshotService",
+            )
+        )
+        snapshot_service = snapshot_service_class.return_value
+
+        telemetry_refresh_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.TelemetryRefreshService",
+            )
+        )
+        telemetry_refresh_service = (
+            telemetry_refresh_service_class.return_value
+        )
+
+        noc_capacity_initializer_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.NocCapacityInitializer",
+            )
+        )
+        noc_capacity_initializer = (
+            noc_capacity_initializer_class.return_value
+        )
+
+        noc_snapshot_projection_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.NocSnapshotProjection",
+            )
+        )
+        noc_snapshot_projection = (
+            noc_snapshot_projection_class.return_value
+        )
+
         dashboard_application_class = stack.enter_context(
             patch(
                 "app.dashboard.live_monitor.DashboardApplication",
@@ -505,7 +567,41 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
         alarm_service=alarm_service
     )
 
+    metric_service_class.assert_called_once_with(
+        node_registry
+    )
+
+    health_service_class.assert_called_once_with(
+        node_registry
+    )
+
+    snapshot_service_class.assert_called_once_with(
+        node_registry
+    )
+
+    telemetry_refresh_service_class.assert_called_once_with(
+        system_service=system_service,
+        metric_service=metric_service,
+        health_service=health_service,
+    )
+
+    noc_capacity_initializer_class.assert_called_once_with(
+        capacity_provider=capacity_provider,
+        capacity_service=capacity_service,
+        node_id=node_id,
+        instance_id=node_instance_id,
+    )
+
+    noc_snapshot_projection_class.assert_called_once_with(
+        telemetry_refresh_service=telemetry_refresh_service,
+        snapshot_service=snapshot_service,
+        node_id=node_id,
+        instance_id=node_instance_id,
+    )
+
     dashboard_application_class.assert_called_once_with(
+        noc_capacity_initializer=noc_capacity_initializer,
+        noc_snapshot_projection=noc_snapshot_projection,
         mediamtx_adapter=mediamtx_adapter,
         session_adapter=session_adapter,
         streaming_service=streaming_service,
@@ -564,6 +660,17 @@ def test_build_dashboard_application_disables_temporal_health_without_policy() -
     dashboard_application = Mock()
 
     with ExitStack() as stack:
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.CapacityService"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.SystemCapacityProvider"
+            )
+        )
+
         stack.enter_context(
             patch(
                 "app.dashboard.live_monitor.get_settings",
@@ -779,6 +886,45 @@ def test_build_dashboard_application_disables_temporal_health_without_policy() -
             )
         )
 
+        metric_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.MetricService",
+            )
+        )
+        metric_service = metric_service_class.return_value
+
+        health_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.HealthService",
+            )
+        )
+        health_service = health_service_class.return_value
+
+        snapshot_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.SnapshotService",
+            )
+        )
+        snapshot_service = snapshot_service_class.return_value
+
+        telemetry_refresh_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.TelemetryRefreshService",
+            )
+        )
+        telemetry_refresh_service = (
+            telemetry_refresh_service_class.return_value
+        )
+
+        noc_snapshot_projection_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.NocSnapshotProjection",
+            )
+        )
+        noc_snapshot_projection = (
+            noc_snapshot_projection_class.return_value
+        )
+
         dashboard_application_class = stack.enter_context(
             patch(
                 "app.dashboard.live_monitor.DashboardApplication",
@@ -835,6 +981,17 @@ def test_build_dashboard_application_composes_stream_health_event_runtime() -> N
     event_history_repository = Mock()
 
     with ExitStack() as stack:
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.CapacityService"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.SystemCapacityProvider"
+            )
+        )
+
         stack.enter_context(
             patch(
                 "app.dashboard.live_monitor.get_settings",
@@ -1032,6 +1189,45 @@ def test_build_dashboard_application_composes_stream_health_event_runtime() -> N
             )
         )
         transition_detector = transition_detector_class.return_value
+
+        metric_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.MetricService",
+            )
+        )
+        metric_service = metric_service_class.return_value
+
+        health_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.HealthService",
+            )
+        )
+        health_service = health_service_class.return_value
+
+        snapshot_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.SnapshotService",
+            )
+        )
+        snapshot_service = snapshot_service_class.return_value
+
+        telemetry_refresh_service_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.TelemetryRefreshService",
+            )
+        )
+        telemetry_refresh_service = (
+            telemetry_refresh_service_class.return_value
+        )
+
+        noc_snapshot_projection_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.NocSnapshotProjection",
+            )
+        )
+        noc_snapshot_projection = (
+            noc_snapshot_projection_class.return_value
+        )
 
         dashboard_application_class = stack.enter_context(
             patch(

@@ -88,12 +88,94 @@ from app.services.streaming_service import StreamingService
 from app.services.system_service import SystemService
 
 
+class NocCapacityInitializer:
+    """Publish canonical NOC capacity once from an existing system capture."""
+
+    def __init__(
+        self,
+        *,
+        capacity_provider,
+        capacity_service,
+        node_id,
+        instance_id,
+    ) -> None:
+        self._capacity_provider = capacity_provider
+        self._capacity_service = capacity_service
+        self._node_id = node_id
+        self._instance_id = instance_id
+        self._initialized = False
+
+    def initialize_from_capture(
+        self,
+        *,
+        resources,
+    ):
+        """Initialize capacity once without performing another system capture."""
+
+        if self._initialized:
+            return None
+
+        capacity = self._capacity_provider.collect(
+            resources
+        )
+
+        result = self._capacity_service.publish(
+            node_id=self._node_id,
+            instance_id=self._instance_id,
+            capacity=capacity,
+        )
+
+        self._initialized = True
+
+        return result
+
+
+class NocSnapshotProjection:
+    """Project an existing system capture into canonical NOC state."""
+
+    def __init__(
+        self,
+        *,
+        telemetry_refresh_service,
+        snapshot_service,
+        node_id,
+        instance_id,
+    ) -> None:
+        self._telemetry_refresh_service = telemetry_refresh_service
+        self._snapshot_service = snapshot_service
+        self._node_id = node_id
+        self._instance_id = instance_id
+
+    def project_from_capture(
+        self,
+        *,
+        resources,
+        interface_infos,
+    ):
+        """Publish one existing capture and return its NodeSnapshot."""
+
+        self._telemetry_refresh_service.refresh_from_capture(
+            node_id=self._node_id,
+            instance_id=self._instance_id,
+            resources=resources,
+            interface_infos=interface_infos,
+        )
+
+        return self._snapshot_service.build(
+            self._node_id,
+            self._instance_id,
+            timestamp=resources.captured_at,
+        )
+
+
 class DashboardApplication:
     """Coordina adquisición, medición, salud y renderizado."""
 
     def __init__(
         self,
         *,
+        noc_capacity_initializer: NocCapacityInitializer | None = None,
+        noc_snapshot_projection: NocSnapshotProjection | None = None,
         mediamtx_adapter: MediaMTXAdapter,
         session_adapter: MediaMTXSessionAdapter,
         streaming_service: StreamingService,
@@ -134,6 +216,8 @@ class DashboardApplication:
         keyboard_input: PosixKeyboardInput | None = None,
         operational_projector: SessionOperationalProjector | None = None,
     ) -> None:
+        self._noc_capacity_initializer = noc_capacity_initializer
+        self._noc_snapshot_projection = noc_snapshot_projection
         self._mediamtx_adapter = mediamtx_adapter
         self._session_adapter = session_adapter
 
@@ -397,6 +481,17 @@ class DashboardApplication:
         interface_infos = (
             self._system_service.get_network_interface_infos()
         )
+
+        if self._noc_capacity_initializer is not None:
+            self._noc_capacity_initializer.initialize_from_capture(
+                resources=system_resources,
+            )
+
+        if self._noc_snapshot_projection is not None:
+            self._noc_snapshot_projection.project_from_capture(
+                resources=system_resources,
+                interface_infos=interface_infos,
+            )
 
         network_telemetry = (
             self._network_telemetry_service.build(

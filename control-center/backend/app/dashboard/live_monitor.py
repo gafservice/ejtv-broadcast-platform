@@ -11,7 +11,11 @@ from app.adapters.mediamtx.session_adapter import MediaMTXSessionAdapter
 from app.adapters.mediamtx.session_client import MediaMTXSessionClient
 from app.core.config import get_settings
 from app.core.http import HttpClient
-from app.dashboard.application import DashboardApplication
+from app.dashboard.application import (
+    DashboardApplication,
+    NocCapacityInitializer,
+    NocSnapshotProjection,
+)
 from app.domain.streaming.aggregation import StreamingHealthAggregator
 from app.dashboard.renderers.dashboard_renderer import DashboardRenderer
 from app.dashboard.services.dashboard_service import DashboardService
@@ -82,6 +86,12 @@ from app.noc.current_state.sqlite_node_health_diagnostic_repository import (
 from app.noc.services.history_query_service import (
     HistoryQueryService,
 )
+from app.noc.services.capacity_service import CapacityService
+from app.noc.services.metric_service import MetricService
+from app.noc.services.health_service import HealthService
+from app.noc.services.snapshot_service import SnapshotService
+from app.noc.runtime.telemetry_refresh import TelemetryRefreshService
+from app.noc.infrastructure.system_capacity_provider import SystemCapacityProvider
 from app.noc.services.session_operational_projector import (
     INTERNAL_MEDIA_OBSERVER_USER_AGENT,
     SessionOperationalProjector,
@@ -271,7 +281,47 @@ def build_dashboard_application() -> DashboardApplication:
     )
     dashboard_renderer = DashboardRenderer()
 
+    capacity_service = CapacityService(
+        node_registry
+    )
+
+    capacity_provider = SystemCapacityProvider()
+
+    metric_service = MetricService(
+        node_registry
+    )
+
+    health_service = HealthService(
+        node_registry
+    )
+
+    snapshot_service = SnapshotService(
+        node_registry
+    )
+
+    telemetry_refresh_service = TelemetryRefreshService(
+        system_service=system_service,
+        metric_service=metric_service,
+        health_service=health_service,
+    )
+
+    noc_capacity_initializer = NocCapacityInitializer(
+        capacity_provider=capacity_provider,
+        capacity_service=capacity_service,
+        node_id=node_id,
+        instance_id=node_instance_id,
+    )
+
+    noc_snapshot_projection = NocSnapshotProjection(
+        telemetry_refresh_service=telemetry_refresh_service,
+        snapshot_service=snapshot_service,
+        node_id=node_id,
+        instance_id=node_instance_id,
+    )
+
     return DashboardApplication(
+        noc_capacity_initializer=noc_capacity_initializer,
+        noc_snapshot_projection=noc_snapshot_projection,
         mediamtx_adapter=mediamtx_adapter,
         session_adapter=session_adapter,
         streaming_service=streaming_service,
