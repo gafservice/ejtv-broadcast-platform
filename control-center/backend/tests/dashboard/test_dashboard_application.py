@@ -160,6 +160,7 @@ def test_run_once_builds_and_renders_dashboard() -> None:
         recent_events=None,
         active_alarms=None,
         platform_health=None,
+        noc_snapshot=None,
         active_connections_viewport=PanelViewport(
             offset=0,
             page_size=7,
@@ -686,6 +687,7 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         recent_events=None,
         active_alarms=None,
         platform_health=None,
+        noc_snapshot=None,
         active_connections_viewport=PanelViewport(
             offset=0,
             page_size=7,

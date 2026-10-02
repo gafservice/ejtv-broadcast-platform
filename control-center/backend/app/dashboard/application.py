@@ -487,10 +487,14 @@ class DashboardApplication:
                 resources=system_resources,
             )
 
+        noc_snapshot = None
+
         if self._noc_snapshot_projection is not None:
-            self._noc_snapshot_projection.project_from_capture(
-                resources=system_resources,
-                interface_infos=interface_infos,
+            noc_snapshot = (
+                self._noc_snapshot_projection.project_from_capture(
+                    resources=system_resources,
+                    interface_infos=interface_infos,
+                )
             )
 
         network_telemetry = (
@@ -577,6 +581,7 @@ class DashboardApplication:
             "system_resources": system_resources,
             "previous_system_resources": self._previous_system_resources,
             "network_interfaces": network_interfaces,
+            "noc_snapshot": noc_snapshot,
         }
 
         if streaming_health is not None:

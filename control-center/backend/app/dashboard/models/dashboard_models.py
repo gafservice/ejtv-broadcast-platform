@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.noc.domain.node_snapshot import NodeSnapshot
+
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -98,3 +100,4 @@ class DashboardData:
     recent_events: RecentEventsPanelData | None = None
     active_alarms: ActiveAlarmsPanelData | None = None
     platform_health: PlatformHealthPanelData | None = None
+    noc_snapshot: NodeSnapshot | None = None

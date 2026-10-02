@@ -42,6 +42,7 @@ from app.noc.domain.node_alarm import AlarmRecord
 from app.noc.domain.node_health_diagnostic import (
     NodeHealthDiagnostic,
 )
+from app.noc.domain.node_snapshot import NodeSnapshot
 
 from app.domain.system import (
     NetworkInterfaceTelemetry,
@@ -979,6 +980,7 @@ class DashboardService:
         recent_events: RecentEventsPanelData | None = None,
         active_alarms: ActiveAlarmsPanelData | None = None,
         platform_health: PlatformHealthPanelData | None = None,
+        noc_snapshot: NodeSnapshot | None = None,
         active_connections_viewport: PanelViewport | None = None,
     ) -> DashboardData:
         """Agrupa todas las secciones del dashboard."""
@@ -996,6 +998,7 @@ class DashboardService:
             recent_events=recent_events,
             active_alarms=active_alarms,
             platform_health=platform_health,
+            noc_snapshot=noc_snapshot,
         )
 
     def build_dashboard_from_measurement(
@@ -1019,6 +1022,7 @@ class DashboardService:
         recent_events: RecentEventsPanelData | None = None,
         active_alarms: ActiveAlarmsPanelData | None = None,
         platform_health: PlatformHealth | None = None,
+        noc_snapshot: NodeSnapshot | None = None,
         active_connections_viewport: PanelViewport | None = None,
     ) -> DashboardData:
         """Construye el dashboard completo desde snapshot y medición."""
@@ -1136,6 +1140,7 @@ class DashboardService:
             recent_events=recent_events,
             active_alarms=active_alarms,
             platform_health=platform_health_panel,
+            noc_snapshot=noc_snapshot,
         )
 
     @staticmethod
