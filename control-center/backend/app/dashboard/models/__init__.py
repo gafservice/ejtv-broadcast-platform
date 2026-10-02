@@ -11,6 +11,10 @@ from app.dashboard.models.active_connections_panel import (
     ActiveConnectionsPanelData,
 )
 from app.dashboard.models.cpu_panel import CpuPanelData
+from app.dashboard.models.capacity_panel import (
+    CapacityPanelData,
+    CapacityResourceRowData,
+)
 from app.dashboard.models.dashboard_models import (
     DashboardData,
     PathRowData,
@@ -42,6 +46,8 @@ __all__ = [
     "ActiveAlarmsPanelData",
     "ActiveConnectionRow",
     "ActiveConnectionsPanelData",
+    "CapacityPanelData",
+    "CapacityResourceRowData",
     "CpuPanelData",
     "DashboardData",
     "DiskPanelData",

@@ -79,6 +79,7 @@ def test_snapshot_service_preserves_same_noc_snapshot_instance() -> None:
     expected_noc_snapshot = Mock(
         name="canonical-node-snapshot"
     )
+    expected_noc_snapshot.capacity = None
 
     result = DashboardSnapshotService().build_snapshot(
         DashboardSnapshotInput(

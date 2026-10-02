@@ -4,6 +4,7 @@ from app.dashboard.models.panel_viewport import PanelViewport
 from app.dashboard.models import (
     ActiveAlarmRowData,
     ActiveAlarmsPanelData,
+    CapacityPanelData,
     ActiveConnectionRow,
     ActiveConnectionsPanelData,
     CpuPanelData,
@@ -74,6 +75,23 @@ class DashboardService:
         self._network_rate_calculator = (
             network_rate_calculator
             or NetworkRateCalculator()
+        )
+
+    def build_capacity_panel(
+        self,
+        noc_snapshot: NodeSnapshot | None,
+    ) -> CapacityPanelData | None:
+        """Proyecta capacidad canónica NOC al modelo de presentación."""
+
+        if noc_snapshot is None:
+            return None
+
+        if noc_snapshot.capacity is None:
+            return None
+
+        return CapacityPanelData.from_capacity(
+            noc_snapshot.capacity,
+            captured_at=noc_snapshot.snapshot_timestamp,
         )
 
     def build_server_panel(
@@ -999,6 +1017,7 @@ class DashboardService:
             active_alarms=active_alarms,
             platform_health=platform_health,
             noc_snapshot=noc_snapshot,
+            capacity=self.build_capacity_panel(noc_snapshot),
         )
 
     def build_dashboard_from_measurement(

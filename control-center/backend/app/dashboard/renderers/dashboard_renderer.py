@@ -11,6 +11,9 @@ from app.dashboard.models.dashboard_navigation_state import (
 from app.dashboard.renderers.active_alarms_panel_renderer import (
     ActiveAlarmsPanelRenderer,
 )
+from app.dashboard.renderers.capacity_panel_renderer import (
+    CapacityPanelRenderer,
+)
 from app.dashboard.renderers.active_connections_panel_renderer import (
     ActiveConnectionsPanelRenderer,
 )
@@ -51,6 +54,7 @@ class DashboardRenderer:
         self._server_renderer = ServerPanelRenderer()
         self._streaming_renderer = StreamingPanelRenderer()
         self._session_renderer = SessionPanelRenderer()
+        self._capacity_renderer = CapacityPanelRenderer()
         self._active_connections_renderer = (
             ActiveConnectionsPanelRenderer()
         )
@@ -104,6 +108,14 @@ class DashboardRenderer:
                 Layout(
                     name="network_interfaces",
                     size=11,
+                )
+            )
+
+        if data.capacity is not None:
+            sections.append(
+                Layout(
+                    name="capacity",
+                    size=9,
                 )
             )
 
@@ -201,6 +213,13 @@ class DashboardRenderer:
             layout["network_interfaces"].update(
                 self._network_interfaces_renderer.render(
                     data.network_interfaces
+                )
+            )
+
+        if data.capacity is not None:
+            layout["capacity"].update(
+                self._capacity_renderer.render(
+                    data.capacity
                 )
             )
 

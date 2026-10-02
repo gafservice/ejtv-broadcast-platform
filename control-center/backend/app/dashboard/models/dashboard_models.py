@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from app.noc.domain.node_snapshot import NodeSnapshot
-
 from dataclasses import dataclass
 from datetime import datetime
+
+from app.dashboard.models.capacity_panel import CapacityPanelData
+from app.noc.domain.node_snapshot import NodeSnapshot
 
 from app.domain.streaming import StreamingHealth
 from app.dashboard.models.network_interfaces_panel import NetworkInterfacesPanelData
@@ -101,3 +102,4 @@ class DashboardData:
     active_alarms: ActiveAlarmsPanelData | None = None
     platform_health: PlatformHealthPanelData | None = None
     noc_snapshot: NodeSnapshot | None = None
+    capacity: CapacityPanelData | None = None
