@@ -10,6 +10,7 @@ from app.dashboard.models.dashboard_navigation_state import (
 )
 from app.dashboard.models.terminal_navigation_state import (
     TerminalNavigationState,
+    TerminalView,
 )
 from app.dashboard.renderers.active_alarms_panel_renderer import (
     ActiveAlarmsPanelRenderer,
@@ -31,6 +32,9 @@ from app.dashboard.renderers.platform_health_renderer import (
 )
 from app.dashboard.renderers.recent_events_panel_renderer import (
     RecentEventsPanelRenderer,
+)
+from app.dashboard.renderers.incoming_panel_renderer import (
+    IncomingPanelRenderer,
 )
 from app.dashboard.renderers.path_table_renderer import PathTableRenderer
 from app.dashboard.renderers.server_panel_renderer import (
@@ -78,6 +82,7 @@ class DashboardRenderer:
         self._recent_events_renderer = (
             RecentEventsPanelRenderer()
         )
+        self._incoming_panel_renderer = IncomingPanelRenderer()
         self._path_table_renderer = PathTableRenderer()
 
     def render(
@@ -129,6 +134,27 @@ class DashboardRenderer:
                     size=3,
                 )
             )
+
+        if (
+            terminal_navigation_state is not None
+            and terminal_navigation_state.active_view
+            is TerminalView.INCOMING
+        ):
+            sections.append(
+                Layout(name="incoming")
+            )
+
+            layout.split_column(
+                *sections
+            )
+
+            layout["incoming"].update(
+                self._incoming_panel_renderer.render(
+                    data.incoming
+                )
+            )
+
+            return layout
 
         sections.append(
             Layout(name="summary", size=22)

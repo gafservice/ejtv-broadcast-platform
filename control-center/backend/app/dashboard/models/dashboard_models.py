@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from app.dashboard.models.capacity_panel import CapacityPanelData
+from app.dashboard.models.incoming_panel import IncomingPanelData
 from app.noc.domain.node_snapshot import NodeSnapshot
 
 from app.domain.streaming import StreamingHealth
@@ -103,3 +104,4 @@ class DashboardData:
     platform_health: PlatformHealthPanelData | None = None
     noc_snapshot: NodeSnapshot | None = None
     capacity: CapacityPanelData | None = None
+    incoming: IncomingPanelData | None = None

@@ -22,6 +22,10 @@ from app.dashboard.models.dashboard_models import (
     StreamingPanelData,
 )
 from app.dashboard.models.disk_panel import DiskPanelData
+from app.dashboard.models.incoming_panel import (
+    IncomingPanelData,
+    IncomingRowData,
+)
 from app.dashboard.models.memory_panel import MemoryPanelData
 from app.dashboard.models.network_interfaces_panel import (
     NetworkInterfaceRowData,
@@ -51,6 +55,8 @@ __all__ = [
     "CpuPanelData",
     "DashboardData",
     "DiskPanelData",
+    "IncomingPanelData",
+    "IncomingRowData",
     "MemoryPanelData",
     "NetworkInterfaceRowData",
     "NetworkInterfacesPanelData",

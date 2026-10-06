@@ -982,3 +982,172 @@ def test_render_identifies_each_terminal_view() -> None:
         output = console.export_text()
 
         assert expected_label in output
+
+def test_render_general_view_preserves_general_body() -> None:
+    """GENERAL debe conservar el cuerpo operacional histórico."""
+    from app.dashboard.models.terminal_navigation_state import (
+        TerminalNavigationState,
+        TerminalView,
+    )
+
+    data = build_dashboard_data()
+    renderer = DashboardRenderer()
+
+    layout = renderer.render(
+        data,
+        terminal_navigation_state=TerminalNavigationState(
+            active_view=TerminalView.GENERAL,
+        ),
+    )
+
+    console = Console(
+        record=True,
+        width=200,
+        height=80,
+        color_system=None,
+    )
+    console.print(layout)
+    output = console.export_text()
+
+    assert "VIEW: GENERAL" in output
+    assert "SERVER" in output
+    assert "STREAMING" in output
+
+
+def test_render_incoming_view_uses_dedicated_incoming_body() -> None:
+    """INCOMING debe presentar sus paths sin reutilizar el cuerpo GENERAL."""
+    from dataclasses import replace
+
+    from app.dashboard.models.incoming_panel import (
+        IncomingPanelData,
+        IncomingRowData,
+    )
+    from app.dashboard.models.terminal_navigation_state import (
+        TerminalNavigationState,
+        TerminalView,
+    )
+    from app.domain.streaming.health import HealthStatus
+
+    data = replace(
+        build_dashboard_data(),
+        incoming=IncomingPanelData(
+            rows=(
+                IncomingRowData(
+                    path_name="alpha-feed",
+                    source="SRT",
+                    status="READY",
+                    bitrate_receive_mbps=5.25,
+                    health_status=HealthStatus.HEALTHY,
+                    protocol="SRT",
+                    remote_address="203.0.113.10:9000",
+                ),
+                IncomingRowData(
+                    path_name="beta-feed",
+                    source="MPEG-TS",
+                    status="READY",
+                    bitrate_receive_mbps=3.75,
+                    health_status=None,
+                ),
+            ),
+        ),
+    )
+
+    renderer = DashboardRenderer()
+
+    layout = renderer.render(
+        data,
+        terminal_navigation_state=TerminalNavigationState(
+            active_view=TerminalView.INCOMING,
+        ),
+    )
+
+    console = Console(
+        record=True,
+        width=200,
+        height=80,
+        color_system=None,
+    )
+    console.print(layout)
+    output = console.export_text()
+
+    assert "VIEW: INCOMING" in output
+    assert "alpha-feed" in output
+    assert "beta-feed" in output
+    assert "203.0.113.10:9000" in output
+    assert "SERVER" not in output
+
+def test_render_incoming_view_reports_unavailable_data() -> None:
+    """INCOMING distingue datos no disponibles de una colección vacía."""
+    from dataclasses import replace
+
+    from app.dashboard.models.terminal_navigation_state import (
+        TerminalNavigationState,
+        TerminalView,
+    )
+
+    data = replace(
+        build_dashboard_data(),
+        incoming=None,
+    )
+
+    layout = DashboardRenderer().render(
+        data,
+        terminal_navigation_state=TerminalNavigationState(
+            active_view=TerminalView.INCOMING,
+        ),
+    )
+
+    console = Console(
+        record=True,
+        width=200,
+        height=40,
+        color_system=None,
+    )
+    console.print(layout)
+    output = console.export_text()
+
+    assert "VIEW: INCOMING" in output
+    assert "INCOMING SIGNALS" in output
+    assert "Incoming data unavailable." in output
+    assert "No incoming signals." not in output
+    assert "SERVER" not in output
+    assert "PATHS" not in output
+
+
+def test_render_incoming_view_reports_no_incoming_signals() -> None:
+    """INCOMING vacío significa evidencia disponible sin señales entrantes."""
+    from dataclasses import replace
+
+    from app.dashboard.models.incoming_panel import IncomingPanelData
+    from app.dashboard.models.terminal_navigation_state import (
+        TerminalNavigationState,
+        TerminalView,
+    )
+
+    data = replace(
+        build_dashboard_data(),
+        incoming=IncomingPanelData(),
+    )
+
+    layout = DashboardRenderer().render(
+        data,
+        terminal_navigation_state=TerminalNavigationState(
+            active_view=TerminalView.INCOMING,
+        ),
+    )
+
+    console = Console(
+        record=True,
+        width=200,
+        height=40,
+        color_system=None,
+    )
+    console.print(layout)
+    output = console.export_text()
+
+    assert "VIEW: INCOMING" in output
+    assert "INCOMING SIGNALS" in output
+    assert "No incoming signals." in output
+    assert "Incoming data unavailable." not in output
+    assert "SERVER" not in output
+    assert "PATHS" not in output

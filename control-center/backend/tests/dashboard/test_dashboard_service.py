@@ -8,6 +8,7 @@ from app.domain.sessions import (
     SessionProtocol,
     SessionQuality,
     SessionRole,
+    SessionSnapshot,
 )
 
 
@@ -3745,3 +3746,582 @@ def test_build_active_connections_panel_rejects_generic_webrtc_bitrate_without_s
     assert connection.protocol == "WebRTC"
     assert connection.health is None
     assert connection.bitrate_bps is None
+
+
+def test_build_incoming_panel_projects_source_bearing_path_without_publisher() -> None:
+    """Un path con fuente activa pertenece a INCOMING sin requerir publisher."""
+
+    from app.domain.streaming import (
+        HealthStatus,
+        SRTPathHealth,
+        StreamingHealth,
+    )
+    from app.domain.sessions import SessionSnapshot
+
+    captured_at = datetime(
+        2026, 10, 6, 0, 0, tzinfo=timezone.utc
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(
+            MediaPath(
+                name="service-a",
+                configuration_name="service-a",
+                status=MediaPathStatus.ACTIVE,
+                ready=True,
+                available=True,
+                online=True,
+                source=MediaSource(
+                    source_type="srtSource",
+                    source_id="source-a",
+                ),
+                readers=(),
+                inbound_bytes=1_000_000,
+                outbound_bytes=0,
+            ),
+        ),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=captured_at - timedelta(seconds=2),
+        interval_seconds=2.0,
+        paths=(
+            StreamingPathMeasurement(
+                name="service-a",
+                status=MediaPathStatus.ACTIVE,
+                previous_status=MediaPathStatus.ACTIVE,
+                reader_count=0,
+                reader_delta=0,
+                inbound_delta_bytes=1_437_500,
+                outbound_delta_bytes=0,
+                inbound_bitrate_bps=5_750_000.0,
+                outbound_bitrate_bps=0.0,
+                state_changed=False,
+                quality=MeasurementQuality.AVAILABLE,
+            ),
+        ),
+        total_inbound_bitrate_bps=5_750_000.0,
+        total_outbound_bitrate_bps=0.0,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    path_health = SRTPathHealth(
+        name="service-a",
+        connections=(),
+        average_rtt_ms=None,
+        total_packets_retransmitted=None,
+        total_packets_lost=None,
+        status=HealthStatus.HEALTHY,
+        message="Path saludable.",
+        maximum_rtt_ms=None,
+        average_link_utilization_percent=None,
+    )
+
+    health = StreamingHealth(
+        captured_at=captured_at,
+        paths=(path_health,),
+        status=HealthStatus.HEALTHY,
+        message="Streaming saludable.",
+    )
+
+    session_snapshot = SessionSnapshot(
+        captured_at=captured_at,
+        sessions=(),
+    )
+
+    panel = DashboardService().build_incoming_panel(
+        snapshot=snapshot,
+        measurement=measurement,
+        session_snapshot=session_snapshot,
+        health=health,
+    )
+
+    assert len(panel.rows) == 1
+
+    row = panel.rows[0]
+
+    assert row.path_name == "service-a"
+    assert row.source == "SRT"
+    assert row.status == "ACTIVE"
+    assert row.bitrate_receive_mbps == 5.75
+    assert row.health_status is HealthStatus.HEALTHY
+    assert row.protocol is None
+    assert row.remote_address is None
+
+
+def test_build_incoming_panel_enriches_unique_publisher_identity() -> None:
+    """Un publisher único correlacionado enriquece la fila del path."""
+
+    from app.domain.sessions import SessionSnapshot
+
+    captured_at = datetime(
+        2026, 10, 6, 0, 5, tzinfo=timezone.utc
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(
+            MediaPath(
+                name="service-b",
+                configuration_name="service-b",
+                status=MediaPathStatus.ACTIVE,
+                ready=True,
+                available=True,
+                online=True,
+                source=MediaSource(
+                    source_type="rtmpSource",
+                    source_id="publisher-b",
+                ),
+                readers=(),
+                inbound_bytes=2_000_000,
+                outbound_bytes=0,
+            ),
+        ),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=captured_at - timedelta(seconds=2),
+        interval_seconds=2.0,
+        paths=(
+            StreamingPathMeasurement(
+                name="service-b",
+                status=MediaPathStatus.ACTIVE,
+                previous_status=MediaPathStatus.ACTIVE,
+                reader_count=0,
+                reader_delta=0,
+                inbound_delta_bytes=1_000_000,
+                outbound_delta_bytes=0,
+                inbound_bitrate_bps=4_000_000.0,
+                outbound_bitrate_bps=0.0,
+                state_changed=False,
+                quality=MeasurementQuality.AVAILABLE,
+            ),
+        ),
+        total_inbound_bitrate_bps=4_000_000.0,
+        total_outbound_bitrate_bps=0.0,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    publisher = ActiveSession(
+        session_id="publisher-b",
+        protocol=SessionProtocol.RTMP,
+        role=SessionRole.PUBLISHER,
+        state="publish",
+        remote_ip="192.0.2.10",
+        remote_port=1935,
+        path="service-b",
+        connected_since=captured_at,
+    )
+
+    session_snapshot = SessionSnapshot(
+        captured_at=captured_at,
+        sessions=(publisher,),
+    )
+
+    panel = DashboardService().build_incoming_panel(
+        snapshot=snapshot,
+        measurement=measurement,
+        session_snapshot=session_snapshot,
+        health=None,
+    )
+
+    assert len(panel.rows) == 1
+
+    row = panel.rows[0]
+
+    assert row.path_name == "service-b"
+    assert row.source == "RTMP"
+    assert row.status == "ACTIVE"
+    assert row.bitrate_receive_mbps == 4.0
+    assert row.health_status is None
+    assert row.protocol == "RTMP"
+    assert row.remote_address == "192.0.2.10:1935"
+
+
+def test_build_incoming_panel_excludes_path_without_source() -> None:
+    """INCOMING contiene únicamente paths con fuente canónica activa."""
+
+    captured_at = datetime(
+        2026, 10, 6, 1, 0, tzinfo=timezone.utc
+    )
+
+    media_path = MediaPath(
+        name="service-without-source",
+        configuration_name="service-without-source",
+        status=MediaPathStatus.NO_SOURCE,
+        ready=False,
+        available=False,
+        online=False,
+        source=None,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(media_path,),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    path_measurement = StreamingPathMeasurement(
+        name="service-without-source",
+        status=MediaPathStatus.NO_SOURCE,
+        previous_status=MediaPathStatus.NO_SOURCE,
+        reader_count=0,
+        reader_delta=None,
+        inbound_delta_bytes=None,
+        outbound_delta_bytes=None,
+        inbound_bitrate_bps=None,
+        outbound_bitrate_bps=None,
+        state_changed=False,
+        quality=MeasurementQuality.NOT_AVAILABLE,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=None,
+        interval_seconds=None,
+        paths=(path_measurement,),
+        total_inbound_bitrate_bps=None,
+        total_outbound_bitrate_bps=None,
+        quality=MeasurementQuality.NOT_AVAILABLE,
+    )
+
+    session_snapshot = SessionSnapshot(
+        captured_at=captured_at,
+        sessions=(),
+    )
+
+    panel = DashboardService().build_incoming_panel(
+        snapshot=snapshot,
+        measurement=measurement,
+        session_snapshot=session_snapshot,
+        health=None,
+    )
+
+    assert panel.rows == ()
+
+
+def test_build_incoming_panel_keeps_multiple_paths_independent() -> None:
+    """Cada fuente INCOMING conserva la evidencia de su propio path."""
+
+    captured_at = datetime(
+        2026, 10, 6, 1, 5, tzinfo=timezone.utc
+    )
+
+    first_path = MediaPath(
+        name="service-alpha",
+        configuration_name="service-alpha",
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type="udpSource",
+            source_id="source-alpha",
+        ),
+        readers=(),
+        inbound_bytes=0,
+        outbound_bytes=0,
+    )
+
+    second_path = MediaPath(
+        name="service-beta",
+        configuration_name="service-beta",
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type="srtSource",
+            source_id="source-beta",
+        ),
+        readers=(),
+        inbound_bytes=0,
+        outbound_bytes=0,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(first_path, second_path),
+        reported_item_count=2,
+        reported_page_count=1,
+    )
+
+    first_measurement = StreamingPathMeasurement(
+        name="service-alpha",
+        status=MediaPathStatus.ACTIVE,
+        previous_status=MediaPathStatus.ACTIVE,
+        reader_count=0,
+        reader_delta=0,
+        inbound_delta_bytes=250_000,
+        outbound_delta_bytes=0,
+        inbound_bitrate_bps=2_000_000,
+        outbound_bitrate_bps=0,
+        state_changed=False,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    second_measurement = StreamingPathMeasurement(
+        name="service-beta",
+        status=MediaPathStatus.ACTIVE,
+        previous_status=MediaPathStatus.ACTIVE,
+        reader_count=0,
+        reader_delta=0,
+        inbound_delta_bytes=625_000,
+        outbound_delta_bytes=0,
+        inbound_bitrate_bps=5_000_000,
+        outbound_bitrate_bps=0,
+        state_changed=False,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=captured_at,
+        interval_seconds=1.0,
+        paths=(first_measurement, second_measurement),
+        total_inbound_bitrate_bps=7_000_000,
+        total_outbound_bitrate_bps=0,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    session_snapshot = SessionSnapshot(
+        captured_at=captured_at,
+        sessions=(),
+    )
+
+    panel = DashboardService().build_incoming_panel(
+        snapshot=snapshot,
+        measurement=measurement,
+        session_snapshot=session_snapshot,
+        health=None,
+    )
+
+    assert len(panel.rows) == 2
+
+    first, second = panel.rows
+
+    assert first.path_name == "service-alpha"
+    assert first.source == "UDP"
+    assert first.bitrate_receive_mbps == 2.0
+
+    assert second.path_name == "service-beta"
+    assert second.source == "SRT"
+    assert second.bitrate_receive_mbps == 5.0
+
+
+def test_build_incoming_panel_does_not_guess_ambiguous_publisher() -> None:
+    """Dos publishers del mismo path no autorizan elegir identidad."""
+
+    captured_at = datetime(
+        2026, 10, 6, 1, 10, tzinfo=timezone.utc
+    )
+
+    media_path = MediaPath(
+        name="service-ambiguous",
+        configuration_name="service-ambiguous",
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type="rtmpSource",
+            source_id="source-ambiguous",
+        ),
+        readers=(),
+        inbound_bytes=0,
+        outbound_bytes=0,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(media_path,),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    path_measurement = StreamingPathMeasurement(
+        name="service-ambiguous",
+        status=MediaPathStatus.ACTIVE,
+        previous_status=MediaPathStatus.ACTIVE,
+        reader_count=0,
+        reader_delta=0,
+        inbound_delta_bytes=500_000,
+        outbound_delta_bytes=0,
+        inbound_bitrate_bps=4_000_000,
+        outbound_bitrate_bps=0,
+        state_changed=False,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=captured_at,
+        interval_seconds=1.0,
+        paths=(path_measurement,),
+        total_inbound_bitrate_bps=4_000_000,
+        total_outbound_bitrate_bps=0,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    first_publisher = ActiveSession(
+        session_id="publisher-alpha",
+        protocol=SessionProtocol.RTMP,
+        role=SessionRole.PUBLISHER,
+        state="publish",
+        remote_ip="192.0.2.10",
+        remote_port=1935,
+        path="service-ambiguous",
+        connected_since=captured_at,
+        bitrate_receive_mbps=4.0,
+    )
+
+    second_publisher = ActiveSession(
+        session_id="publisher-beta",
+        protocol=SessionProtocol.RTMP,
+        role=SessionRole.PUBLISHER,
+        state="publish",
+        remote_ip="192.0.2.11",
+        remote_port=1935,
+        path="service-ambiguous",
+        connected_since=captured_at,
+        bitrate_receive_mbps=4.0,
+    )
+
+    session_snapshot = SessionSnapshot(
+        captured_at=captured_at,
+        sessions=(first_publisher, second_publisher),
+    )
+
+    panel = DashboardService().build_incoming_panel(
+        snapshot=snapshot,
+        measurement=measurement,
+        session_snapshot=session_snapshot,
+        health=None,
+    )
+
+    assert len(panel.rows) == 1
+
+    row = panel.rows[0]
+
+    assert row.path_name == "service-ambiguous"
+    assert row.source == "RTMP"
+    assert row.bitrate_receive_mbps == 4.0
+    assert row.protocol is None
+    assert row.remote_address is None
+
+
+def test_build_dashboard_from_measurement_composes_incoming_panel() -> None:
+    """La composición debe transportar la proyección INCOMING canónica."""
+
+    captured_at = datetime(
+        2026, 10, 6, 2, 20, tzinfo=timezone.utc
+    )
+
+    media_path = MediaPath(
+        name="service-incoming",
+        configuration_name="service-incoming",
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type="srtSource",
+            source_id="source-incoming",
+        ),
+        readers=(),
+        inbound_bytes=0,
+        outbound_bytes=0,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(media_path,),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    path_measurement = StreamingPathMeasurement(
+        name="service-incoming",
+        status=MediaPathStatus.ACTIVE,
+        previous_status=MediaPathStatus.ACTIVE,
+        reader_count=0,
+        reader_delta=0,
+        inbound_delta_bytes=625_000,
+        outbound_delta_bytes=0,
+        inbound_bitrate_bps=5_000_000,
+        outbound_bitrate_bps=0,
+        state_changed=False,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=captured_at,
+        interval_seconds=1.0,
+        paths=(path_measurement,),
+        total_inbound_bitrate_bps=5_000_000,
+        total_outbound_bitrate_bps=0,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    publisher = ActiveSession(
+        session_id="publisher-incoming",
+        protocol=SessionProtocol.SRT,
+        role=SessionRole.PUBLISHER,
+        state="publish",
+        remote_ip="192.0.2.50",
+        remote_port=9000,
+        path="service-incoming",
+        connected_since=captured_at,
+        bitrate_receive_mbps=5.0,
+    )
+
+    session_snapshot = SessionSnapshot(
+        captured_at=captured_at,
+        sessions=(publisher,),
+    )
+
+    session_measurement = SessionMeasurement(
+        captured_at=captured_at,
+        sessions=(publisher,),
+        paths=(),
+        total_sessions=1,
+        reader_count=0,
+        publisher_count=1,
+        unknown_role_count=0,
+        degraded_session_count=0,
+        critical_session_count=0,
+        total_inbound_bitrate_mbps=5.0,
+        total_outbound_bitrate_mbps=0.0,
+        worst_quality=SessionQuality.GOOD,
+        protocols=(SessionProtocol.SRT,),
+    )
+
+    data = DashboardService().build_dashboard_from_measurement(
+        hostname="server-01",
+        mediamtx_online=True,
+        api_online=True,
+        snapshot=snapshot,
+        measurement=measurement,
+        session_measurement=session_measurement,
+        session_snapshot=session_snapshot,
+    )
+
+    assert data.incoming is not None
+    assert len(data.incoming.rows) == 1
+
+    row = data.incoming.rows[0]
+
+    assert row.path_name == "service-incoming"
+    assert row.source == "SRT"
+    assert row.bitrate_receive_mbps == 5.0
+    assert row.protocol == "SRT"
+    assert row.remote_address == "192.0.2.50:9000"

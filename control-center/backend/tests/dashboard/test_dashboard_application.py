@@ -148,6 +148,7 @@ def test_run_once_builds_and_renders_dashboard() -> None:
         snapshot=snapshot,
         measurement=measurement,
         session_measurement=session_measurement,
+        session_snapshot=session_snapshot,
         rtmp_connections=(),
         rtsp_sessions=(),
         hls_sessions=(),
@@ -678,6 +679,7 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         snapshot=snapshot,
         measurement=measurement,
         session_measurement=session_measurement,
+        session_snapshot=session_snapshot,
         rtmp_connections=(),
         rtsp_sessions=(),
         hls_sessions=(),
@@ -4075,3 +4077,92 @@ def test_view_navigation_state_reaches_renderer_across_run_once() -> None:
             active_view=TerminalView.GENERAL,
         ),
     )
+
+def test_application_transports_session_snapshot_into_dashboard_snapshot_input() -> None:
+    """Debe reutilizar el SessionSnapshot capturado en la frontera de snapshot."""
+    captured_at = datetime(
+        2026,
+        10,
+        6,
+        1,
+        15,
+        tzinfo=timezone.utc,
+    )
+
+    media_snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=0,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=None,
+        interval_seconds=None,
+        paths=(),
+        total_inbound_bitrate_bps=None,
+        total_outbound_bitrate_bps=None,
+        quality=MeasurementQuality.NOT_AVAILABLE,
+    )
+
+    session_snapshot = Mock()
+
+    mediamtx_adapter = Mock()
+    mediamtx_adapter.health.return_value = True
+    mediamtx_adapter.get_snapshot.return_value = media_snapshot
+
+    session_adapter = Mock()
+    session_adapter.get_snapshot.return_value = session_snapshot
+
+    streaming_service = Mock()
+    streaming_service.compare.return_value = measurement
+
+    session_service = Mock()
+    session_service.measure.return_value = Mock()
+
+    dashboard_service = Mock()
+
+    dashboard_data = Mock(spec=DashboardData)
+    dashboard_data.active_connections = None
+    dashboard_data.active_alarms = None
+    dashboard_data.recent_events = None
+
+    dashboard_snapshot_service = Mock()
+    dashboard_snapshot_service.build_snapshot.return_value = dashboard_data
+
+    system_service = Mock()
+    system_service.get_system_info.return_value = Mock(
+        hostname="server-01"
+    )
+    system_service.get_system_resources.return_value = Mock()
+    system_service.get_network_interface_infos.return_value = ()
+
+    network_telemetry_service = Mock()
+    network_telemetry_service.build.return_value = None
+
+    application = DashboardApplication(
+        mediamtx_adapter=mediamtx_adapter,
+        session_adapter=session_adapter,
+        streaming_service=streaming_service,
+        session_service=session_service,
+        dashboard_service=dashboard_service,
+        dashboard_renderer=Mock(),
+        system_service=system_service,
+        dashboard_snapshot_service=dashboard_snapshot_service,
+        network_telemetry_service=network_telemetry_service,
+    )
+
+    application.build_dashboard()
+
+    session_adapter.get_snapshot.assert_called_once_with()
+    dashboard_snapshot_service.build_snapshot.assert_called_once()
+
+    snapshot_input = (
+        dashboard_snapshot_service
+        .build_snapshot
+        .call_args
+        .args[0]
+    )
+
+    assert snapshot_input.session_snapshot is session_snapshot

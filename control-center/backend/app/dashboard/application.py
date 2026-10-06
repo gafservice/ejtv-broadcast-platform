@@ -593,6 +593,7 @@ class DashboardApplication:
             "snapshot": snapshot,
             "measurement": measurement,
             "session_measurement": session_measurement,
+            "session_snapshot": session_snapshot,
             "rtmp_connections": rtmp_connections,
             "rtsp_sessions": rtsp_sessions,
             "hls_sessions": hls_sessions,

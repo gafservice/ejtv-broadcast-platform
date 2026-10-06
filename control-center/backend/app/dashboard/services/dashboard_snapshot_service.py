@@ -19,6 +19,7 @@ from app.dashboard.models import (
 )
 from app.dashboard.models.panel_viewport import PanelViewport
 from app.dashboard.services.dashboard_service import DashboardService
+from app.domain.sessions import SessionSnapshot
 from app.domain.sessions.measurement import SessionMeasurement
 from app.domain.streaming import (
     HLSSessionHealth,
@@ -51,6 +52,7 @@ class DashboardSnapshotInput:
     measurement: StreamingMeasurement
 
     session_measurement: SessionMeasurement | None = None
+    session_snapshot: SessionSnapshot | None = None
     rtmp_connections: tuple[RTMPConnectionHealth, ...] = ()
     rtsp_sessions: tuple[RTSPSessionHealth, ...] = ()
     hls_sessions: tuple[HLSSessionHealth, ...] = ()
@@ -125,6 +127,7 @@ class DashboardSnapshotService:
             snapshot=snapshot_input.snapshot,
             measurement=snapshot_input.measurement,
             session_measurement=snapshot_input.session_measurement,
+            session_snapshot=snapshot_input.session_snapshot,
             rtmp_connections=snapshot_input.rtmp_connections,
             rtsp_sessions=snapshot_input.rtsp_sessions,
             hls_sessions=snapshot_input.hls_sessions,

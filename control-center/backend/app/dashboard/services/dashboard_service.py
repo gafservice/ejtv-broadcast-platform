@@ -1,6 +1,7 @@
 """Servicio de aplicación para construir datos del dashboard."""
 
 from app.dashboard.models.panel_viewport import PanelViewport
+from app.dashboard.models.incoming_panel import IncomingPanelData, IncomingRowData
 from app.dashboard.models import (
     ActiveAlarmRowData,
     ActiveAlarmsPanelData,
@@ -26,6 +27,7 @@ from app.dashboard.models import (
     SystemPanelData,
     UptimePanelData,
 )
+from app.domain.sessions import ActiveSession, SessionRole, SessionSnapshot
 from app.domain.sessions.measurement import SessionMeasurement
 from app.domain.streaming import (
     MeasurementQuality,
@@ -64,6 +66,111 @@ _SOURCE_LABELS = {
 
 
 class DashboardService:
+
+    def build_incoming_panel(
+        self,
+        *,
+        snapshot: MediaMTXSnapshot,
+        measurement: StreamingMeasurement,
+        session_snapshot: SessionSnapshot,
+        health: StreamingHealth | None,
+    ) -> IncomingPanelData:
+        """Project canonical incoming-path evidence for presentation."""
+
+        measurements_by_path = {
+            path_measurement.name: path_measurement
+            for path_measurement in measurement.paths
+        }
+
+        health_by_path = (
+            {
+                path_health.name: path_health
+                for path_health in health.paths
+            }
+            if health is not None
+            else {}
+        )
+
+        publishers_by_path: dict[str, list[ActiveSession]] = {}
+
+        for session in session_snapshot.sessions:
+            if (
+                session.role is SessionRole.PUBLISHER
+                and session.path is not None
+            ):
+                publishers_by_path.setdefault(
+                    session.path,
+                    [],
+                ).append(session)
+
+        rows: list[IncomingRowData] = []
+
+        for media_path in snapshot.paths:
+            if media_path.source is None:
+                continue
+
+            path_measurement = measurements_by_path.get(
+                media_path.name
+            )
+            path_health = health_by_path.get(media_path.name)
+
+            publishers = publishers_by_path.get(
+                media_path.name,
+                [],
+            )
+            publisher = (
+                publishers[0]
+                if len(publishers) == 1
+                else None
+            )
+
+            bitrate_receive_mbps = None
+
+            if (
+                path_measurement is not None
+                and path_measurement.inbound_bitrate_bps is not None
+            ):
+                bitrate_receive_mbps = (
+                    path_measurement.inbound_bitrate_bps
+                    / 1_000_000.0
+                )
+
+            protocol = None
+            remote_address = None
+
+            if publisher is not None:
+                protocol = publisher.protocol.value.upper()
+
+                if publisher.remote_ip is not None:
+                    remote_address = publisher.remote_ip
+
+                    if publisher.remote_port is not None:
+                        remote_address = (
+                            f"{publisher.remote_ip}:"
+                            f"{publisher.remote_port}"
+                        )
+
+            rows.append(
+                IncomingRowData(
+                    path_name=media_path.name,
+                    source=self._resolve_source(
+                        snapshot=snapshot,
+                        path_name=media_path.name,
+                    ),
+                    status=media_path.status.value.upper(),
+                    bitrate_receive_mbps=bitrate_receive_mbps,
+                    health_status=(
+                        path_health.status
+                        if path_health is not None
+                        else None
+                    ),
+                    protocol=protocol,
+                    remote_address=remote_address,
+                )
+            )
+
+        return IncomingPanelData(rows=tuple(rows))
+
     """Coordina la construcción de la información del dashboard."""
 
     def __init__(
@@ -1000,6 +1107,7 @@ class DashboardService:
         platform_health: PlatformHealthPanelData | None = None,
         noc_snapshot: NodeSnapshot | None = None,
         active_connections_viewport: PanelViewport | None = None,
+        incoming: IncomingPanelData | None = None,
     ) -> DashboardData:
         """Agrupa todas las secciones del dashboard."""
 
@@ -1018,6 +1126,7 @@ class DashboardService:
             platform_health=platform_health,
             noc_snapshot=noc_snapshot,
             capacity=self.build_capacity_panel(noc_snapshot),
+            incoming=incoming,
         )
 
     def build_dashboard_from_measurement(
@@ -1029,6 +1138,7 @@ class DashboardService:
         snapshot: MediaMTXSnapshot,
         measurement: StreamingMeasurement,
         session_measurement: SessionMeasurement | None = None,
+        session_snapshot: SessionSnapshot | None = None,
         rtmp_connections: tuple[RTMPConnectionHealth, ...] = (),
         rtsp_sessions: tuple[RTSPSessionHealth, ...] = (),
         hls_sessions: tuple[HLSSessionHealth, ...] = (),
@@ -1109,6 +1219,17 @@ class DashboardService:
             else None
         )
 
+        incoming = (
+            self.build_incoming_panel(
+                snapshot=snapshot,
+                measurement=measurement,
+                session_snapshot=session_snapshot,
+                health=health,
+            )
+            if session_snapshot is not None
+            else None
+        )
+
         system = (
             self.build_system_panel(
                 resources=system_resources,
@@ -1150,6 +1271,7 @@ class DashboardService:
             server=server,
             streaming=streaming,
             sessions=sessions,
+            incoming=incoming,
             active_connections=active_connections,
             system=system,
             paths=paths,
