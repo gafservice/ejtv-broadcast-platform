@@ -125,7 +125,11 @@ class DashboardService:
                 if signal_health_state is not None
                 else None
             )
-            health_reason = None
+            health_reason = (
+                signal_health_state.health.reason
+                if signal_health_state is not None
+                else None
+            )
 
             publishers = publishers_by_path.get(
                 media_path.name,

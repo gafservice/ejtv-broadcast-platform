@@ -443,3 +443,329 @@ def test_evaluator_rejects_transport_path_identity_mismatch() -> None:
             media_status=HealthStatus.HEALTHY,
             transport_health=transport,
         )
+
+def test_signal_health_accepts_optional_reason() -> None:
+    result = SignalHealth(
+        profile_id="profile-main",
+        service_id="service-a",
+        path_name="service-a",
+        media_status=HealthStatus.DEGRADED,
+        transport_status=HealthStatus.HEALTHY,
+        status=HealthStatus.DEGRADED,
+        reason="media degraded",
+    )
+
+    assert result.reason == "media degraded"
+
+
+def test_signal_health_reason_defaults_to_none() -> None:
+    result = SignalHealth(
+        profile_id="profile-main",
+        service_id="service-a",
+        path_name="service-a",
+        media_status=HealthStatus.HEALTHY,
+        transport_status=HealthStatus.HEALTHY,
+        status=HealthStatus.HEALTHY,
+    )
+
+    assert result.reason is None
+
+
+def test_evaluator_reason_is_none_when_signal_is_healthy() -> None:
+    result = SignalHealthEvaluator().evaluate(
+        profile_id="profile-main",
+        service_id="service-a",
+        path_name="service-a",
+        media_status=HealthStatus.HEALTHY,
+        transport_health=SourceTransportHealth(
+            service_id="service-a",
+            source_type="srtSource",
+            path_name="service-a",
+            status=HealthStatus.HEALTHY,
+        ),
+    )
+
+    assert result.status is HealthStatus.HEALTHY
+    assert result.reason is None
+
+
+def test_evaluator_reason_identifies_media_degraded() -> None:
+    result = SignalHealthEvaluator().evaluate(
+        profile_id="profile-main",
+        service_id="service-a",
+        path_name="service-a",
+        media_status=HealthStatus.DEGRADED,
+        transport_health=SourceTransportHealth(
+            service_id="service-a",
+            source_type="srtSource",
+            path_name="service-a",
+            status=HealthStatus.HEALTHY,
+        ),
+    )
+
+    assert result.status is HealthStatus.DEGRADED
+    assert result.reason == "media degraded"
+
+
+def test_evaluator_reason_identifies_transport_degraded() -> None:
+    result = SignalHealthEvaluator().evaluate(
+        profile_id="profile-main",
+        service_id="service-a",
+        path_name="service-a",
+        media_status=HealthStatus.HEALTHY,
+        transport_health=SourceTransportHealth(
+            service_id="service-a",
+            source_type="srtSource",
+            path_name="service-a",
+            status=HealthStatus.DEGRADED,
+        ),
+    )
+
+    assert result.status is HealthStatus.DEGRADED
+    assert result.reason == "transport degraded"
+
+
+def test_evaluator_reason_identifies_transport_critical() -> None:
+    result = SignalHealthEvaluator().evaluate(
+        profile_id="profile-main",
+        service_id="service-a",
+        path_name="service-a",
+        media_status=HealthStatus.HEALTHY,
+        transport_health=SourceTransportHealth(
+            service_id="service-a",
+            source_type="srtSource",
+            path_name="service-a",
+            status=HealthStatus.CRITICAL,
+        ),
+    )
+
+    assert result.status is HealthStatus.CRITICAL
+    assert result.reason == "transport critical"
+
+
+def test_evaluator_reason_identifies_media_unknown() -> None:
+    result = SignalHealthEvaluator().evaluate(
+        profile_id="profile-main",
+        service_id="service-a",
+        path_name="service-a",
+        media_status=HealthStatus.UNKNOWN,
+        transport_health=SourceTransportHealth(
+            service_id="service-a",
+            source_type="srtSource",
+            path_name="service-a",
+            status=HealthStatus.HEALTHY,
+        ),
+    )
+
+    assert result.status is HealthStatus.UNKNOWN
+    assert result.reason == "media unknown"
+
+
+def test_evaluator_reason_identifies_transport_unknown() -> None:
+    result = SignalHealthEvaluator().evaluate(
+        profile_id="profile-main",
+        service_id="service-a",
+        path_name="service-a",
+        media_status=HealthStatus.HEALTHY,
+        transport_health=SourceTransportHealth(
+            service_id="service-a",
+            source_type="srtSource",
+            path_name="service-a",
+            status=HealthStatus.UNKNOWN,
+        ),
+    )
+
+    assert result.status is HealthStatus.UNKNOWN
+    assert result.reason == "transport unknown"
+
+
+def test_evaluator_reason_preserves_both_equal_degraded_domains() -> None:
+    result = SignalHealthEvaluator().evaluate(
+        profile_id="profile-main",
+        service_id="service-a",
+        path_name="service-a",
+        media_status=HealthStatus.DEGRADED,
+        transport_health=SourceTransportHealth(
+            service_id="service-a",
+            source_type="srtSource",
+            path_name="service-a",
+            status=HealthStatus.DEGRADED,
+        ),
+    )
+
+    assert result.status is HealthStatus.DEGRADED
+    assert result.reason == "media degraded; transport degraded"
+
+
+def test_evaluator_reason_reports_only_status_determining_domain() -> None:
+    result = SignalHealthEvaluator().evaluate(
+        profile_id="profile-main",
+        service_id="service-a",
+        path_name="service-a",
+        media_status=HealthStatus.DEGRADED,
+        transport_health=SourceTransportHealth(
+            service_id="service-a",
+            source_type="srtSource",
+            path_name="service-a",
+            status=HealthStatus.UNKNOWN,
+        ),
+    )
+
+    assert result.status is HealthStatus.DEGRADED
+    assert result.reason == "media degraded"
+
+
+def test_signal_uses_detailed_transport_reason_when_transport_determines_degraded_status() -> None:
+    evaluator = SignalHealthEvaluator()
+
+    media_health = MediaHealth(
+        profile_id="future-profile",
+        service_id="future-service",
+        path_name="future-path",
+        status=HealthStatus.HEALTHY,
+    )
+    transport_health = SourceTransportHealth(
+        service_id="future-service",
+        path_name="future-path",
+        source_type="futureSource",
+        status=HealthStatus.DEGRADED,
+        reason="no traffic",
+    )
+
+    result = evaluator.evaluate(
+        media_health=media_health,
+        transport_health=transport_health,
+    )
+
+    assert result.status is HealthStatus.DEGRADED
+    assert result.reason == "no traffic"
+
+
+def test_signal_uses_detailed_transport_reason_when_transport_determines_critical_status() -> None:
+    evaluator = SignalHealthEvaluator()
+
+    media_health = MediaHealth(
+        profile_id="future-profile",
+        service_id="future-service",
+        path_name="future-path",
+        status=HealthStatus.HEALTHY,
+    )
+    transport_health = SourceTransportHealth(
+        service_id="future-service",
+        path_name="future-path",
+        source_type="futureSource",
+        status=HealthStatus.CRITICAL,
+        reason="source offline",
+    )
+
+    result = evaluator.evaluate(
+        media_health=media_health,
+        transport_health=transport_health,
+    )
+
+    assert result.status is HealthStatus.CRITICAL
+    assert result.reason == "source offline"
+
+
+def test_signal_uses_detailed_transport_reason_for_unknown_transport() -> None:
+    evaluator = SignalHealthEvaluator()
+
+    media_health = MediaHealth(
+        profile_id="future-profile",
+        service_id="future-service",
+        path_name="future-path",
+        status=HealthStatus.HEALTHY,
+    )
+    transport_health = SourceTransportHealth(
+        service_id="future-service",
+        path_name="future-path",
+        source_type="futureSource",
+        status=HealthStatus.UNKNOWN,
+        reason="telemetry unavailable",
+    )
+
+    result = evaluator.evaluate(
+        media_health=media_health,
+        transport_health=transport_health,
+    )
+
+    assert result.status is HealthStatus.UNKNOWN
+    assert result.reason == "telemetry unavailable"
+
+
+def test_transport_reason_does_not_override_more_severe_media_reason() -> None:
+    evaluator = SignalHealthEvaluator()
+
+    media_health = MediaHealth(
+        profile_id="future-profile",
+        service_id="future-service",
+        path_name="future-path",
+        status=HealthStatus.CRITICAL,
+    )
+    transport_health = SourceTransportHealth(
+        service_id="future-service",
+        path_name="future-path",
+        source_type="futureSource",
+        status=HealthStatus.DEGRADED,
+        reason="no traffic",
+    )
+
+    result = evaluator.evaluate(
+        media_health=media_health,
+        transport_health=transport_health,
+    )
+
+    assert result.status is HealthStatus.CRITICAL
+    assert result.reason == "media critical"
+
+
+def test_transport_reason_does_not_override_degraded_media_when_transport_is_unknown() -> None:
+    evaluator = SignalHealthEvaluator()
+
+    media_health = MediaHealth(
+        profile_id="future-profile",
+        service_id="future-service",
+        path_name="future-path",
+        status=HealthStatus.DEGRADED,
+    )
+    transport_health = SourceTransportHealth(
+        service_id="future-service",
+        path_name="future-path",
+        source_type="futureSource",
+        status=HealthStatus.UNKNOWN,
+        reason="telemetry unavailable",
+    )
+
+    result = evaluator.evaluate(
+        media_health=media_health,
+        transport_health=transport_health,
+    )
+
+    assert result.status is HealthStatus.DEGRADED
+    assert result.reason == "media degraded"
+
+
+def test_signal_falls_back_to_generic_transport_reason_when_detailed_reason_is_absent() -> None:
+    evaluator = SignalHealthEvaluator()
+
+    media_health = MediaHealth(
+        profile_id="future-profile",
+        service_id="future-service",
+        path_name="future-path",
+        status=HealthStatus.HEALTHY,
+    )
+    transport_health = SourceTransportHealth(
+        service_id="future-service",
+        path_name="future-path",
+        source_type="futureSource",
+        status=HealthStatus.DEGRADED,
+        reason=None,
+    )
+
+    result = evaluator.evaluate(
+        media_health=media_health,
+        transport_health=transport_health,
+    )
+
+    assert result.status is HealthStatus.DEGRADED
+    assert result.reason == "transport degraded"

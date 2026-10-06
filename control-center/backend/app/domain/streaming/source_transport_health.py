@@ -24,11 +24,22 @@ class SourceTransportHealth:
     path_name: str
     source_type: str
     status: HealthStatus
+    reason: str | None = None
 
     def __post_init__(self) -> None:
         service_id = self.service_id.strip()
         path_name = self.path_name.strip()
         source_type = self.source_type.strip()
+
+        if self.reason is not None and not isinstance(self.reason, str):
+            raise TypeError("reason must be a string or None")
+
+        reason = (
+            self.reason.strip()
+            if self.reason is not None
+            else None
+        )
+        reason = reason or None
 
         if not service_id:
             raise ValueError(
@@ -64,4 +75,9 @@ class SourceTransportHealth:
             self,
             "source_type",
             source_type,
+        )
+        object.__setattr__(
+            self,
+            "reason",
+            reason,
         )

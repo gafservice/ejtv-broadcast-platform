@@ -25,6 +25,9 @@ class SignalHealthCodec:
             "status": health.status.value,
         }
 
+        if health.reason is not None:
+            payload["reason"] = health.reason
+
         return json.dumps(payload)
 
     def decode(self, payload: str) -> SignalHealth:
@@ -43,4 +46,5 @@ class SignalHealthCodec:
             media_status=HealthStatus(raw["media_status"]),
             transport_status=HealthStatus(raw["transport_status"]),
             status=HealthStatus(raw["status"]),
+            reason=raw.get("reason"),
         )

@@ -41,12 +41,14 @@ class SourceTransportHealthEvaluator:
             )
 
         status = self._resolve_status(measurement)
+        reason = self._resolve_reason(measurement)
 
         return SourceTransportHealth(
             service_id=service_id,
             path_name=measurement.name,
             source_type=source_type,
             status=status,
+            reason=reason,
         )
 
     @staticmethod
@@ -72,3 +74,25 @@ class SourceTransportHealthEvaluator:
             return HealthStatus.DEGRADED
 
         return HealthStatus.HEALTHY
+
+    @staticmethod
+    def _resolve_reason(
+        measurement: StreamingPathMeasurement,
+    ) -> str | None:
+        if measurement.status is MediaPathStatus.OFFLINE:
+            return "source offline"
+
+        if measurement.status is MediaPathStatus.NO_SOURCE:
+            return "no source"
+
+        if measurement.quality is MeasurementQuality.NOT_AVAILABLE:
+            return "telemetry unavailable"
+
+        if measurement.quality is MeasurementQuality.INVALID:
+            return "telemetry invalid"
+
+
+        if measurement.inbound_delta_bytes == 0:
+            return "no traffic"
+
+        return None

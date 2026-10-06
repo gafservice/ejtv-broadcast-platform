@@ -5260,3 +5260,97 @@ def test_incoming_panel_uses_udp_protocol_for_configured_mpegts_listener() -> No
     assert row.source == "MPEG-TS"
     assert row.protocol == "UDP"
     assert row.remote_address is None
+
+
+def test_incoming_panel_projects_reason_from_canonical_signal_health() -> None:
+    """INCOMING Reason comes only from canonical SignalHealth."""
+
+    from datetime import datetime, timedelta, timezone
+
+    from app.domain.sessions import SessionSnapshot
+    from app.domain.streaming import (
+        HealthStatus,
+        MediaMTXSnapshot,
+        MediaPath,
+        MediaPathStatus,
+        MediaSource,
+        StreamingMeasurement,
+    )
+    from app.domain.streaming.signal_health import SignalHealth
+    from app.noc.current_state.signal_health_current_state import (
+        SignalHealthCurrentState,
+    )
+
+    captured_at = datetime(
+        2026,
+        10,
+        6,
+        19,
+        30,
+        tzinfo=timezone.utc,
+    )
+
+    media_path = MediaPath(
+        name="future-service",
+        configuration_name="future-service",
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type="srtSource",
+            source_id="source-future-service",
+        ),
+        readers=(),
+        inbound_bytes=1_000_000,
+        outbound_bytes=0,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(media_path,),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    canonical_state = SignalHealthCurrentState(
+        profile_id="future-profile",
+        service_id="future-service",
+        path_name="future-service",
+        observed_at=captured_at,
+        health=SignalHealth(
+            profile_id="future-profile",
+            service_id="future-service",
+            path_name="future-service",
+            media_status=HealthStatus.DEGRADED,
+            transport_status=HealthStatus.HEALTHY,
+            status=HealthStatus.DEGRADED,
+            reason="media degraded",
+        ),
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=captured_at - timedelta(seconds=1),
+        interval_seconds=1.0,
+        paths=(),
+        total_inbound_bitrate_bps=0.0,
+        total_outbound_bitrate_bps=0.0,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    panel = DashboardService().build_incoming_panel(
+        snapshot=snapshot,
+        measurement=measurement,
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(),
+        ),
+        health=None,
+        signal_health_current_states=(canonical_state,),
+    )
+
+    assert len(panel.rows) == 1
+    assert panel.rows[0].path_name == "future-service"
+    assert panel.rows[0].health_status is HealthStatus.DEGRADED
+    assert panel.rows[0].health_reason == "media degraded"

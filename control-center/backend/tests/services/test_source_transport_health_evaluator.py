@@ -204,3 +204,147 @@ def test_evaluator_is_protocol_agnostic() -> None:
     assert result.path_name == "future-path"
     assert result.source_type == "futureSource"
     assert result.status is HealthStatus.HEALTHY
+
+
+def test_positive_source_receive_traffic_has_no_reason() -> None:
+    evaluator = SourceTransportHealthEvaluator()
+
+    result = evaluator.evaluate(
+        service_id="future-service",
+        source_type="futureSource",
+        measurement=measurement(
+            path_name="future-path",
+        ),
+    )
+
+    assert result.status is HealthStatus.HEALTHY
+    assert result.reason is None
+
+
+def test_zero_source_receive_traffic_reason_is_no_traffic() -> None:
+    evaluator = SourceTransportHealthEvaluator()
+
+    result = evaluator.evaluate(
+        service_id="future-service",
+        source_type="futureSource",
+        measurement=measurement(
+            path_name="future-path",
+            inbound_delta_bytes=0,
+            inbound_bitrate_bps=0.0,
+        ),
+    )
+
+    assert result.status is HealthStatus.DEGRADED
+    assert result.reason == "no traffic"
+
+
+def test_offline_source_reason_is_source_offline() -> None:
+    evaluator = SourceTransportHealthEvaluator()
+
+    result = evaluator.evaluate(
+        service_id="future-service",
+        source_type="futureSource",
+        measurement=measurement(
+            path_name="future-path",
+            status=MediaPathStatus.OFFLINE,
+            previous_status=MediaPathStatus.ACTIVE,
+            inbound_delta_bytes=0,
+            inbound_bitrate_bps=0.0,
+        ),
+    )
+
+    assert result.status is HealthStatus.CRITICAL
+    assert result.reason == "source offline"
+
+
+def test_no_source_reason_is_no_source() -> None:
+    evaluator = SourceTransportHealthEvaluator()
+
+    result = evaluator.evaluate(
+        service_id="future-service",
+        source_type="futureSource",
+        measurement=measurement(
+            path_name="future-path",
+            status=MediaPathStatus.NO_SOURCE,
+            previous_status=MediaPathStatus.ACTIVE,
+            inbound_delta_bytes=0,
+            inbound_bitrate_bps=0.0,
+        ),
+    )
+
+    assert result.status is HealthStatus.CRITICAL
+    assert result.reason == "no source"
+
+
+def test_unavailable_temporal_evidence_reason_is_telemetry_unavailable() -> None:
+    evaluator = SourceTransportHealthEvaluator()
+
+    result = evaluator.evaluate(
+        service_id="future-service",
+        source_type="futureSource",
+        measurement=measurement(
+            path_name="future-path",
+            previous_status=None,
+            inbound_delta_bytes=None,
+            inbound_bitrate_bps=None,
+            quality=MeasurementQuality.NOT_AVAILABLE,
+        ),
+    )
+
+    assert result.status is HealthStatus.UNKNOWN
+    assert result.reason == "telemetry unavailable"
+
+
+def test_invalid_temporal_evidence_reason_is_telemetry_invalid() -> None:
+    evaluator = SourceTransportHealthEvaluator()
+
+    result = evaluator.evaluate(
+        service_id="future-service",
+        source_type="futureSource",
+        measurement=measurement(
+            path_name="future-path",
+            quality=MeasurementQuality.INVALID,
+        ),
+    )
+
+    assert result.status is HealthStatus.UNKNOWN
+    assert result.reason == "telemetry invalid"
+
+
+
+def test_offline_reason_dominates_invalid_telemetry() -> None:
+    evaluator = SourceTransportHealthEvaluator()
+
+    result = evaluator.evaluate(
+        service_id="future-service",
+        source_type="futureSource",
+        measurement=measurement(
+            path_name="future-path",
+            status=MediaPathStatus.OFFLINE,
+            inbound_delta_bytes=None,
+            inbound_bitrate_bps=None,
+            quality=MeasurementQuality.INVALID,
+        ),
+    )
+
+    assert result.status is HealthStatus.CRITICAL
+    assert result.reason == "source offline"
+
+
+def test_no_source_reason_dominates_invalid_telemetry() -> None:
+    evaluator = SourceTransportHealthEvaluator()
+
+    result = evaluator.evaluate(
+        service_id="future-service",
+        source_type="futureSource",
+        measurement=measurement(
+            path_name="future-path",
+            status=MediaPathStatus.NO_SOURCE,
+            inbound_delta_bytes=None,
+            inbound_bitrate_bps=None,
+            quality=MeasurementQuality.INVALID,
+        ),
+    )
+
+    assert result.status is HealthStatus.CRITICAL
+    assert result.reason == "no source"

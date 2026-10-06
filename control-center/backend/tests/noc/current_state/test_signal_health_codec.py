@@ -153,3 +153,39 @@ def test_decode_rejects_unknown_health_status() -> None:
 
     with pytest.raises(ValueError):
         codec.decode(payload)
+
+def test_codec_round_trip_preserves_signal_health_reason() -> None:
+    codec = SignalHealthCodec()
+
+    health = SignalHealth(
+        profile_id="profile-1",
+        service_id="service-1",
+        path_name="impact",
+        media_status=HealthStatus.DEGRADED,
+        transport_status=HealthStatus.HEALTHY,
+        status=HealthStatus.DEGRADED,
+        reason="media degraded",
+    )
+
+    result = codec.decode(codec.encode(health))
+
+    assert result.reason == "media degraded"
+
+
+def test_decode_legacy_payload_without_reason_defaults_to_none() -> None:
+    codec = SignalHealthCodec()
+
+    payload = json.dumps(
+        {
+            "profile_id": "profile-1",
+            "service_id": "service-1",
+            "path_name": "impact",
+            "media_status": "HEALTHY",
+            "transport_status": "HEALTHY",
+            "status": "HEALTHY",
+        }
+    )
+
+    result = codec.decode(payload)
+
+    assert result.reason is None

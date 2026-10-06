@@ -167,3 +167,42 @@ def test_contract_does_not_expose_media_evidence() -> None:
     assert "gop" not in fields
     assert "pcr" not in fields
     assert "mpegts" not in fields
+
+
+def test_accepts_optional_transport_reason() -> None:
+    health = SourceTransportHealth(
+        service_id="future-service",
+        path_name="future-path",
+        source_type="futureSource",
+        status=HealthStatus.DEGRADED,
+        reason="  no traffic  ",
+    )
+
+    assert health.reason == "no traffic"
+
+
+def test_transport_reason_defaults_to_none() -> None:
+    health = build_health()
+
+    assert health.reason is None
+
+
+@pytest.mark.parametrize(
+    "reason",
+    (
+        "",
+        "   ",
+    ),
+)
+def test_blank_transport_reason_normalizes_to_none(
+    reason: str,
+) -> None:
+    health = SourceTransportHealth(
+        service_id="future-service",
+        path_name="future-path",
+        source_type="futureSource",
+        status=HealthStatus.UNKNOWN,
+        reason=reason,
+    )
+
+    assert health.reason is None

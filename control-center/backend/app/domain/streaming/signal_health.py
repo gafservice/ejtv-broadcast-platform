@@ -38,6 +38,7 @@ class SignalHealth:
     media_status: HealthStatus
     transport_status: HealthStatus
     status: HealthStatus
+    reason: str | None = None
 
     def __post_init__(self) -> None:
         profile_id = self.profile_id.strip()
@@ -71,9 +72,21 @@ class SignalHealth:
                     f"{field_name} must be a HealthStatus"
                 )
 
+        reason = self.reason
+
+        if reason is not None:
+            if not isinstance(reason, str):
+                raise TypeError("reason must be a string or None")
+
+            reason = reason.strip()
+
+            if not reason:
+                reason = None
+
         object.__setattr__(self, "profile_id", profile_id)
         object.__setattr__(self, "service_id", service_id)
         object.__setattr__(self, "path_name", path_name)
+        object.__setattr__(self, "reason", reason)
 
 
 class SignalHealthEvaluator:
@@ -155,6 +168,12 @@ class SignalHealthEvaluator:
             transport_health.status,
         )
 
+        reason = self._resolve_reason(
+            effective_media_status,
+            transport_health,
+            status,
+        )
+
         return SignalHealth(
             profile_id=effective_profile_id,
             service_id=effective_service_id,
@@ -162,7 +181,32 @@ class SignalHealthEvaluator:
             media_status=effective_media_status,
             transport_status=transport_health.status,
             status=status,
+            reason=reason,
         )
+
+    @staticmethod
+    def _resolve_reason(
+        media_status: HealthStatus,
+        transport_health: SourceTransportHealth,
+        status: HealthStatus,
+    ) -> str | None:
+        """Describe only the domain conclusions determining aggregate status."""
+
+        if status is HealthStatus.HEALTHY:
+            return None
+
+        reasons = []
+
+        if media_status is status:
+            reasons.append(f"media {status.value.lower()}")
+
+        if transport_health.status is status:
+            reasons.append(
+                transport_health.reason
+                or f"transport {status.value.lower()}"
+            )
+
+        return "; ".join(reasons) or None
 
     @staticmethod
     def _resolve_status(
