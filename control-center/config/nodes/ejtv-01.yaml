@@ -64,3 +64,50 @@ media_profiles:
       sample_rate: 48000
       channels: 2
       channel_layout: stereo
+
+
+  - profile_id: ejtv-main
+    service_id: ejtv
+    path_name: ejtv
+
+    video:
+      presence: required
+      codec: hevc
+      profile: Main
+      level: "120"
+      width: 1920
+      height: 1080
+      frame_rate:
+        numerator: 30000
+        denominator: 1001
+
+    audio:
+      presence: required
+      codec: aac
+      profile: LC
+      sample_rate: 48000
+      channels: 2
+      channel_layout: stereo
+
+  - profile_id: enlace-main
+    service_id: enlace
+    path_name: enlace
+
+    video:
+      presence: required
+      codec: hevc
+      profile: Main
+      level: "120"
+      width: 1920
+      height: 1080
+      frame_rate:
+        numerator: 30000
+        denominator: 1001
+
+    audio:
+      presence: required
+      codec: aac
+      profile: LC
+      sample_rate: 48000
+      channels: 2
+      channel_layout: stereo

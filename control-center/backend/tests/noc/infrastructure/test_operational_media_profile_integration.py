@@ -159,3 +159,50 @@ def test_operational_impact_profile_evaluates_healthy() -> None:
     )
 
     assert stable.status is HealthStatus.HEALTHY
+
+
+def test_operational_policy_covers_all_reference_incoming_services() -> None:
+    profiles = NodeMediaProfileLoader().load(
+        CONFIG_PATH
+    )
+
+    profiles_by_identity = {
+        (
+            profile.profile_id,
+            profile.service_id,
+            profile.path_name,
+        ): profile
+        for profile in profiles
+    }
+
+    assert set(profiles_by_identity) == {
+        ("impact-main", "impact", "impact"),
+        ("ejtv-main", "ejtv", "ejtv"),
+        ("enlace-main", "enlace", "enlace"),
+    }
+
+    for identity in (
+        ("ejtv-main", "ejtv", "ejtv"),
+        ("enlace-main", "enlace", "enlace"),
+    ):
+        profile = profiles_by_identity[identity]
+
+        assert profile.container is None
+
+        assert profile.video is not None
+        assert profile.video.presence.value == "required"
+        assert profile.video.codec == "hevc"
+        assert profile.video.profile == "Main"
+        assert profile.video.level == "120"
+        assert profile.video.width == 1920
+        assert profile.video.height == 1080
+        assert profile.video.frame_rate_numerator == 30000
+        assert profile.video.frame_rate_denominator == 1001
+
+        assert profile.audio is not None
+        assert profile.audio.presence.value == "required"
+        assert profile.audio.codec == "aac"
+        assert profile.audio.profile == "LC"
+        assert profile.audio.sample_rate == 48000
+        assert profile.audio.channels == 2
+        assert profile.audio.channel_layout == "stereo"
