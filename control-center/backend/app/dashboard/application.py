@@ -24,6 +24,9 @@ from app.dashboard.models.dashboard_navigation_state import (
 from app.dashboard.models.dashboard_navigation_totals import (
     DashboardNavigationTotals,
 )
+from app.dashboard.models.terminal_navigation_state import (
+    TerminalNavigationState,
+)
 from app.dashboard.models import DashboardData
 from app.dashboard.services.dashboard_navigation_controller import (
     DashboardNavigationController,
@@ -272,6 +275,7 @@ class DashboardApplication:
             if navigation_state is not None
             else DashboardNavigationState()
         )
+        self._terminal_navigation_state = TerminalNavigationState()
 
         self._navigation_totals = DashboardNavigationTotals()
 
@@ -312,6 +316,12 @@ class DashboardApplication:
         return self._navigation_state
 
     @property
+    def terminal_navigation_state(self) -> TerminalNavigationState:
+        """Estado actual de navegación entre vistas operacionales."""
+
+        return self._terminal_navigation_state
+
+    @property
     def navigation_totals(self) -> DashboardNavigationTotals:
         """Totales navegables de la última captura."""
 
@@ -346,6 +356,18 @@ class DashboardApplication:
             raise TypeError(
                 "action must be a DashboardNavigationAction"
             )
+
+        if action is DashboardNavigationAction.NEXT_VIEW:
+            self._terminal_navigation_state = (
+                self._terminal_navigation_state.select_next()
+            )
+            return
+
+        if action is DashboardNavigationAction.PREVIOUS_VIEW:
+            self._terminal_navigation_state = (
+                self._terminal_navigation_state.select_previous()
+            )
+            return
 
         total_items = self._navigation_totals.for_panel(
             self._navigation_state.active_panel
@@ -669,6 +691,7 @@ class DashboardApplication:
         return self._dashboard_renderer.render(
             dashboard_data,
             navigation_state=self._navigation_state,
+            terminal_navigation_state=self._terminal_navigation_state,
         )
 
     def run(

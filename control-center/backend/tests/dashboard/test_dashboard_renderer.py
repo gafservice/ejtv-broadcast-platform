@@ -887,3 +887,98 @@ def test_render_contains_platform_health_panel() -> None:
     assert "Coverage: 80%" in output
     assert "Affected: 50%" in output
     assert "H:2 D:1 C:1 U:1" in output
+
+
+def test_render_accepts_terminal_navigation_state_for_general_view() -> None:
+    """GENERAL debe aceptar el estado de navegación terminal."""
+
+    from app.dashboard.models.terminal_navigation_state import (
+        TerminalNavigationState,
+        TerminalView,
+    )
+
+    data = build_dashboard_data()
+    renderer = DashboardRenderer()
+    terminal_navigation_state = TerminalNavigationState()
+
+    assert terminal_navigation_state.active_view is TerminalView.GENERAL
+
+    rendered = renderer.render(
+        data,
+        terminal_navigation_state=terminal_navigation_state,
+    )
+
+    assert isinstance(rendered, Layout)
+
+
+def test_render_identifies_general_as_active_terminal_view() -> None:
+    """El dashboard debe identificar visualmente la vista GENERAL activa."""
+
+    from app.dashboard.models.terminal_navigation_state import (
+        TerminalNavigationState,
+        TerminalView,
+    )
+
+    data = build_dashboard_data()
+    renderer = DashboardRenderer()
+    terminal_navigation_state = TerminalNavigationState(
+        active_view=TerminalView.GENERAL,
+    )
+
+    layout = renderer.render(
+        data,
+        terminal_navigation_state=terminal_navigation_state,
+    )
+
+    console = Console(
+        record=True,
+        width=200,
+        height=80,
+        color_system=None,
+    )
+    console.print(layout)
+
+    output = console.export_text()
+
+    assert "VIEW: GENERAL" in output
+
+
+def test_render_identifies_each_terminal_view() -> None:
+    """Cada estado terminal debe identificar visualmente su vista activa."""
+
+    from app.dashboard.models.terminal_navigation_state import (
+        TerminalNavigationState,
+        TerminalView,
+    )
+
+    data = build_dashboard_data()
+    renderer = DashboardRenderer()
+
+    expected_views = (
+        (TerminalView.GENERAL, "VIEW: GENERAL"),
+        (TerminalView.INCOMING, "VIEW: INCOMING"),
+        (TerminalView.OUTGOING, "VIEW: OUTGOING"),
+        (TerminalView.SYSTEM, "VIEW: SYSTEM"),
+        (TerminalView.ALARMS, "VIEW: ALARMS"),
+        (TerminalView.EVENTS, "VIEW: EVENTS"),
+    )
+
+    for terminal_view, expected_label in expected_views:
+        layout = renderer.render(
+            data,
+            terminal_navigation_state=TerminalNavigationState(
+                active_view=terminal_view,
+            ),
+        )
+
+        console = Console(
+            record=True,
+            width=200,
+            height=80,
+            color_system=None,
+        )
+        console.print(layout)
+
+        output = console.export_text()
+
+        assert expected_label in output

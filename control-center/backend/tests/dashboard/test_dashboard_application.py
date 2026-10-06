@@ -170,6 +170,7 @@ def test_run_once_builds_and_renders_dashboard() -> None:
     dashboard_renderer.render.assert_called_once_with(
         dashboard_data,
         navigation_state=application.navigation_state,
+        terminal_navigation_state=application.terminal_navigation_state,
     )
 
 
@@ -415,10 +416,12 @@ def test_run_once_uses_previous_snapshot_on_second_execution() -> None:
             call(
                 first_dashboard_data,
                 navigation_state=application.navigation_state,
+        terminal_navigation_state=application.terminal_navigation_state,
             ),
             call(
                 second_dashboard_data,
                 navigation_state=application.navigation_state,
+        terminal_navigation_state=application.terminal_navigation_state,
             ),
         ]
     )
@@ -697,6 +700,7 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
     dashboard_renderer.render.assert_called_once_with(
         dashboard_data,
         navigation_state=application.navigation_state,
+        terminal_navigation_state=application.terminal_navigation_state,
     )
 
 
@@ -1777,13 +1781,16 @@ def test_run_multiple_navigation_keys_do_not_add_refreshes() -> None:
 
 
 def test_run_once_passes_current_navigation_state_to_renderer() -> None:
-    """El renderer debe recibir el estado UI vigente de la aplicación."""
+    """El renderer debe recibir los estados UI vigentes de la aplicación."""
 
     from app.dashboard.models.dashboard_navigation_state import (
         DashboardNavigationState,
         NavigablePanel,
     )
     from app.dashboard.models.panel_viewport import PanelViewport
+    from app.dashboard.models.terminal_navigation_state import (
+        TerminalNavigationState,
+    )
 
     application = Mock(spec=DashboardApplication)
 
@@ -1802,6 +1809,7 @@ def test_run_once_passes_current_navigation_state_to_renderer() -> None:
             page_size=5,
         ),
     )
+    terminal_navigation_state = TerminalNavigationState()
 
     dashboard_data = Mock(spec=DashboardData)
     rendered_dashboard = Mock(spec=Layout)
@@ -1812,6 +1820,7 @@ def test_run_once_passes_current_navigation_state_to_renderer() -> None:
         rendered_dashboard
     )
     application._navigation_state = navigation_state
+    application._terminal_navigation_state = terminal_navigation_state
 
     result = DashboardApplication.run_once(application)
 
@@ -1820,8 +1829,8 @@ def test_run_once_passes_current_navigation_state_to_renderer() -> None:
     application._dashboard_renderer.render.assert_called_once_with(
         dashboard_data,
         navigation_state=navigation_state,
+        terminal_navigation_state=terminal_navigation_state,
     )
-
 
 def test_run_once_preserves_temporal_stream_health_across_cycles() -> None:
     """La misma aplicación debe conservar el estado temporal entre ciclos."""
@@ -3990,3 +3999,79 @@ def test_dashboard_temporal_services_receive_only_operational_snapshots() -> Non
     )
 
     assert media_second.paths[0].reader_count == 2
+
+
+def test_view_navigation_state_reaches_renderer_across_run_once() -> None:
+    """La navegación de vista debe llegar al renderer en cada ciclo."""
+
+    from app.dashboard.models.dashboard_navigation_action import (
+        DashboardNavigationAction,
+    )
+    from app.dashboard.models.dashboard_navigation_state import (
+        DashboardNavigationState,
+    )
+    from app.dashboard.models.terminal_navigation_state import (
+        TerminalNavigationState,
+        TerminalView,
+    )
+
+    application = DashboardApplication.__new__(DashboardApplication)
+
+    dashboard_data = Mock(spec=DashboardData)
+    rendered_dashboard = Mock(spec=Layout)
+
+    application.build_dashboard = Mock(return_value=dashboard_data)
+    application._dashboard_renderer = Mock()
+    application._dashboard_renderer.render.return_value = rendered_dashboard
+
+    application._navigation_state = DashboardNavigationState()
+    application._terminal_navigation_state = TerminalNavigationState()
+
+    assert (
+        application.terminal_navigation_state.active_view
+        is TerminalView.GENERAL
+    )
+
+    application.apply_navigation_action(
+        DashboardNavigationAction.NEXT_VIEW
+    )
+
+    assert (
+        application.terminal_navigation_state.active_view
+        is TerminalView.INCOMING
+    )
+
+    result = DashboardApplication.run_once(application)
+
+    assert result is rendered_dashboard
+
+    application._dashboard_renderer.render.assert_called_once_with(
+        dashboard_data,
+        navigation_state=application.navigation_state,
+        terminal_navigation_state=TerminalNavigationState(
+            active_view=TerminalView.INCOMING,
+        ),
+    )
+
+    application._dashboard_renderer.reset_mock()
+
+    application.apply_navigation_action(
+        DashboardNavigationAction.PREVIOUS_VIEW
+    )
+
+    assert (
+        application.terminal_navigation_state.active_view
+        is TerminalView.GENERAL
+    )
+
+    result = DashboardApplication.run_once(application)
+
+    assert result is rendered_dashboard
+
+    application._dashboard_renderer.render.assert_called_once_with(
+        dashboard_data,
+        navigation_state=application.navigation_state,
+        terminal_navigation_state=TerminalNavigationState(
+            active_view=TerminalView.GENERAL,
+        ),
+    )

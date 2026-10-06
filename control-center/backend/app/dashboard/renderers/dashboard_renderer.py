@@ -8,6 +8,9 @@ from app.dashboard.models.dashboard_navigation_state import (
     DashboardNavigationState,
     NavigablePanel,
 )
+from app.dashboard.models.terminal_navigation_state import (
+    TerminalNavigationState,
+)
 from app.dashboard.renderers.active_alarms_panel_renderer import (
     ActiveAlarmsPanelRenderer,
 )
@@ -82,6 +85,7 @@ class DashboardRenderer:
         data: DashboardData,
         *,
         navigation_state: DashboardNavigationState | None = None,
+        terminal_navigation_state: TerminalNavigationState | None = None,
     ) -> Layout:
         """Convierte DashboardData en un layout completo de Rich."""
 
@@ -97,11 +101,38 @@ class DashboardRenderer:
                 "DashboardNavigationState or None"
             )
 
+        if (
+            terminal_navigation_state is not None
+            and not isinstance(
+                terminal_navigation_state,
+                TerminalNavigationState,
+            )
+        ):
+            raise TypeError(
+                "terminal_navigation_state must be a "
+                "TerminalNavigationState or None"
+            )
+
         layout = Layout(name="dashboard")
 
-        sections = [
-            Layout(name="summary", size=22),
-        ]
+        sections = []
+
+        if terminal_navigation_state is not None:
+            sections.append(
+                Layout(
+                    Panel(
+                        "VIEW: "
+                        f"{terminal_navigation_state.active_view.name}",
+                        title="TERMINAL",
+                    ),
+                    name="terminal_view",
+                    size=3,
+                )
+            )
+
+        sections.append(
+            Layout(name="summary", size=22)
+        )
 
         if data.network_interfaces is not None:
             sections.append(

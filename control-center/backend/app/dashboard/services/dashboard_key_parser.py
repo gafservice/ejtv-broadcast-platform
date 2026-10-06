@@ -17,6 +17,9 @@ class DashboardKeyParser:
         b"\x1b[A": DashboardNavigationAction.SCROLL_UP,
         b"\x1b[B": DashboardNavigationAction.SCROLL_DOWN,
 
+        b"\x1b[C": DashboardNavigationAction.NEXT_VIEW,
+        b"\x1b[D": DashboardNavigationAction.PREVIOUS_VIEW,
+
         b"\x1b[5~": DashboardNavigationAction.PAGE_UP,
         b"\x1b[6~": DashboardNavigationAction.PAGE_DOWN,
 

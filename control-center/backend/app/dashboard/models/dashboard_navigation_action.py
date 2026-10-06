@@ -11,6 +11,9 @@ class DashboardNavigationAction(str, Enum):
     NEXT_PANEL = "next_panel"
     PREVIOUS_PANEL = "previous_panel"
 
+    NEXT_VIEW = "next_view"
+    PREVIOUS_VIEW = "previous_view"
+
     SCROLL_UP = "scroll_up"
     SCROLL_DOWN = "scroll_down"
 

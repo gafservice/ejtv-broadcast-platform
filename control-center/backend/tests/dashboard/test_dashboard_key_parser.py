@@ -27,6 +27,14 @@ from app.dashboard.services.dashboard_key_parser import (
             DashboardNavigationAction.SCROLL_DOWN,
         ),
         (
+            b"\x1b[C",
+            DashboardNavigationAction.NEXT_VIEW,
+        ),
+        (
+            b"\x1b[D",
+            DashboardNavigationAction.PREVIOUS_VIEW,
+        ),
+        (
             b"\x1b[5~",
             DashboardNavigationAction.PAGE_UP,
         ),
@@ -56,8 +64,6 @@ def test_parser_maps_terminal_sequences(
         b"x",
         b" ",
         b"\x1b",
-        b"\x1b[C",
-        b"\x1b[D",
     ),
 )
 def test_parser_ignores_unknown_sequences(
