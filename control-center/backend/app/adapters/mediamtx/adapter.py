@@ -29,6 +29,43 @@ class MediaMTXAdapter:
         """Indica si la API de MediaMTX está disponible."""
         return self._client.health()
 
+    def get_source_configurations(self) -> dict[str, str]:
+        """Obtiene las fuentes efectivas indexadas por configuración."""
+        payload = self._client.get_path_configurations()
+
+        raw_items = payload.get("items", [])
+
+        if not isinstance(raw_items, list):
+            raise MediaMTXInvalidResponseError(
+                "El campo 'items' de configuración debe ser una lista."
+            )
+
+        configurations: dict[str, str] = {}
+
+        for item in raw_items:
+            if not isinstance(item, Mapping):
+                raise MediaMTXInvalidResponseError(
+                    "Uno o más elementos de configuración "
+                    "no son objetos válidos."
+                )
+
+            name = item.get("name")
+            source = item.get("source")
+
+            if not isinstance(name, str) or not name:
+                raise MediaMTXInvalidResponseError(
+                    "La configuración de path requiere un nombre válido."
+                )
+
+            if not isinstance(source, str):
+                raise MediaMTXInvalidResponseError(
+                    "La configuración de path requiere una fuente válida."
+                )
+
+            configurations[name] = source
+
+        return configurations
+
     def get_snapshot(self) -> MediaMTXSnapshot:
         """Obtiene el estado normalizado del servidor multimedia."""
         payload = self._client.get_paths()

@@ -1,5 +1,7 @@
 """Servicio de aplicación para construir datos del dashboard."""
 
+from urllib.parse import urlsplit
+
 from app.dashboard.models.panel_viewport import PanelViewport
 from app.dashboard.models.incoming_panel import IncomingPanelData, IncomingRowData
 from app.noc.current_state.signal_health_current_state import (
@@ -77,6 +79,7 @@ class DashboardService:
         measurement: StreamingMeasurement,
         session_snapshot: SessionSnapshot,
         health: StreamingHealth | None,
+        source_configurations: dict[str, str] | None = None,
         signal_health_current_states: tuple[
             SignalHealthCurrentState, ...
         ] = (),
@@ -145,10 +148,39 @@ class DashboardService:
                     / 1_000_000.0
                 )
 
-            protocol = None
+            protocol = _SOURCE_LABELS.get(
+                media_path.source.source_type,
+                media_path.source.source_type,
+            )
             remote_address = None
 
-            if publisher is not None:
+            source_uri = (
+                source_configurations.get(media_path.configuration_name)
+                if source_configurations is not None
+                else None
+            )
+
+            if source_uri:
+                parsed_source = urlsplit(source_uri)
+
+                source_scheme = parsed_source.scheme.lower()
+
+                if source_scheme == "udp+mpegts":
+                    protocol = "UDP"
+                elif source_scheme:
+                    protocol = source_scheme.upper()
+
+                if (
+                    source_scheme == "srt"
+                    and parsed_source.hostname is not None
+                    and parsed_source.port is not None
+                    and parsed_source.query.lower().find("mode=caller") >= 0
+                ):
+                    remote_address = (
+                        f"{parsed_source.hostname}:{parsed_source.port}"
+                    )
+
+            if publisher is not None and remote_address is None:
                 protocol = publisher.protocol.value.upper()
 
                 if publisher.remote_ip is not None:
@@ -1161,6 +1193,7 @@ class DashboardService:
         noc_snapshot: NodeSnapshot | None = None,
         active_connections_viewport: PanelViewport | None = None,
         signal_health_current_states: tuple[SignalHealthCurrentState, ...] = (),
+        source_configurations: dict[str, str] | None = None,
     ) -> DashboardData:
         """Construye el dashboard completo desde snapshot y medición."""
 
@@ -1236,6 +1269,7 @@ class DashboardService:
                 signal_health_current_states=(
                     signal_health_current_states
                 ),
+                source_configurations=source_configurations,
             )
             if session_snapshot is not None
             else None

@@ -419,6 +419,7 @@ class DashboardApplication:
         api_online = self._mediamtx_adapter.health()
 
         snapshot = self._mediamtx_adapter.get_snapshot()
+        source_configurations = self._mediamtx_adapter.get_source_configurations()
 
         session_snapshot = self._session_adapter.get_snapshot()
 
@@ -647,6 +648,7 @@ class DashboardApplication:
             "signal_health_current_states": (
                 signal_health_current_states
             ),
+            "source_configurations": source_configurations,
         }
 
         if streaming_health is not None:

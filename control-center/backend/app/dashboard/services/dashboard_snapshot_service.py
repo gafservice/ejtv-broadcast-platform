@@ -69,6 +69,7 @@ class DashboardSnapshotInput:
     noc_snapshot: NodeSnapshot | None = None
     active_connections_viewport: PanelViewport | None = None
     signal_health_current_states: tuple[SignalHealthCurrentState, ...] = ()
+    source_configurations: dict[str, str] | None = None
 
 
 class DashboardSnapshotService:
@@ -152,5 +153,8 @@ class DashboardSnapshotService:
             ),
             signal_health_current_states=(
                 snapshot_input.signal_health_current_states
+            ),
+            source_configurations=(
+                snapshot_input.source_configurations
             ),
         )

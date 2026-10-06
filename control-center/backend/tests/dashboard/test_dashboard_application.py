@@ -63,6 +63,12 @@ def test_run_once_builds_and_renders_dashboard() -> None:
     mediamtx_adapter = Mock()
     mediamtx_adapter.health.return_value = True
     mediamtx_adapter.get_snapshot.return_value = snapshot
+    source_configurations = Mock(
+        name="source-configurations"
+    )
+    mediamtx_adapter.get_source_configurations.return_value = (
+        source_configurations
+    )
 
     session_adapter = Mock()
     session_adapter.get_snapshot.return_value = session_snapshot
@@ -167,6 +173,7 @@ def test_run_once_builds_and_renders_dashboard() -> None:
             page_size=7,
         ),
         signal_health_current_states=(),
+        source_configurations=source_configurations,
     )
 
     dashboard_renderer.render.assert_called_once_with(
@@ -541,6 +548,12 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
     mediamtx_adapter = Mock()
     mediamtx_adapter.health.return_value = True
     mediamtx_adapter.get_snapshot.return_value = snapshot
+    source_configurations = Mock(
+        name="source-configurations"
+    )
+    mediamtx_adapter.get_source_configurations.return_value = (
+        source_configurations
+    )
 
     session_adapter = Mock()
     session_adapter.get_snapshot.return_value = (
@@ -699,6 +712,7 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
             page_size=7,
         ),
         signal_health_current_states=(),
+        source_configurations=source_configurations,
     )
 
     dashboard_renderer.render.assert_called_once_with(
@@ -4325,3 +4339,98 @@ def test_application_reads_signal_health_current_state_for_media_profiles() -> N
     assert snapshot_input.signal_health_current_states == (
         signal_state,
     )
+
+
+
+def test_dashboard_cycle_forwards_source_configurations() -> None:
+    """One dashboard cycle forwards effective source configuration evidence."""
+
+    snapshot = Mock(name="mediamtx-snapshot")
+    snapshot.captured_at = Mock(name="captured-at")
+
+    source_configurations = {
+        "future-listener": "udp+mpegts://:12001",
+        "future-caller": "srt://198.51.100.25:9000?mode=caller",
+    }
+
+    mediamtx_adapter = Mock()
+    mediamtx_adapter.health.return_value = True
+    mediamtx_adapter.get_snapshot.return_value = snapshot
+    mediamtx_adapter.get_source_configurations.return_value = (
+        source_configurations
+    )
+
+    session_snapshot = Mock(name="session-snapshot")
+    session_adapter = Mock()
+    session_adapter.get_snapshot.return_value = session_snapshot
+
+    measurement = Mock(name="streaming-measurement")
+    streaming_service = Mock()
+    streaming_service.compare.return_value = measurement
+
+    session_measurement = Mock(name="session-measurement")
+    session_service = Mock()
+    session_service.measure.return_value = session_measurement
+
+    system_info = Mock(name="system-info")
+    system_info.hostname = "future-host"
+
+    system_resources = Mock(name="system-resources")
+    interface_infos = Mock(name="interface-infos")
+
+    system_service = Mock()
+    system_service.get_system_info.return_value = system_info
+    system_service.get_system_resources.return_value = system_resources
+    system_service.get_network_interface_infos.return_value = interface_infos
+
+    network_telemetry_service = Mock()
+    network_telemetry_service.build.return_value = Mock(
+        name="network-telemetry"
+    )
+
+    dashboard_service = Mock()
+    dashboard_service.build_network_interfaces_panel.return_value = Mock(
+        name="network-panel"
+    )
+
+    dashboard_data = Mock(name="dashboard-data")
+    dashboard_data.active_connections = Mock()
+    dashboard_data.active_connections.total_items = 0
+    dashboard_data.active_alarms = None
+    dashboard_data.recent_events = None
+
+    dashboard_snapshot_service = Mock()
+    dashboard_snapshot_service.build_snapshot.return_value = dashboard_data
+
+    application = DashboardApplication(
+        mediamtx_adapter=mediamtx_adapter,
+        session_adapter=session_adapter,
+        streaming_service=streaming_service,
+        session_service=session_service,
+        dashboard_service=dashboard_service,
+        dashboard_renderer=Mock(),
+        system_service=system_service,
+        dashboard_snapshot_service=dashboard_snapshot_service,
+        network_telemetry_service=network_telemetry_service,
+    )
+
+    result = application.build_dashboard()
+
+    assert result is dashboard_data
+
+
+    mediamtx_adapter.get_snapshot.assert_called_once_with()
+    mediamtx_adapter.get_source_configurations.assert_called_once_with()
+
+    dashboard_snapshot_service.build_snapshot.assert_called_once_with(
+        dashboard_snapshot_service.build_snapshot.call_args.args[0]
+    )
+
+    snapshot_input = (
+        dashboard_snapshot_service
+        .build_snapshot
+        .call_args
+        .args[0]
+    )
+
+    assert snapshot_input.source_configurations is source_configurations

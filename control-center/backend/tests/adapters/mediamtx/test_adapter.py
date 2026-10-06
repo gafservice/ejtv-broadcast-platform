@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import Mock
+
 import pytest
 
 from app.adapters.mediamtx import MediaMTXAdapter
@@ -207,3 +209,45 @@ def test_health_delegates_to_client() -> None:
     )
 
     assert adapter.health() is False
+
+
+def test_get_source_configurations_normalizes_effective_path_sources() -> None:
+    """Effective MediaMTX path sources are normalized by configuration name."""
+
+    client = Mock()
+
+    client.get_path_configurations.return_value = {
+        "itemCount": 4,
+        "pageCount": 1,
+        "items": [
+            {
+                "name": "all_others",
+                "source": "publisher",
+            },
+            {
+                "name": "future-listener",
+                "source": "udp+mpegts://:12001",
+            },
+            {
+                "name": "future-caller",
+                "source": "srt://198.51.100.25:9000?mode=caller",
+            },
+            {
+                "name": "future-empty",
+                "source": "",
+            },
+        ],
+    }
+
+    adapter = MediaMTXAdapter(client)
+
+    result = adapter.get_source_configurations()
+
+    assert result == {
+        "all_others": "publisher",
+        "future-listener": "udp+mpegts://:12001",
+        "future-caller": "srt://198.51.100.25:9000?mode=caller",
+        "future-empty": "",
+    }
+
+    client.get_path_configurations.assert_called_once_with()

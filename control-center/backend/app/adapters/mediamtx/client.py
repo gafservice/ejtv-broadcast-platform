@@ -24,6 +24,7 @@ class MediaMTXClient:
     """Encapsula los endpoints HTTP utilizados de MediaMTX."""
 
     PATHS_ENDPOINT = "/v3/paths/list"
+    PATH_CONFIGURATIONS_ENDPOINT = "/v3/config/paths/list"
 
     def __init__(self, http_client: HttpClient) -> None:
         self._http_client = http_client
@@ -77,6 +78,38 @@ class MediaMTXClient:
         if items is not None and not isinstance(items, list):
             raise MediaMTXInvalidResponseError(
                 "El campo 'items' debe contener una lista."
+            )
+
+        return payload
+
+
+    def get_path_configurations(self) -> dict[str, Any]:
+        """Obtiene la configuración efectiva de paths de MediaMTX."""
+        try:
+            response = self._http_client.get(
+                self.PATH_CONFIGURATIONS_ENDPOINT
+            )
+            payload = response.json()
+
+        except HttpTimeoutError as exc:
+            raise MediaMTXTimeoutError(str(exc)) from exc
+
+        except HttpConnectionError as exc:
+            raise MediaMTXConnectionError(str(exc)) from exc
+
+        except HttpStatusError as exc:
+            raise MediaMTXHTTPError(
+                status_code=exc.status_code,
+                message=exc.message,
+            ) from exc
+
+        except HttpInvalidResponseError as exc:
+            raise MediaMTXInvalidResponseError(str(exc)) from exc
+
+        if not isinstance(payload, dict):
+            raise MediaMTXInvalidResponseError(
+                "La respuesta de configuración de MediaMTX "
+                "debe ser un objeto JSON."
             )
 
         return payload

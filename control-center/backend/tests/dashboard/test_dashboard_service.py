@@ -3849,7 +3849,7 @@ def test_build_incoming_panel_projects_source_bearing_path_without_publisher() -
     assert row.status == "ACTIVE"
     assert row.bitrate_receive_mbps == 5.75
     assert row.health_status is None
-    assert row.protocol is None
+    assert row.protocol == "SRT"
     assert row.remote_address is None
 
 
@@ -4214,7 +4214,7 @@ def test_build_incoming_panel_does_not_guess_ambiguous_publisher() -> None:
     assert row.path_name == "service-ambiguous"
     assert row.source == "RTMP"
     assert row.bitrate_receive_mbps == 4.0
-    assert row.protocol is None
+    assert row.protocol == "RTMP"
     assert row.remote_address is None
 
 
@@ -4833,3 +4833,430 @@ def test_incoming_panel_does_not_use_streaming_health_when_signal_state_is_absen
     assert panel.rows[0].path_name == 'enlace'
     assert panel.rows[0].health_status is None
     assert panel.rows[0].health_reason is None
+
+
+def test_incoming_protocol_comes_from_media_source_without_publisher_session() -> None:
+    """INCOMING protocol must come from path source evidence, not a session."""
+    from datetime import datetime, timezone
+    from unittest.mock import Mock
+
+    from app.domain.sessions import SessionSnapshot
+    from app.domain.streaming import (
+        MediaMTXSnapshot,
+        MediaPath,
+        MediaPathStatus,
+        MediaSource,
+    )
+
+    captured_at = datetime(
+        2026,
+        10,
+        6,
+        16,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    media_path = MediaPath(
+        name="future-service",
+        configuration_name="future-service",
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type="srtSource",
+            source_id=None,
+        ),
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(media_path,),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    measurement = Mock()
+    measurement.paths = ()
+
+    session_snapshot = SessionSnapshot(
+        captured_at=captured_at,
+        sessions=(),
+    )
+
+    panel = DashboardService().build_incoming_panel(
+        snapshot=snapshot,
+        measurement=measurement,
+        session_snapshot=session_snapshot,
+        health=None,
+    )
+
+    assert len(panel.rows) == 1
+
+    row = panel.rows[0]
+
+    assert row.path_name == "future-service"
+    assert row.protocol == "SRT"
+    assert row.remote_address is None
+
+
+def test_incoming_remote_uses_configured_srt_caller_endpoint() -> None:
+    """A configured SRT caller endpoint is valid INCOMING remote evidence."""
+
+    from app.domain.sessions import SessionSnapshot
+
+    captured_at = datetime(
+        2026, 10, 6, 16, 30, tzinfo=timezone.utc
+    )
+
+    media_path = MediaPath(
+        name="future-service",
+        configuration_name="future-service",
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type="srtSource",
+            source_id=None,
+        ),
+        readers=(),
+        inbound_bytes=0,
+        outbound_bytes=0,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(media_path,),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    path_measurement = StreamingPathMeasurement(
+        name="future-service",
+        status=MediaPathStatus.ACTIVE,
+        previous_status=MediaPathStatus.ACTIVE,
+        reader_count=0,
+        reader_delta=0,
+        inbound_delta_bytes=625_000,
+        outbound_delta_bytes=0,
+        inbound_bitrate_bps=5_000_000.0,
+        outbound_bitrate_bps=0.0,
+        state_changed=False,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=captured_at - timedelta(seconds=1),
+        interval_seconds=1.0,
+        paths=(path_measurement,),
+        total_inbound_bitrate_bps=5_000_000.0,
+        total_outbound_bitrate_bps=0.0,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    session_snapshot = SessionSnapshot(
+        captured_at=captured_at,
+        sessions=(),
+    )
+
+    panel = DashboardService().build_incoming_panel(
+        snapshot=snapshot,
+        measurement=measurement,
+        session_snapshot=session_snapshot,
+        health=None,
+        source_configurations={
+            "future-service": "srt://198.51.100.25:9000?mode=caller",
+        },
+    )
+
+    assert len(panel.rows) == 1
+
+    row = panel.rows[0]
+
+    assert row.path_name == "future-service"
+    assert row.protocol == "SRT"
+    assert row.remote_address == "198.51.100.25:9000"
+
+
+
+def test_incoming_remote_does_not_treat_udp_listener_as_remote() -> None:
+    """A UDP listener endpoint is local configuration, not remote identity."""
+
+    from unittest.mock import Mock
+
+    from app.domain.sessions import SessionSnapshot
+
+    captured_at = datetime(
+        2026, 10, 6, 16, 40, tzinfo=timezone.utc
+    )
+
+    media_path = MediaPath(
+        name="future-listener",
+        configuration_name="future-listener",
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type="mpegtsSource",
+            source_id=None,
+        ),
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(media_path,),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    measurement = Mock()
+    measurement.paths = ()
+
+    panel = DashboardService().build_incoming_panel(
+        snapshot=snapshot,
+        measurement=measurement,
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(),
+        ),
+        health=None,
+        source_configurations={
+            "future-listener": "udp+mpegts://:12001",
+        },
+    )
+
+    assert len(panel.rows) == 1
+    assert panel.rows[0].path_name == "future-listener"
+    assert panel.rows[0].remote_address is None
+
+
+
+def test_incoming_srt_caller_configuration_is_not_overridden_by_publisher() -> None:
+    """Contradictory publisher evidence must not override an SRT caller source."""
+
+    from unittest.mock import Mock
+
+    from app.domain.sessions import (
+        ActiveSession,
+        SessionProtocol,
+        SessionRole,
+        SessionSnapshot,
+    )
+
+    captured_at = datetime(
+        2026, 10, 6, 16, 45, tzinfo=timezone.utc
+    )
+
+    media_path = MediaPath(
+        name="future-caller",
+        configuration_name="future-caller",
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type="srtSource",
+            source_id=None,
+        ),
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(media_path,),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    measurement = Mock()
+    measurement.paths = ()
+
+    contradictory_publisher = ActiveSession(
+        session_id="contradictory-publisher",
+        protocol=SessionProtocol.RTMP,
+        role=SessionRole.PUBLISHER,
+        state="publish",
+        remote_ip="192.0.2.44",
+        remote_port=1935,
+        path="future-caller",
+        connected_since=captured_at,
+    )
+
+    panel = DashboardService().build_incoming_panel(
+        snapshot=snapshot,
+        measurement=measurement,
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(contradictory_publisher,),
+        ),
+        health=None,
+        source_configurations={
+            "future-caller": "srt://198.51.100.25:9000?mode=caller",
+        },
+    )
+
+    assert len(panel.rows) == 1
+
+    row = panel.rows[0]
+
+    assert row.path_name == "future-caller"
+    assert row.protocol == "SRT"
+    assert row.remote_address == "198.51.100.25:9000"
+
+
+def test_build_dashboard_from_measurement_forwards_source_configurations() -> None:
+    """Effective source configuration must reach the INCOMING composition."""
+
+    from unittest.mock import patch
+
+    captured_at = datetime(
+        2026,
+        10,
+        6,
+        17,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    media_path = MediaPath(
+        name="future-caller",
+        configuration_name="future-caller",
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type="srtSource",
+            source_id=None,
+        ),
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(media_path,),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    path_measurement = StreamingPathMeasurement(
+        name="future-caller",
+        status=MediaPathStatus.ACTIVE,
+        previous_status=MediaPathStatus.ACTIVE,
+        reader_count=0,
+        reader_delta=0,
+        inbound_delta_bytes=625_000,
+        outbound_delta_bytes=0,
+        inbound_bitrate_bps=5_000_000.0,
+        outbound_bitrate_bps=0.0,
+        state_changed=False,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=(
+            captured_at - timedelta(seconds=1)
+        ),
+        interval_seconds=1.0,
+        paths=(path_measurement,),
+        total_inbound_bitrate_bps=5_000_000.0,
+        total_outbound_bitrate_bps=0.0,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    session_snapshot = SessionSnapshot(
+        captured_at=captured_at,
+        sessions=(),
+    )
+
+    source_configurations = {
+        "future-caller": "srt://198.51.100.25:9000?mode=caller",
+    }
+
+    service = DashboardService()
+
+    with patch.object(
+        service,
+        "build_incoming_panel",
+        wraps=service.build_incoming_panel,
+    ) as incoming_spy:
+        service.build_dashboard_from_measurement(
+            hostname="server-01",
+            mediamtx_online=True,
+            api_online=True,
+            snapshot=snapshot,
+            measurement=measurement,
+            session_snapshot=session_snapshot,
+            source_configurations=source_configurations,
+        )
+
+    assert incoming_spy.call_count == 1
+
+    assert (
+        incoming_spy.call_args.kwargs["source_configurations"]
+        is source_configurations
+    )
+
+def test_incoming_panel_uses_udp_protocol_for_configured_mpegts_listener() -> None:
+    """Configured UDP+MPEGTS keeps source identity but exposes UDP transport."""
+    from unittest.mock import Mock
+
+    from app.domain.sessions import SessionSnapshot
+
+    captured_at = datetime(
+        2026,
+        10,
+        6,
+        12,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    media_path = MediaPath(
+        name="future-listener",
+        configuration_name="future-listener",
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type="mpegtsSource",
+            source_id=None,
+        ),
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(media_path,),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    measurement = Mock()
+    measurement.paths = ()
+
+    session_snapshot = SessionSnapshot(
+        captured_at=captured_at,
+        sessions=(),
+    )
+
+    panel = DashboardService().build_incoming_panel(
+        snapshot=snapshot,
+        measurement=measurement,
+        session_snapshot=session_snapshot,
+        health=None,
+        source_configurations={
+            "future-listener": "udp+mpegts://:12001",
+        },
+    )
+
+    assert len(panel.rows) == 1
+
+    row = panel.rows[0]
+
+    assert row.source == "MPEG-TS"
+    assert row.protocol == "UDP"
+    assert row.remote_address is None

@@ -142,3 +142,44 @@ def test_health_is_false_when_api_fails() -> None:
     client = MediaMTXClient(http)  # type: ignore[arg-type]
 
     assert client.health() is False
+
+def test_get_path_configurations_translates_invalid_json() -> None:
+    """Invalid config JSON is translated at the MediaMTX boundary."""
+    class InvalidJsonHttpClient:
+        base_url = "http://127.0.0.1:9997"
+
+        def __init__(self) -> None:
+            self.requested_path: str | None = None
+
+        def get(self, path: str) -> HttpResponse:
+            self.requested_path = path
+            return HttpResponse(
+                status_code=200,
+                headers={"Content-Type": "application/json"},
+                body=b"{invalid-json",
+            )
+
+    http = InvalidJsonHttpClient()
+    client = MediaMTXClient(http)  # type: ignore[arg-type]
+
+    with pytest.raises(MediaMTXInvalidResponseError):
+        client.get_path_configurations()
+
+    assert http.requested_path == "/v3/config/paths/list"
+
+def test_get_path_configurations_preserves_http_status_and_message() -> None:
+    """Config endpoint preserves HTTP status and original message."""
+    http = FakeHttpClient(
+        error=HttpStatusError(
+            503,
+            "configuration service unavailable",
+        )
+    )
+    client = MediaMTXClient(http)  # type: ignore[arg-type]
+
+    with pytest.raises(MediaMTXHTTPError) as error:
+        client.get_path_configurations()
+
+    assert error.value.status_code == 503
+    assert error.value.message == "configuration service unavailable"
+    assert http.requested_path == "/v3/config/paths/list"
