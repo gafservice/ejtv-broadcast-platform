@@ -74,6 +74,9 @@ from app.noc.current_state.sqlite_node_health_diagnostic_repository import (
 from app.noc.current_state.sqlite_media_health_current_state_repository import (
     SQLiteMediaHealthCurrentStateRepository,
 )
+from app.noc.current_state.sqlite_signal_health_current_state_repository import (
+    SQLiteSignalHealthCurrentStateRepository,
+)
 from app.noc.history.evidence_day_sealer import (
     EvidenceDaySealer,
 )
@@ -496,6 +499,16 @@ def get_media_health_current_state_repository(
 
 
 @lru_cache
+def get_signal_health_current_state_repository(
+) -> SQLiteSignalHealthCurrentStateRepository:
+    """Build the shared durable Signal Health current-state repository."""
+
+    return SQLiteSignalHealthCurrentStateRepository(
+        get_noc_history_database()
+    )
+
+
+@lru_cache
 def get_noc_repository() -> InMemoryNodeRepository:
     """Construye el repositorio compartido del runtime NOC."""
 
@@ -899,6 +912,9 @@ def get_session_observation_runtime() -> SessionObservationRuntime:
         ),
         signal_health_operational_runtime=(
             get_signal_health_operational_runtime()
+        ),
+        signal_health_current_state_repository=(
+            get_signal_health_current_state_repository()
         ),
         signal_health_transition_detector=(
             get_signal_health_transition_detector()

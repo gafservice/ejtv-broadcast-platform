@@ -72,3 +72,57 @@ def test_render_empty_reports_no_incoming_signals() -> None:
 
     assert "INCOMING SIGNALS" in output
     assert "No incoming signals." in output
+
+
+def test_renderer_presents_health_reason_without_interpretation() -> None:
+    data = IncomingPanelData(
+        rows=(
+            IncomingRowData(
+                path_name="signal-a",
+                source="SRT",
+                status="ACTIVE",
+                bitrate_receive_mbps=6.0,
+                health_status=HealthStatus.DEGRADED,
+                health_reason="RTT 180 ms",
+            ),
+        ),
+    )
+
+    rendered = IncomingPanelRenderer().render(data)
+
+    console = Console(
+        record=True,
+        width=160,
+    )
+    console.print(rendered)
+    output = console.export_text()
+
+    assert "Reason" in output
+    assert "RTT 180 ms" in output
+
+
+def test_renderer_presents_na_when_health_reason_is_unavailable() -> None:
+    data = IncomingPanelData(
+        rows=(
+            IncomingRowData(
+                path_name="signal-a",
+                source="MPEG-TS",
+                status="ACTIVE",
+                bitrate_receive_mbps=4.5,
+                health_status=HealthStatus.HEALTHY,
+                health_reason=None,
+            ),
+        ),
+    )
+
+    rendered = IncomingPanelRenderer().render(data)
+
+    console = Console(
+        record=True,
+        width=160,
+    )
+    console.print(rendered)
+    output = console.export_text()
+
+    assert "Reason" in output
+    assert "N/A" in output

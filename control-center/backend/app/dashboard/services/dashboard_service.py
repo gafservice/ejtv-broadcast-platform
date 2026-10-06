@@ -2,6 +2,9 @@
 
 from app.dashboard.models.panel_viewport import PanelViewport
 from app.dashboard.models.incoming_panel import IncomingPanelData, IncomingRowData
+from app.noc.current_state.signal_health_current_state import (
+    SignalHealthCurrentState,
+)
 from app.dashboard.models import (
     ActiveAlarmRowData,
     ActiveAlarmsPanelData,
@@ -74,6 +77,9 @@ class DashboardService:
         measurement: StreamingMeasurement,
         session_snapshot: SessionSnapshot,
         health: StreamingHealth | None,
+        signal_health_current_states: tuple[
+            SignalHealthCurrentState, ...
+        ] = (),
     ) -> IncomingPanelData:
         """Project canonical incoming-path evidence for presentation."""
 
@@ -82,14 +88,10 @@ class DashboardService:
             for path_measurement in measurement.paths
         }
 
-        health_by_path = (
-            {
-                path_health.name: path_health
-                for path_health in health.paths
-            }
-            if health is not None
-            else {}
-        )
+        signal_health_by_path = {
+            state.path_name: state
+            for state in signal_health_current_states
+        }
 
         publishers_by_path: dict[str, list[ActiveSession]] = {}
 
@@ -112,7 +114,15 @@ class DashboardService:
             path_measurement = measurements_by_path.get(
                 media_path.name
             )
-            path_health = health_by_path.get(media_path.name)
+            signal_health_state = signal_health_by_path.get(
+                media_path.name
+            )
+            health_status = (
+                signal_health_state.health.status
+                if signal_health_state is not None
+                else None
+            )
+            health_reason = None
 
             publishers = publishers_by_path.get(
                 media_path.name,
@@ -159,13 +169,10 @@ class DashboardService:
                     ),
                     status=media_path.status.value.upper(),
                     bitrate_receive_mbps=bitrate_receive_mbps,
-                    health_status=(
-                        path_health.status
-                        if path_health is not None
-                        else None
-                    ),
+                    health_status=health_status,
                     protocol=protocol,
                     remote_address=remote_address,
+                    health_reason=health_reason,
                 )
             )
 
@@ -1153,6 +1160,7 @@ class DashboardService:
         platform_health: PlatformHealth | None = None,
         noc_snapshot: NodeSnapshot | None = None,
         active_connections_viewport: PanelViewport | None = None,
+        signal_health_current_states: tuple[SignalHealthCurrentState, ...] = (),
     ) -> DashboardData:
         """Construye el dashboard completo desde snapshot y medición."""
 
@@ -1225,6 +1233,9 @@ class DashboardService:
                 measurement=measurement,
                 session_snapshot=session_snapshot,
                 health=health,
+                signal_health_current_states=(
+                    signal_health_current_states
+                ),
             )
             if session_snapshot is not None
             else None

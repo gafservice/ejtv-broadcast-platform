@@ -18,6 +18,7 @@ class IncomingRowData:
     health_status: HealthStatus | None
     protocol: str | None = None
     remote_address: str | None = None
+    health_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

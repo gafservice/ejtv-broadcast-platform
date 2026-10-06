@@ -32,6 +32,7 @@ from app.domain.streaming import (
 )
 from app.domain.streaming.aggregation import PlatformHealth
 from app.noc.domain.node_snapshot import NodeSnapshot
+from app.noc.current_state.signal_health_current_state import SignalHealthCurrentState
 from app.domain.system import SystemResources
 
 
@@ -67,6 +68,7 @@ class DashboardSnapshotInput:
     platform_health: PlatformHealth | None = None
     noc_snapshot: NodeSnapshot | None = None
     active_connections_viewport: PanelViewport | None = None
+    signal_health_current_states: tuple[SignalHealthCurrentState, ...] = ()
 
 
 class DashboardSnapshotService:
@@ -147,5 +149,8 @@ class DashboardSnapshotService:
             noc_snapshot=snapshot_input.noc_snapshot,
             active_connections_viewport=(
                 snapshot_input.active_connections_viewport
+            ),
+            signal_health_current_states=(
+                snapshot_input.signal_health_current_states
             ),
         )

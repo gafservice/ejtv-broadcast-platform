@@ -166,6 +166,7 @@ def test_run_once_builds_and_renders_dashboard() -> None:
             offset=0,
             page_size=7,
         ),
+        signal_health_current_states=(),
     )
 
     dashboard_renderer.render.assert_called_once_with(
@@ -697,6 +698,7 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
             offset=0,
             page_size=7,
         ),
+        signal_health_current_states=(),
     )
 
     dashboard_renderer.render.assert_called_once_with(
@@ -4166,3 +4168,160 @@ def test_application_transports_session_snapshot_into_dashboard_snapshot_input()
     )
 
     assert snapshot_input.session_snapshot is session_snapshot
+
+def test_application_reads_signal_health_current_state_for_media_profiles() -> None:
+    """Dashboard reads durable Signal Health by canonical profile identity."""
+    from datetime import datetime, timezone
+
+    from app.domain.sessions import SessionSnapshot
+    from app.domain.streaming import (
+        MeasurementQuality,
+        MediaMTXSnapshot,
+        StreamingMeasurement,
+    )
+    from app.domain.streaming.expected_media_profile import (
+        ExpectedMediaProfile,
+    )
+    from app.domain.streaming.health import HealthStatus
+    from app.domain.streaming.signal_health import SignalHealth
+    from app.noc.current_state.signal_health_current_state import (
+        SignalHealthCurrentState,
+        SignalHealthCurrentStateRepository,
+    )
+
+    captured_at = datetime(
+        2026,
+        10,
+        6,
+        14,
+        30,
+        tzinfo=timezone.utc,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=0,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=None,
+        interval_seconds=None,
+        paths=(),
+        total_inbound_bitrate_bps=None,
+        total_outbound_bitrate_bps=None,
+        quality=MeasurementQuality.NOT_AVAILABLE,
+    )
+
+    session_snapshot = SessionSnapshot(
+        captured_at=captured_at,
+        sessions=(),
+    )
+
+    session_measurement = Mock()
+
+    mediamtx_adapter = Mock()
+    mediamtx_adapter.health.return_value = True
+    mediamtx_adapter.get_snapshot.return_value = snapshot
+
+    session_adapter = Mock()
+    session_adapter.get_snapshot.return_value = session_snapshot
+
+    streaming_service = Mock()
+    streaming_service.compare.return_value = measurement
+
+    session_service = Mock()
+    session_service.measure.return_value = session_measurement
+
+    dashboard_service = Mock()
+    dashboard_data = Mock(spec=DashboardData)
+    dashboard_data.active_connections = Mock()
+    dashboard_data.active_connections.total_items = 0
+    dashboard_data.active_alarms = None
+    dashboard_data.recent_events = None
+    dashboard_service.build_dashboard_from_measurement.return_value = (
+        dashboard_data
+    )
+
+    dashboard_snapshot_service = Mock()
+    dashboard_snapshot_service.build_snapshot.return_value = (
+        dashboard_data
+    )
+
+    dashboard_renderer = Mock()
+
+    system_service = Mock()
+    system_info = Mock()
+    system_info.hostname = 'server-01'
+    system_service.get_system_info.return_value = system_info
+    system_service.get_system_resources.return_value = Mock()
+    system_service.get_network_interface_infos.return_value = ()
+
+    network_telemetry_service = Mock()
+    network_telemetry_service.build.return_value = Mock()
+    dashboard_service.build_network_interfaces_panel.return_value = Mock()
+
+    signal_state = SignalHealthCurrentState(
+        profile_id='impact-main',
+        service_id='impact',
+        path_name='impact',
+        observed_at=captured_at,
+        health=SignalHealth(
+            profile_id='impact-main',
+            service_id='impact',
+            path_name='impact',
+            media_status=HealthStatus.HEALTHY,
+            transport_status=HealthStatus.HEALTHY,
+            status=HealthStatus.HEALTHY,
+        ),
+    )
+
+    signal_repository = Mock(
+        spec=SignalHealthCurrentStateRepository
+    )
+    signal_repository.latest.return_value = signal_state
+
+    media_profiles = (
+        ExpectedMediaProfile(
+            profile_id='impact-main',
+            service_id='impact',
+            path_name='impact',
+        ),
+    )
+
+    application = DashboardApplication(
+        mediamtx_adapter=mediamtx_adapter,
+        session_adapter=session_adapter,
+        streaming_service=streaming_service,
+        session_service=session_service,
+        dashboard_service=dashboard_service,
+        dashboard_renderer=dashboard_renderer,
+        system_service=system_service,
+        dashboard_snapshot_service=dashboard_snapshot_service,
+        network_telemetry_service=network_telemetry_service,
+        media_profiles=media_profiles,
+        signal_health_current_state_repository=signal_repository,
+    )
+
+    result = application.build_dashboard()
+
+    assert result is dashboard_data
+
+    signal_repository.latest.assert_called_once_with(
+        profile_id='impact-main',
+        service_id='impact',
+        path_name='impact',
+    )
+
+    snapshot_input = (
+        dashboard_snapshot_service
+        .build_snapshot
+        .call_args
+        .args[0]
+    )
+
+    assert snapshot_input.signal_health_current_states == (
+        signal_state,
+    )

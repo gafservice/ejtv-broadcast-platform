@@ -27,6 +27,10 @@ from app.domain.streaming.expected_media_profile import ExpectedMediaProfile
 from app.noc.current_state.media_health_current_state import (
     MediaHealthCurrentStateRepository,
 )
+from app.noc.current_state.signal_health_current_state import (
+    SignalHealthCurrentState,
+    SignalHealthCurrentStateRepository,
+)
 from app.noc.domain.node_id import NodeId
 from app.noc.domain.node_instance import NodeInstanceId
 from app.noc.runtime.session_operational_runtime import (
@@ -74,6 +78,9 @@ class SessionObservationRuntime:
         ) = None,
         signal_health_operational_runtime: (
             SignalHealthOperationalRuntime | None
+        ) = None,
+        signal_health_current_state_repository: (
+            SignalHealthCurrentStateRepository | None
         ) = None,
         signal_health_transition_detector: (
             SignalHealthTransitionDetector | None
@@ -172,6 +179,9 @@ class SessionObservationRuntime:
         self._signal_health_operational_runtime = (
             signal_health_operational_runtime
         )
+        self._signal_health_current_state_repository = (
+            signal_health_current_state_repository
+        )
         self._signal_health_transition_detector = (
             signal_health_transition_detector
         )
@@ -251,6 +261,24 @@ class SessionObservationRuntime:
                         measurement=streaming_measurement,
                     )
                 )
+
+                signal_current_state_repository = (
+                    self._signal_health_current_state_repository
+                )
+
+                if (
+                    signal_current_state_repository is not None
+                    and current_signal_health.path_name is not None
+                ):
+                    signal_current_state_repository.save(
+                        state=SignalHealthCurrentState(
+                            profile_id=current_signal_health.profile_id,
+                            service_id=current_signal_health.service_id,
+                            path_name=current_signal_health.path_name,
+                            observed_at=media_snapshot.captured_at,
+                            health=current_signal_health,
+                        )
+                    )
 
                 detector = (
                     self._signal_health_transition_detector

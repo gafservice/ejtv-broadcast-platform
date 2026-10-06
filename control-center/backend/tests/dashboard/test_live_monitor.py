@@ -73,6 +73,19 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
     dashboard_application = Mock()
 
     with ExitStack() as stack:
+        media_profile_loader_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor."
+                "NodeMediaProfileLoader"
+            )
+        )
+        signal_current_state_repository_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor."
+                "SQLiteSignalHealthCurrentStateRepository"
+            )
+        )
+
         capacity_service_class = stack.enter_context(
             patch(
                 "app.dashboard.live_monitor.CapacityService"
@@ -632,6 +645,10 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
         history_query_service=history_query_service,
         node_id=node_id,
         instance_id=node_instance_id,
+        media_profiles=(media_profile_loader_class.return_value.load.return_value),
+        signal_health_current_state_repository=(
+            signal_current_state_repository_class.return_value
+        ),
     )
 
 
@@ -660,6 +677,19 @@ def test_build_dashboard_application_disables_temporal_health_without_policy() -
     dashboard_application = Mock()
 
     with ExitStack() as stack:
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor."
+                "NodeMediaProfileLoader"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor."
+                "SQLiteSignalHealthCurrentStateRepository"
+            )
+        )
+
         stack.enter_context(
             patch(
                 "app.dashboard.live_monitor.CapacityService"
@@ -981,6 +1011,19 @@ def test_build_dashboard_application_composes_stream_health_event_runtime() -> N
     event_history_repository = Mock()
 
     with ExitStack() as stack:
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor."
+                "NodeMediaProfileLoader"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor."
+                "SQLiteSignalHealthCurrentStateRepository"
+            )
+        )
+
         stack.enter_context(
             patch(
                 "app.dashboard.live_monitor.CapacityService"
@@ -1308,3 +1351,168 @@ def test_build_dashboard_application_uses_canonical_operational_projector(
     )
 
     assert application._operational_projector is projector
+
+
+def test_build_dashboard_application_wires_signal_health_current_state_reader(
+    monkeypatch,
+) -> None:
+    """Dashboard reader uses canonical profiles and shared Signal state storage."""
+
+    from contextlib import ExitStack
+    from types import SimpleNamespace
+    from unittest.mock import Mock, patch
+
+    from app.dashboard import live_monitor
+
+    profile = SimpleNamespace(
+        profile_id="impact-main",
+        service_id="impact",
+        path_name="impact",
+    )
+    media_profiles = (profile,)
+
+    settings = Mock()
+    settings.mediamtx_api_url = "http://127.0.0.1:9997"
+    settings.mediamtx_api_timeout_seconds = 5.0
+    settings.mediamtx_metrics_url = "http://127.0.0.1:9998"
+    settings.mediamtx_metrics_timeout_seconds = 5.0
+    settings.geoip_database_path = "data/geoip/GeoLite2-Country.mmdb"
+    settings.noc_history_database_path = "/tmp/noc-history.db"
+    settings.noc_evidence_path = "/tmp/noc-evidence"
+    settings.stream_health_srt_degradation_seconds = 10.0
+    settings.stream_health_srt_recovery_seconds = 5.0
+    settings.node_network_policy_path = "/tmp/ejtv-01.yaml"
+
+    history_database = Mock(name="history_database")
+    signal_repository = Mock(name="signal_repository")
+    application = Mock(name="dashboard_application")
+
+    loader_instance = Mock(name="media_profile_loader")
+    loader_instance.load.return_value = media_profiles
+
+    loader_class = Mock(
+        name="NodeMediaProfileLoader",
+        return_value=loader_instance,
+    )
+
+    signal_repository_class = Mock(
+        name="SQLiteSignalHealthCurrentStateRepository",
+        return_value=signal_repository,
+    )
+
+    with ExitStack() as stack:
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.get_settings",
+                return_value=settings,
+            )
+        )
+
+        for dependency in (
+            "CapacityService",
+            "SystemCapacityProvider",
+            "HttpClient",
+            "MediaMTXClient",
+            "MediaMTXAdapter",
+            "GeoIPService",
+            "MediaMTXSessionClient",
+            "MediaMTXSessionAdapter",
+            "SessionService",
+            "SessionOperationalProjector",
+            "MediaMTXMetricsClient",
+            "MediaMTXMetricsParser",
+            "StreamingHealthService",
+            "StreamingHealthAggregator",
+            "RTMPConnectionHealthService",
+            "RTMPConnectionHealthWindow",
+            "RTSPSessionHealthService",
+            "HLSSessionHealthService",
+            "WebRTCSessionHealthService",
+            "SRTConnectionHealthStabilizer",
+            "StreamingHealthStabilizer",
+            "LinuxSystemAdapter",
+            "SystemService",
+            "NetworkTelemetryService",
+            "NodeId",
+            "NodeInstanceId",
+            "SQLiteEventHistoryRepository",
+            "SQLiteAlarmHistoryRepository",
+            "HistoryQueryService",
+            "SQLiteNodeHealthDiagnosticRepository",
+            "StreamingService",
+            "DashboardService",
+            "DashboardSnapshotService",
+            "DashboardRenderer",
+            "InMemoryNodeRepository",
+            "NodeRegistry",
+            "bootstrap_noc_runtime",
+            "JsonlEvidenceWriter",
+            "EventService",
+            "AlarmService",
+            "StreamingHealthTransitionAlarmService",
+            "StreamingHealthTransitionEventService",
+            "MetricService",
+            "HealthService",
+            "SnapshotService",
+            "TelemetryRefreshService",
+            "NocSnapshotProjection",
+        ):
+            stack.enter_context(
+                patch(
+                    "app.dashboard.live_monitor." + dependency
+                )
+            )
+
+        history_database_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.SQLiteHistoryDatabase",
+                return_value=history_database,
+            )
+        )
+
+        application_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.DashboardApplication",
+                return_value=application,
+            )
+        )
+
+        monkeypatch.setattr(
+            live_monitor,
+            "NodeMediaProfileLoader",
+            loader_class,
+            raising=False,
+        )
+
+        monkeypatch.setattr(
+            live_monitor,
+            "SQLiteSignalHealthCurrentStateRepository",
+            signal_repository_class,
+            raising=False,
+        )
+
+        result = live_monitor.build_dashboard_application()
+
+    assert result is application
+
+    history_database_class.assert_called_once_with(
+        settings.noc_history_database_path
+    )
+
+    loader_class.assert_called_once_with()
+
+    loader_instance.load.assert_called_once_with(
+        settings.node_network_policy_path
+    )
+
+    signal_repository_class.assert_called_once_with(
+        history_database
+    )
+
+    call_kwargs = application_class.call_args.kwargs
+
+    assert call_kwargs["media_profiles"] is media_profiles
+    assert (
+        call_kwargs["signal_health_current_state_repository"]
+        is signal_repository
+    )

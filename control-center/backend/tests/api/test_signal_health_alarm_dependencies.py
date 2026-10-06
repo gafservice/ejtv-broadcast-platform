@@ -36,6 +36,7 @@ def test_session_observation_runtime_receives_signal_alarm_service(
     streaming_service = Mock()
     operational_runtime = Mock()
     repository = Mock()
+    signal_current_state_repository = Mock()
     signal_runtime = Mock()
     detector = Mock()
     event_service = Mock()
@@ -67,6 +68,11 @@ def test_session_observation_runtime_receives_signal_alarm_service(
         dependencies,
         "get_media_health_current_state_repository",
         lambda: repository,
+    )
+    monkeypatch.setattr(
+        dependencies,
+        "get_signal_health_current_state_repository",
+        lambda: signal_current_state_repository,
     )
     monkeypatch.setattr(
         dependencies,
@@ -124,6 +130,7 @@ def test_session_observation_runtime_receives_signal_alarm_service(
             media_profiles,
             media_health_current_state_repository,
             signal_health_operational_runtime,
+            signal_health_current_state_repository,
             signal_health_transition_detector,
             signal_health_transition_event_service,
             signal_health_transition_alarm_service,
@@ -139,6 +146,9 @@ def test_session_observation_runtime_receives_signal_alarm_service(
             captured[
                 "signal_health_operational_runtime"
             ] = signal_health_operational_runtime
+            captured[
+                "signal_health_current_state_repository"
+            ] = signal_health_current_state_repository
             captured[
                 "signal_health_transition_detector"
             ] = signal_health_transition_detector
@@ -165,4 +175,9 @@ def test_session_observation_runtime_receives_signal_alarm_service(
     assert (
         captured["signal_health_transition_alarm_service"]
         is alarm_service
+    )
+
+    assert (
+        captured["signal_health_current_state_repository"]
+        is signal_current_state_repository
     )

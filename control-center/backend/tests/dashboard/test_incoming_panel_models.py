@@ -167,3 +167,28 @@ def test_dashboard_data_preserves_legacy_construction_without_incoming() -> None
     )
 
     assert data.incoming is None
+
+
+def test_incoming_row_accepts_optional_health_reason() -> None:
+    row = IncomingRowData(
+        path_name="signal-a",
+        source="SRT",
+        status="ACTIVE",
+        bitrate_receive_mbps=6.0,
+        health_status=HealthStatus.DEGRADED,
+        health_reason="RTT 180 ms",
+    )
+
+    assert row.health_reason == "RTT 180 ms"
+
+
+def test_incoming_row_defaults_health_reason_to_none() -> None:
+    row = IncomingRowData(
+        path_name="signal-a",
+        source="MPEG-TS",
+        status="ACTIVE",
+        bitrate_receive_mbps=4.5,
+        health_status=HealthStatus.HEALTHY,
+    )
+
+    assert row.health_reason is None

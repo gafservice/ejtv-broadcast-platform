@@ -107,6 +107,18 @@ def test_build_dashboard_application_composes_canonical_capacity_services():
                 "app.dashboard.live_monitor.SQLiteHistoryDatabase"
             )
         )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.NodeMediaProfileLoader"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor."
+                "SQLiteSignalHealthCurrentStateRepository"
+            )
+        )
         stack.enter_context(
             patch(
                 "app.dashboard.live_monitor.SQLiteEventHistoryRepository"
@@ -348,6 +360,18 @@ def test_build_dashboard_application_wires_capacity_initializer():
         stack.enter_context(
             patch(
                 "app.dashboard.live_monitor.SQLiteHistoryDatabase"
+            )
+        )
+
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor.NodeMediaProfileLoader"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor."
+                "SQLiteSignalHealthCurrentStateRepository"
             )
         )
         stack.enter_context(

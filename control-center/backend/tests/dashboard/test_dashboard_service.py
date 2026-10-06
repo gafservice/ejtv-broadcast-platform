@@ -3848,7 +3848,7 @@ def test_build_incoming_panel_projects_source_bearing_path_without_publisher() -
     assert row.source == "SRT"
     assert row.status == "ACTIVE"
     assert row.bitrate_receive_mbps == 5.75
-    assert row.health_status is HealthStatus.HEALTHY
+    assert row.health_status is None
     assert row.protocol is None
     assert row.remote_address is None
 
@@ -4325,3 +4325,511 @@ def test_build_dashboard_from_measurement_composes_incoming_panel() -> None:
     assert row.bitrate_receive_mbps == 5.0
     assert row.protocol == "SRT"
     assert row.remote_address == "192.0.2.50:9000"
+
+
+def test_build_incoming_panel_projects_unique_connection_health_message() -> None:
+    """INCOMING projects canonical connection message only when attribution is unique."""
+
+    from app.domain.sessions import SessionSnapshot
+    from app.domain.streaming import (
+        HealthStatus,
+        SRTConnectionHealth,
+        SRTPathHealth,
+        StreamingHealth,
+    )
+
+    captured_at = datetime(
+        2026, 10, 6, 12, 0, tzinfo=timezone.utc
+    )
+
+    media_path = MediaPath(
+        name="service-reason",
+        configuration_name="service-reason",
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type="srtSource",
+            source_id="source-reason",
+        ),
+        readers=(),
+        inbound_bytes=1_000_000,
+        outbound_bytes=0,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(media_path,),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    path_measurement = StreamingPathMeasurement(
+        name="service-reason",
+        status=MediaPathStatus.ACTIVE,
+        previous_status=MediaPathStatus.ACTIVE,
+        reader_count=0,
+        reader_delta=0,
+        inbound_delta_bytes=1_000_000,
+        outbound_delta_bytes=0,
+        inbound_bitrate_bps=4_000_000.0,
+        outbound_bitrate_bps=0.0,
+        state_changed=False,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=captured_at - timedelta(seconds=2),
+        interval_seconds=2.0,
+        paths=(path_measurement,),
+        total_inbound_bitrate_bps=4_000_000.0,
+        total_outbound_bitrate_bps=0.0,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    connection = SRTConnectionHealth(
+        connection_id="connection-reason",
+        path_name="service-reason",
+        state="publish",
+        rtt_ms=180.0,
+        packets_retransmitted=10,
+        packets_lost=2,
+        status=HealthStatus.DEGRADED,
+        message="Canonical degraded connection evidence.",
+        remote_address="192.0.2.20:9000",
+        role="publisher",
+    )
+
+    path_health = SRTPathHealth(
+        name="service-reason",
+        connections=(connection,),
+        average_rtt_ms=180.0,
+        total_packets_retransmitted=10,
+        total_packets_lost=2,
+        status=HealthStatus.DEGRADED,
+        message="Path contains degraded connections.",
+        maximum_rtt_ms=180.0,
+        average_link_utilization_percent=None,
+    )
+
+    health = StreamingHealth(
+        captured_at=captured_at,
+        paths=(path_health,),
+        status=HealthStatus.DEGRADED,
+        message="Streaming degraded.",
+    )
+
+    panel = DashboardService().build_incoming_panel(
+        snapshot=snapshot,
+        measurement=measurement,
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(),
+        ),
+        health=health,
+    )
+
+    assert len(panel.rows) == 1
+    assert panel.rows[0].health_status is None
+    assert panel.rows[0].health_reason is None
+
+
+def test_build_incoming_panel_omits_health_reason_without_connection() -> None:
+    """INCOMING does not invent a reason when path Health has no connection."""
+
+    from app.domain.sessions import SessionSnapshot
+    from app.domain.streaming import (
+        HealthStatus,
+        SRTPathHealth,
+        StreamingHealth,
+    )
+
+    captured_at = datetime(
+        2026, 10, 6, 12, 5, tzinfo=timezone.utc
+    )
+
+    media_path = MediaPath(
+        name="service-no-reason",
+        configuration_name="service-no-reason",
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type="srtSource",
+            source_id="source-no-reason",
+        ),
+        readers=(),
+        inbound_bytes=1_000_000,
+        outbound_bytes=0,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(media_path,),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=None,
+        interval_seconds=None,
+        paths=(),
+        total_inbound_bitrate_bps=None,
+        total_outbound_bitrate_bps=None,
+        quality=MeasurementQuality.NOT_AVAILABLE,
+    )
+
+    path_health = SRTPathHealth(
+        name="service-no-reason",
+        connections=(),
+        average_rtt_ms=None,
+        total_packets_retransmitted=None,
+        total_packets_lost=None,
+        status=HealthStatus.HEALTHY,
+        message="Path healthy.",
+        maximum_rtt_ms=None,
+        average_link_utilization_percent=None,
+    )
+
+    health = StreamingHealth(
+        captured_at=captured_at,
+        paths=(path_health,),
+        status=HealthStatus.HEALTHY,
+        message="Streaming healthy.",
+    )
+
+    panel = DashboardService().build_incoming_panel(
+        snapshot=snapshot,
+        measurement=measurement,
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(),
+        ),
+        health=health,
+    )
+
+    assert panel.rows[0].health_reason is None
+
+
+def test_build_incoming_panel_omits_health_reason_for_ambiguous_connections() -> None:
+    """INCOMING does not choose an arbitrary reason from multiple connections."""
+
+    from app.domain.sessions import SessionSnapshot
+    from app.domain.streaming import (
+        HealthStatus,
+        SRTConnectionHealth,
+        SRTPathHealth,
+        StreamingHealth,
+    )
+
+    captured_at = datetime(
+        2026, 10, 6, 12, 10, tzinfo=timezone.utc
+    )
+
+    media_path = MediaPath(
+        name="service-ambiguous-reason",
+        configuration_name="service-ambiguous-reason",
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type="srtSource",
+            source_id="source-ambiguous-reason",
+        ),
+        readers=(),
+        inbound_bytes=1_000_000,
+        outbound_bytes=0,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(media_path,),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=None,
+        interval_seconds=None,
+        paths=(),
+        total_inbound_bitrate_bps=None,
+        total_outbound_bitrate_bps=None,
+        quality=MeasurementQuality.NOT_AVAILABLE,
+    )
+
+    first = SRTConnectionHealth(
+        connection_id="connection-a",
+        path_name="service-ambiguous-reason",
+        state="read",
+        rtt_ms=180.0,
+        packets_retransmitted=10,
+        packets_lost=2,
+        status=HealthStatus.DEGRADED,
+        message="First canonical connection evidence.",
+        remote_address="192.0.2.21:9000",
+        role="reader",
+    )
+
+    second = SRTConnectionHealth(
+        connection_id="connection-b",
+        path_name="service-ambiguous-reason",
+        state="read",
+        rtt_ms=190.0,
+        packets_retransmitted=12,
+        packets_lost=3,
+        status=HealthStatus.DEGRADED,
+        message="Second canonical connection evidence.",
+        remote_address="192.0.2.22:9000",
+        role="reader",
+    )
+
+    path_health = SRTPathHealth(
+        name="service-ambiguous-reason",
+        connections=(first, second),
+        average_rtt_ms=185.0,
+        total_packets_retransmitted=22,
+        total_packets_lost=5,
+        status=HealthStatus.DEGRADED,
+        message="Path contains degraded connections.",
+        maximum_rtt_ms=190.0,
+        average_link_utilization_percent=None,
+    )
+
+    health = StreamingHealth(
+        captured_at=captured_at,
+        paths=(path_health,),
+        status=HealthStatus.DEGRADED,
+        message="Streaming degraded.",
+    )
+
+    panel = DashboardService().build_incoming_panel(
+        snapshot=snapshot,
+        measurement=measurement,
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(),
+        ),
+        health=health,
+    )
+
+    assert len(panel.rows) == 1
+    assert panel.rows[0].health_status is None
+    assert panel.rows[0].health_reason is None
+
+
+
+def test_incoming_panel_prefers_canonical_signal_health_over_streaming_health() -> None:
+    """INCOMING Health comes from canonical SignalHealth, not SRT readers."""
+    from app.domain.sessions import SessionSnapshot
+    from app.domain.streaming import (
+        HealthStatus,
+        SRTPathHealth,
+        StreamingHealth,
+    )
+    from app.domain.streaming.signal_health import SignalHealth
+    from app.noc.current_state.signal_health_current_state import (
+        SignalHealthCurrentState,
+    )
+
+    captured_at = datetime(
+        2026, 10, 6, 13, 53, 43, tzinfo=timezone.utc
+    )
+
+    media_path = MediaPath(
+        name='impact',
+        configuration_name='impact',
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type='srtSource',
+            source_id='source-impact',
+        ),
+        readers=(),
+        inbound_bytes=0,
+        outbound_bytes=0,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(media_path,),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    path_measurement = StreamingPathMeasurement(
+        name='impact',
+        status=MediaPathStatus.ACTIVE,
+        previous_status=MediaPathStatus.ACTIVE,
+        reader_count=0,
+        reader_delta=0,
+        inbound_delta_bytes=750_000,
+        outbound_delta_bytes=0,
+        inbound_bitrate_bps=6_000_000,
+        outbound_bitrate_bps=0,
+        state_changed=False,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=captured_at,
+        interval_seconds=1.0,
+        paths=(path_measurement,),
+        total_inbound_bitrate_bps=6_000_000,
+        total_outbound_bitrate_bps=0,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    path_health = SRTPathHealth(
+        name='impact',
+        connections=(),
+        average_rtt_ms=None,
+        total_packets_retransmitted=None,
+        total_packets_lost=None,
+        status=HealthStatus.DEGRADED,
+        message='Streaming path degraded.',
+        maximum_rtt_ms=None,
+        average_link_utilization_percent=None,
+    )
+
+    streaming_health = StreamingHealth(
+        captured_at=captured_at,
+        paths=(path_health,),
+        status=HealthStatus.DEGRADED,
+        message='Streaming degraded.',
+    )
+
+    canonical_state = SignalHealthCurrentState(
+        profile_id='impact-main',
+        service_id='impact',
+        path_name='impact',
+        observed_at=captured_at,
+        health=SignalHealth(
+            profile_id='impact-main',
+            service_id='impact',
+            path_name='impact',
+            media_status=HealthStatus.HEALTHY,
+            transport_status=HealthStatus.HEALTHY,
+            status=HealthStatus.HEALTHY,
+        ),
+    )
+
+    panel = DashboardService().build_incoming_panel(
+        snapshot=snapshot,
+        measurement=measurement,
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(),
+        ),
+        health=streaming_health,
+        signal_health_current_states=(canonical_state,),
+    )
+
+    assert len(panel.rows) == 1
+    assert panel.rows[0].path_name == 'impact'
+    assert panel.rows[0].health_status is HealthStatus.HEALTHY
+    assert panel.rows[0].health_reason is None
+
+
+def test_incoming_panel_does_not_use_streaming_health_when_signal_state_is_absent() -> None:
+    """INCOMING without canonical SignalHealth must not inherit reader Health."""
+    from app.domain.sessions import SessionSnapshot
+    from app.domain.streaming import (
+        HealthStatus,
+        SRTPathHealth,
+        StreamingHealth,
+    )
+
+    captured_at = datetime(
+        2026, 10, 6, 13, 54, tzinfo=timezone.utc
+    )
+
+    media_path = MediaPath(
+        name='enlace',
+        configuration_name='enlace',
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type='mpegtsSource',
+            source_id='source-enlace',
+        ),
+        readers=(),
+        inbound_bytes=0,
+        outbound_bytes=0,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(media_path,),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    path_measurement = StreamingPathMeasurement(
+        name='enlace',
+        status=MediaPathStatus.ACTIVE,
+        previous_status=MediaPathStatus.ACTIVE,
+        reader_count=0,
+        reader_delta=0,
+        inbound_delta_bytes=500_000,
+        outbound_delta_bytes=0,
+        inbound_bitrate_bps=4_000_000,
+        outbound_bitrate_bps=0,
+        state_changed=False,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=captured_at,
+        interval_seconds=1.0,
+        paths=(path_measurement,),
+        total_inbound_bitrate_bps=4_000_000,
+        total_outbound_bitrate_bps=0,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    path_health = SRTPathHealth(
+        name='enlace',
+        connections=(),
+        average_rtt_ms=None,
+        total_packets_retransmitted=None,
+        total_packets_lost=None,
+        status=HealthStatus.DEGRADED,
+        message='Streaming path degraded.',
+        maximum_rtt_ms=None,
+        average_link_utilization_percent=None,
+    )
+
+    streaming_health = StreamingHealth(
+        captured_at=captured_at,
+        paths=(path_health,),
+        status=HealthStatus.DEGRADED,
+        message='Streaming degraded.',
+    )
+
+    panel = DashboardService().build_incoming_panel(
+        snapshot=snapshot,
+        measurement=measurement,
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(),
+        ),
+        health=streaming_health,
+        signal_health_current_states=(),
+    )
+
+    assert len(panel.rows) == 1
+    assert panel.rows[0].path_name == 'enlace'
+    assert panel.rows[0].health_status is None
+    assert panel.rows[0].health_reason is None

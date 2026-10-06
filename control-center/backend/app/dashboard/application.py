@@ -44,6 +44,9 @@ from app.dashboard.services.dashboard_snapshot_service import (
 )
 from app.domain.sessions import SessionSnapshot
 from app.domain.streaming import MediaMTXSnapshot, StreamingHealth
+from app.domain.streaming.expected_media_profile import (
+    ExpectedMediaProfile,
+)
 from app.domain.streaming.aggregation import (
     PlatformHealth,
     StreamingHealthAggregator,
@@ -51,6 +54,9 @@ from app.domain.streaming.aggregation import (
 from app.domain.system import SystemResources
 from app.noc.domain.node_id import NodeId
 from app.noc.domain.node_instance import NodeInstanceId
+from app.noc.current_state.signal_health_current_state import (
+    SignalHealthCurrentStateRepository,
+)
 from app.noc.current_state.repository import (
     NodeHealthDiagnosticRepository,
 )
@@ -218,6 +224,10 @@ class DashboardApplication:
         key_parser: DashboardKeyParser | None = None,
         keyboard_input: PosixKeyboardInput | None = None,
         operational_projector: SessionOperationalProjector | None = None,
+        media_profiles: tuple[ExpectedMediaProfile, ...] = (),
+        signal_health_current_state_repository: (
+            SignalHealthCurrentStateRepository | None
+        ) = None,
     ) -> None:
         self._noc_capacity_initializer = noc_capacity_initializer
         self._noc_snapshot_projection = noc_snapshot_projection
@@ -298,6 +308,10 @@ class DashboardApplication:
         )
 
         self._operational_projector = operational_projector
+        self._media_profiles = media_profiles
+        self._signal_health_current_state_repository = (
+            signal_health_current_state_repository
+        )
 
         self._previous_snapshot: MediaMTXSnapshot | None = None
         self._previous_session_snapshot: SessionSnapshot | None = None
@@ -586,6 +600,31 @@ class DashboardApplication:
                 )
             )
 
+        signal_health_current_states = ()
+
+        if (
+            self._signal_health_current_state_repository
+            is not None
+        ):
+            states = []
+
+            for profile in self._media_profiles:
+                if profile.path_name is None:
+                    continue
+
+                state = (
+                    self._signal_health_current_state_repository.latest(
+                        profile_id=profile.profile_id,
+                        service_id=profile.service_id,
+                        path_name=profile.path_name,
+                    )
+                )
+
+                if state is not None:
+                    states.append(state)
+
+            signal_health_current_states = tuple(states)
+
         snapshot_kwargs = {
             "hostname": system_info.hostname,
             "mediamtx_online": api_online,
@@ -605,6 +644,9 @@ class DashboardApplication:
             "previous_system_resources": self._previous_system_resources,
             "network_interfaces": network_interfaces,
             "noc_snapshot": noc_snapshot,
+            "signal_health_current_states": (
+                signal_health_current_states
+            ),
         }
 
         if streaming_health is not None:

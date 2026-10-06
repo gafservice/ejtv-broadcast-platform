@@ -74,8 +74,14 @@ from app.noc.services.alarm_service import AlarmService
 from app.noc.history.sqlite_alarm_repository import (
     SQLiteAlarmHistoryRepository,
 )
+from app.noc.current_state.sqlite_signal_health_current_state_repository import (
+    SQLiteSignalHealthCurrentStateRepository,
+)
 from app.noc.history.sqlite_database import (
     SQLiteHistoryDatabase,
+)
+from app.noc.infrastructure.node_media_profile_loader import (
+    NodeMediaProfileLoader,
 )
 from app.noc.history.sqlite_event_repository import (
     SQLiteEventHistoryRepository,
@@ -220,6 +226,15 @@ def build_dashboard_application() -> DashboardApplication:
         settings.noc_history_database_path
     )
 
+    media_profiles = NodeMediaProfileLoader().load(
+        settings.node_network_policy_path
+    )
+    signal_health_current_state_repository = (
+        SQLiteSignalHealthCurrentStateRepository(
+            history_database
+        )
+    )
+
     event_history_repository = (
         SQLiteEventHistoryRepository(
             history_database
@@ -354,6 +369,10 @@ def build_dashboard_application() -> DashboardApplication:
         history_query_service=history_query_service,
         node_id=node_id,
         instance_id=node_instance_id,
+        media_profiles=media_profiles,
+        signal_health_current_state_repository=(
+            signal_health_current_state_repository
+        ),
     )
 
 

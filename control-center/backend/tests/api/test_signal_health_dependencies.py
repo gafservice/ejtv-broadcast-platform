@@ -247,6 +247,7 @@ def test_session_observation_runtime_receives_signal_health_handoff(
     streaming_service = object()
     operational_runtime = object()
     current_state_repository = object()
+    signal_current_state_repository = object()
     signal_runtime = object()
     signal_transition_detector = object()
     signal_transition_event_service = object()
@@ -276,6 +277,11 @@ def test_session_observation_runtime_receives_signal_health_handoff(
         dependencies,
         "get_media_health_current_state_repository",
         lambda: current_state_repository,
+    )
+    monkeypatch.setattr(
+        dependencies,
+        "get_signal_health_current_state_repository",
+        lambda: signal_current_state_repository,
     )
     monkeypatch.setattr(
         dependencies,
@@ -335,6 +341,7 @@ def test_session_observation_runtime_receives_signal_health_handoff(
             media_profiles,
             media_health_current_state_repository,
             signal_health_operational_runtime,
+            signal_health_current_state_repository,
             signal_health_transition_detector,
             signal_health_transition_event_service,
             signal_health_transition_alarm_service,
@@ -350,6 +357,9 @@ def test_session_observation_runtime_receives_signal_health_handoff(
             captured[
                 "signal_health_operational_runtime"
             ] = signal_health_operational_runtime
+            captured[
+                "signal_health_current_state_repository"
+            ] = signal_health_current_state_repository
             captured[
                 "signal_health_transition_detector"
             ] = signal_health_transition_detector
@@ -396,6 +406,11 @@ def test_session_observation_runtime_receives_signal_health_handoff(
     assert (
         captured["signal_health_operational_runtime"]
         is signal_runtime
+    )
+
+    assert (
+        captured["signal_health_current_state_repository"]
+        is signal_current_state_repository
     )
 
     assert (

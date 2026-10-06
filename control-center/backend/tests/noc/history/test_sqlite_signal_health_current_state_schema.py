@@ -1,10 +1,10 @@
-"""Schema contract for Media Health current state.
+"""Schema contract for Signal Health current state.
 
-ENG-013C — Media Health Current State
+ENG-013C — Signal Health Current State
 
-This contract requires schema version 4 to introduce the
-media_health_current_state table while preserving an existing
-version-3 database.
+Schema version 5 introduces signal_health_current_state while
+preserving an existing version-4 database and its Media Health
+current-state data.
 
 All databases used here are temporary test databases.
 """
@@ -81,11 +81,11 @@ def _schema_version(database_path) -> int:
         connection.close()
 
 
-def test_current_schema_version_is_five() -> None:
+def test_schema_version_is_five() -> None:
     assert SCHEMA_VERSION == 5
 
 
-def test_new_database_contains_media_health_current_state(
+def test_new_database_contains_signal_health_current_state(
     tmp_path,
 ) -> None:
     database_path = tmp_path / "new.db"
@@ -94,19 +94,17 @@ def test_new_database_contains_media_health_current_state(
     database.initialize()
 
     assert _schema_version(database_path) == 5
-
     assert (
-        "media_health_current_state"
+        "signal_health_current_state"
         in _table_names(database_path)
     )
-
     assert _columns(
         database_path,
-        "media_health_current_state",
+        "signal_health_current_state",
     ) == EXPECTED_COLUMNS
 
 
-def test_media_health_current_state_uses_full_identity_primary_key(
+def test_signal_health_current_state_uses_full_identity_primary_key(
     tmp_path,
 ) -> None:
     database_path = tmp_path / "identity.db"
@@ -119,7 +117,7 @@ def test_media_health_current_state_uses_full_identity_primary_key(
     try:
         rows = connection.execute(
             """
-            PRAGMA table_info(media_health_current_state)
+            PRAGMA table_info(signal_health_current_state)
             """
         ).fetchall()
     finally:
@@ -141,7 +139,7 @@ def test_media_health_current_state_uses_full_identity_primary_key(
     ]
 
 
-def test_version_three_database_migrates_to_four_without_data_loss(
+def test_version_four_database_migrates_to_five_without_data_loss(
     tmp_path,
 ) -> None:
     database_path = tmp_path / "migration.db"
@@ -155,55 +153,54 @@ def test_version_three_database_migrates_to_four_without_data_loss(
         database._migrate_v1(connection)
         database._migrate_v2(connection)
         database._migrate_v3(connection)
-        database._set_version(
-            connection,
-            3,
-        )
-
-        connection.execute(
-            """
-            INSERT INTO managed_history_scopes (
-                node_id,
-                instance_id,
-                managed_since_day,
-                created_at
-            )
-            VALUES (?, ?, ?, ?)
-            """,
-            (
-                "node-1",
-                "instance-1",
-                "2026-09-23",
-                "2026-09-23T12:00:00.000000+00:00",
-            ),
-        )
-
-        connection.commit()
-
-    assert _schema_version(database_path) == 3
-    assert (
-        "media_health_current_state"
-        not in _table_names(database_path)
-    )
-
-    with database.connect() as connection:
         database._migrate_v4(connection)
         database._set_version(
             connection,
             4,
         )
+
+        connection.execute(
+            """
+            INSERT INTO media_health_current_state (
+                profile_id,
+                service_id,
+                path_name,
+                observed_at,
+                health_json
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                "profile-enlace",
+                "enlace",
+                "enlace",
+                "2026-10-06T12:00:00.000000+00:00",
+                "{\"preserved\":true}",
+            ),
+        )
+
         connection.commit()
 
     assert _schema_version(database_path) == 4
+    assert (
+        "signal_health_current_state"
+        not in _table_names(database_path)
+    )
+
+    migrated = SQLiteHistoryDatabase(database_path)
+    migrated.initialize()
+
+    assert _schema_version(database_path) == 5
 
     tables = _table_names(database_path)
 
     assert "events" in tables
     assert "alarms" in tables
     assert "alarm_transitions" in tables
-    assert "managed_history_scopes" in tables
     assert "node_health_diagnostics" in tables
+    assert "managed_history_scopes" in tables
     assert "media_health_current_state" in tables
+    assert "signal_health_current_state" in tables
 
     connection = sqlite3.connect(database_path)
 
@@ -211,43 +208,49 @@ def test_version_three_database_migrates_to_four_without_data_loss(
         row = connection.execute(
             """
             SELECT
-                node_id,
-                instance_id,
-                managed_since_day,
-                created_at
-            FROM managed_history_scopes
-            WHERE node_id = ?
-              AND instance_id = ?
+                profile_id,
+                service_id,
+                path_name,
+                observed_at,
+                health_json
+            FROM media_health_current_state
+            WHERE profile_id = ?
+              AND service_id = ?
+              AND path_name = ?
             """,
             (
-                "node-1",
-                "instance-1",
+                "profile-enlace",
+                "enlace",
+                "enlace",
             ),
         ).fetchone()
     finally:
         connection.close()
 
     assert row == (
-        "node-1",
-        "instance-1",
-        "2026-09-23",
-        "2026-09-23T12:00:00.000000+00:00",
+        "profile-enlace",
+        "enlace",
+        "enlace",
+        "2026-10-06T12:00:00.000000+00:00",
+        "{\"preserved\":true}",
     )
 
 
-def test_reinitializing_current_database_is_idempotent(
+def test_reinitializing_version_five_database_is_idempotent(
     tmp_path,
 ) -> None:
     database_path = tmp_path / "idempotent.db"
 
     database = SQLiteHistoryDatabase(database_path)
-
     database.initialize()
     database.initialize()
 
     assert _schema_version(database_path) == 5
-
     assert (
         "media_health_current_state"
+        in _table_names(database_path)
+    )
+    assert (
+        "signal_health_current_state"
         in _table_names(database_path)
     )

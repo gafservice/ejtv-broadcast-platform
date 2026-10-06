@@ -16,7 +16,7 @@ import sqlite3
 from pathlib import Path
 
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 class SQLiteHistoryDatabase:
@@ -108,6 +108,14 @@ class SQLiteHistoryDatabase:
                     4,
                 )
                 current_version = 4
+
+            if current_version == 4:
+                self._migrate_v5(connection)
+                self._set_version(
+                    connection,
+                    5,
+                )
+                current_version = 5
 
             if current_version != SCHEMA_VERSION:
                 raise RuntimeError(
@@ -336,6 +344,31 @@ class SQLiteHistoryDatabase:
         connection.executescript(
             """
             CREATE TABLE media_health_current_state (
+                profile_id TEXT NOT NULL,
+                service_id TEXT NOT NULL,
+                path_name TEXT NOT NULL,
+
+                observed_at TEXT NOT NULL,
+                health_json TEXT NOT NULL,
+
+                PRIMARY KEY (
+                    profile_id,
+                    service_id,
+                    path_name
+                )
+            );
+            """
+        )
+
+    @staticmethod
+    def _migrate_v5(
+        connection: sqlite3.Connection,
+    ) -> None:
+        """Add durable current state for canonical Signal Health."""
+
+        connection.executescript(
+            """
+            CREATE TABLE signal_health_current_state (
                 profile_id TEXT NOT NULL,
                 service_id TEXT NOT NULL,
                 path_name TEXT NOT NULL,

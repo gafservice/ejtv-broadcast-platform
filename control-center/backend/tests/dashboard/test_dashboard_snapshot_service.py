@@ -713,3 +713,84 @@ def test_snapshot_service_transports_webrtc_health_to_active_connections() -> No
     assert connection.protocol == "WebRTC"
     assert connection.health == "HEALTHY"
     assert connection.bitrate_bps == 6_000_000
+
+
+def test_snapshot_service_transports_signal_health_current_states() -> None:
+    """Signal Health current-state crosses the snapshot boundary unchanged."""
+    from datetime import datetime, timezone
+
+    from app.domain.streaming.health import HealthStatus
+    from app.domain.streaming.signal_health import SignalHealth
+    from app.noc.current_state.signal_health_current_state import (
+        SignalHealthCurrentState,
+    )
+
+    captured_at = datetime(
+        2026,
+        10,
+        6,
+        14,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=0,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=None,
+        interval_seconds=None,
+        paths=(),
+        total_inbound_bitrate_bps=None,
+        total_outbound_bitrate_bps=None,
+        quality=MeasurementQuality.NOT_AVAILABLE,
+    )
+
+    signal_state = SignalHealthCurrentState(
+        profile_id="impact-main",
+        service_id="impact",
+        path_name="impact",
+        observed_at=captured_at,
+        health=SignalHealth(
+            profile_id="impact-main",
+            service_id="impact",
+            path_name="impact",
+            media_status=HealthStatus.HEALTHY,
+            transport_status=HealthStatus.HEALTHY,
+            status=HealthStatus.HEALTHY,
+        ),
+    )
+
+    class CapturingDashboardService:
+        def __init__(self) -> None:
+            self.kwargs = None
+
+        def build_dashboard_from_measurement(self, **kwargs):
+            self.kwargs = kwargs
+            return object()
+
+    service = CapturingDashboardService()
+    snapshot_service = DashboardSnapshotService(service)
+
+    snapshot_input = DashboardSnapshotInput(
+        hostname="ejtv-01",
+        mediamtx_online=True,
+        api_online=True,
+        snapshot=snapshot,
+        measurement=measurement,
+        signal_health_current_states=(signal_state,),
+    )
+
+    result = snapshot_service.build_snapshot(snapshot_input)
+
+    assert result is not None
+    assert service.kwargs is not None
+    assert (
+        service.kwargs["signal_health_current_states"]
+        == (signal_state,)
+    )

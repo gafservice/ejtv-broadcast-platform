@@ -42,6 +42,7 @@ class IncomingPanelRenderer:
         table.add_column("Receive")
         table.add_column("Status")
         table.add_column("Health")
+        table.add_column("Reason")
 
         for row in data.rows:
             table.add_row(
@@ -54,6 +55,7 @@ class IncomingPanelRenderer:
                 ),
                 row.status,
                 self._format_health(row),
+                self._format_optional(row.health_reason),
             )
 
         return Panel(
