@@ -26,6 +26,13 @@ network_interfaces:
     expected_up: true
     critical: false
 
+incoming_origins:
+  - path_name: ejtv
+    expected_remote_address: "10.0.18.51:3000"
+
+  - path_name: enlace
+    expected_remote_address: "10.0.18.56:3000"
+
 session_policies:
   expected_sessions: []
 

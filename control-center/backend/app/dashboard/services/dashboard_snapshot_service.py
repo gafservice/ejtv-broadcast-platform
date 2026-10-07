@@ -70,6 +70,7 @@ class DashboardSnapshotInput:
     active_connections_viewport: PanelViewport | None = None
     signal_health_current_states: tuple[SignalHealthCurrentState, ...] = ()
     source_configurations: dict[str, str] | None = None
+    expected_incoming_origins: dict[str, str] | None = None
 
 
 class DashboardSnapshotService:
@@ -156,5 +157,8 @@ class DashboardSnapshotService:
             ),
             source_configurations=(
                 snapshot_input.source_configurations
+            ),
+            expected_incoming_origins=(
+                snapshot_input.expected_incoming_origins
             ),
         )

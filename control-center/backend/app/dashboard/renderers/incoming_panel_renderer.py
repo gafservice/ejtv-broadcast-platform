@@ -38,7 +38,7 @@ class IncomingPanelRenderer:
         table.add_column("Path")
         table.add_column("Source")
         table.add_column("Protocol")
-        table.add_column("Remote")
+        table.add_column("Origin")
         table.add_column("Receive")
         table.add_column("Status")
         table.add_column("Health")

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from app.adapters.linux.linux_system_adapter import LinuxSystemAdapter
 from app.adapters.mediamtx.adapter import MediaMTXAdapter
 from app.adapters.mediamtx.client import MediaMTXClient
@@ -82,6 +84,9 @@ from app.noc.history.sqlite_database import (
 )
 from app.noc.infrastructure.node_media_profile_loader import (
     NodeMediaProfileLoader,
+)
+from app.noc.infrastructure.node_incoming_origin_loader import (
+    NodeIncomingOriginLoader,
 )
 from app.noc.history.sqlite_event_repository import (
     SQLiteEventHistoryRepository,
@@ -229,6 +234,9 @@ def build_dashboard_application() -> DashboardApplication:
     media_profiles = NodeMediaProfileLoader().load(
         settings.node_network_policy_path
     )
+    expected_incoming_origins = NodeIncomingOriginLoader().load(
+        Path(settings.node_network_policy_path)
+    )
     signal_health_current_state_repository = (
         SQLiteSignalHealthCurrentStateRepository(
             history_database
@@ -370,6 +378,7 @@ def build_dashboard_application() -> DashboardApplication:
         node_id=node_id,
         instance_id=node_instance_id,
         media_profiles=media_profiles,
+        expected_incoming_origins=expected_incoming_origins,
         signal_health_current_state_repository=(
             signal_health_current_state_repository
         ),

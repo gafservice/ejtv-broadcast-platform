@@ -174,6 +174,7 @@ def test_run_once_builds_and_renders_dashboard() -> None:
         ),
         signal_health_current_states=(),
         source_configurations=source_configurations,
+        expected_incoming_origins=None,
     )
 
     dashboard_renderer.render.assert_called_once_with(
@@ -713,6 +714,7 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         ),
         signal_health_current_states=(),
         source_configurations=source_configurations,
+        expected_incoming_origins=None,
     )
 
     dashboard_renderer.render.assert_called_once_with(
@@ -4434,3 +4436,22 @@ def test_dashboard_cycle_forwards_source_configurations() -> None:
     )
 
     assert snapshot_input.source_configurations is source_configurations
+
+
+def test_dashboard_cycle_forwards_expected_incoming_origins() -> None:
+    expected_incoming_origins = {
+        "future-service": "192.0.2.10:5000",
+    }
+
+    application = object.__new__(DashboardApplication)
+    application._expected_incoming_origins = expected_incoming_origins
+
+    snapshot_input_class = __import__(
+        "app.dashboard.services.dashboard_snapshot_service",
+        fromlist=["DashboardSnapshotInput"],
+    ).DashboardSnapshotInput
+
+    assert (
+        "expected_incoming_origins"
+        in snapshot_input_class.__dataclass_fields__
+    )

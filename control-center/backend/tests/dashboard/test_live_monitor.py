@@ -11,6 +11,7 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
     """El terminal debe leer el NOC compartido sin poseer su runtime."""
 
     settings = Mock()
+    settings.node_network_policy_path = "/tmp/ejtv-01.yaml"
     settings.mediamtx_api_url = "http://127.0.0.1:9997"
     settings.mediamtx_api_timeout_seconds = 3.0
     settings.mediamtx_metrics_url = "http://127.0.0.1:9998"
@@ -77,6 +78,12 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
             patch(
                 "app.dashboard.live_monitor."
                 "NodeMediaProfileLoader"
+            )
+        )
+        incoming_origin_loader_class = stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor."
+                "NodeIncomingOriginLoader"
             )
         )
         signal_current_state_repository_class = stack.enter_context(
@@ -646,6 +653,9 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
         node_id=node_id,
         instance_id=node_instance_id,
         media_profiles=(media_profile_loader_class.return_value.load.return_value),
+        expected_incoming_origins=(
+            incoming_origin_loader_class.return_value.load.return_value
+        ),
         signal_health_current_state_repository=(
             signal_current_state_repository_class.return_value
         ),
@@ -656,6 +666,7 @@ def test_build_dashboard_application_disables_temporal_health_without_policy() -
     """Sin política temporal, el monitor conserva Health instantáneo."""
 
     settings = Mock()
+    settings.node_network_policy_path = "/tmp/ejtv-01.yaml"
     settings.mediamtx_api_url = "http://127.0.0.1:9997"
     settings.mediamtx_api_timeout_seconds = 3.0
     settings.mediamtx_metrics_url = "http://127.0.0.1:9998"
@@ -681,6 +692,12 @@ def test_build_dashboard_application_disables_temporal_health_without_policy() -
             patch(
                 "app.dashboard.live_monitor."
                 "NodeMediaProfileLoader"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor."
+                "NodeIncomingOriginLoader"
             )
         )
         stack.enter_context(
@@ -980,6 +997,7 @@ def test_build_dashboard_application_composes_stream_health_event_runtime() -> N
     """Block 4 debe conectar Stream Health Events al runtime real del terminal."""
 
     settings = Mock()
+    settings.node_network_policy_path = "/tmp/ejtv-01.yaml"
     settings.mediamtx_api_url = "http://127.0.0.1:9997"
     settings.mediamtx_api_timeout_seconds = 3.0
     settings.mediamtx_metrics_url = "http://127.0.0.1:9998"
@@ -1015,6 +1033,12 @@ def test_build_dashboard_application_composes_stream_health_event_runtime() -> N
             patch(
                 "app.dashboard.live_monitor."
                 "NodeMediaProfileLoader"
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.dashboard.live_monitor."
+                "NodeIncomingOriginLoader"
             )
         )
         stack.enter_context(
@@ -1486,6 +1510,13 @@ def test_build_dashboard_application_wires_signal_health_current_state_reader(
 
         monkeypatch.setattr(
             live_monitor,
+            "NodeIncomingOriginLoader",
+            Mock(),
+            raising=False,
+        )
+
+        monkeypatch.setattr(
+            live_monitor,
             "SQLiteSignalHealthCurrentStateRepository",
             signal_repository_class,
             raising=False,
@@ -1515,4 +1546,61 @@ def test_build_dashboard_application_wires_signal_health_current_state_reader(
     assert (
         call_kwargs["signal_health_current_state_repository"]
         is signal_repository
+    )
+
+
+def test_build_dashboard_application_wires_expected_incoming_origins(
+    monkeypatch,
+) -> None:
+    from pathlib import Path
+
+    import app.dashboard.live_monitor as live_monitor
+
+    loader_instance = Mock()
+    loader_instance.load.return_value = {
+        "future-service": "192.0.2.10:5000",
+    }
+
+    loader_class = Mock(
+        name="NodeIncomingOriginLoader",
+        return_value=loader_instance,
+    )
+
+    monkeypatch.setattr(
+        live_monitor,
+        "NodeIncomingOriginLoader",
+        loader_class,
+        raising=False,
+    )
+
+    captured_kwargs = {}
+
+    original_application_class = live_monitor.DashboardApplication
+
+    class CapturingDashboardApplication(original_application_class):
+        def __init__(self, *args, **kwargs):
+            captured_kwargs.update(kwargs)
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(
+        live_monitor,
+        "DashboardApplication",
+        CapturingDashboardApplication,
+    )
+
+    application = live_monitor.build_dashboard_application()
+
+    loader_class.assert_called_once_with()
+    loader_instance.load.assert_called_once_with(
+        Path(live_monitor.get_settings().node_network_policy_path)
+    )
+
+    assert (
+        captured_kwargs["expected_incoming_origins"]
+        is loader_instance.load.return_value
+    )
+
+    assert (
+        application._expected_incoming_origins
+        is loader_instance.load.return_value
     )

@@ -80,6 +80,7 @@ class DashboardService:
         session_snapshot: SessionSnapshot,
         health: StreamingHealth | None,
         source_configurations: dict[str, str] | None = None,
+        expected_incoming_origins: dict[str, str] | None = None,
         signal_health_current_states: tuple[
             SignalHealthCurrentState, ...
         ] = (),
@@ -195,6 +196,14 @@ class DashboardService:
                             f"{publisher.remote_ip}:"
                             f"{publisher.remote_port}"
                         )
+
+            if (
+                remote_address is None
+                and expected_incoming_origins is not None
+            ):
+                remote_address = expected_incoming_origins.get(
+                    media_path.name
+                )
 
             rows.append(
                 IncomingRowData(
@@ -1198,6 +1207,7 @@ class DashboardService:
         active_connections_viewport: PanelViewport | None = None,
         signal_health_current_states: tuple[SignalHealthCurrentState, ...] = (),
         source_configurations: dict[str, str] | None = None,
+        expected_incoming_origins: dict[str, str] | None = None,
     ) -> DashboardData:
         """Construye el dashboard completo desde snapshot y medición."""
 
@@ -1274,6 +1284,7 @@ class DashboardService:
                     signal_health_current_states
                 ),
                 source_configurations=source_configurations,
+                expected_incoming_origins=expected_incoming_origins,
             )
             if session_snapshot is not None
             else None

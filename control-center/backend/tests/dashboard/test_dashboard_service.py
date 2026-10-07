@@ -5354,3 +5354,148 @@ def test_incoming_panel_projects_reason_from_canonical_signal_health() -> None:
     assert panel.rows[0].path_name == "future-service"
     assert panel.rows[0].health_status is HealthStatus.DEGRADED
     assert panel.rows[0].health_reason == "media degraded"
+
+
+def test_incoming_uses_expected_origin_when_runtime_remote_is_unavailable() -> None:
+    from datetime import UTC, datetime
+
+    from app.domain.streaming.models import (
+        MediaMTXSnapshot,
+        MediaPath,
+        MediaPathStatus,
+        MediaSource,
+    )
+
+    captured_at = datetime(
+        2026,
+        10,
+        7,
+        12,
+        0,
+        tzinfo=UTC,
+    )
+
+    media_path = MediaPath(
+        name="future-service",
+        configuration_name="future-service",
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type="mpegtsSource",
+        ),
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(media_path,),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    from unittest.mock import Mock
+
+    from app.domain.sessions import SessionSnapshot
+
+    measurement = Mock()
+    measurement.paths = ()
+
+    panel = DashboardService().build_incoming_panel(
+        snapshot=snapshot,
+        measurement=measurement,
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(),
+        ),
+        health=None,
+        expected_incoming_origins={
+            "future-service": "192.0.2.10:5000",
+        },
+    )
+
+    assert len(panel.rows) == 1
+    assert panel.rows[0].path_name == "future-service"
+    assert panel.rows[0].remote_address == "192.0.2.10:5000"
+
+
+def test_build_dashboard_from_measurement_forwards_expected_incoming_origins(
+    monkeypatch,
+) -> None:
+    """Expected origins must reach the incoming-path projector."""
+    from datetime import UTC, datetime
+    from unittest.mock import Mock
+
+    from app.dashboard.services.dashboard_service import DashboardService
+    from app.domain.sessions import SessionSnapshot
+    from app.domain.streaming.models import MediaMTXSnapshot
+    from app.domain.streaming import StreamingMeasurement
+
+    captured_at = datetime(
+        2026,
+        10,
+        7,
+        14,
+        30,
+        tzinfo=UTC,
+    )
+
+    expected_incoming_origins = {
+        "future-service": "192.0.2.10:5000",
+    }
+
+    service = DashboardService()
+
+    incoming_panel = Mock(name="incoming_panel")
+
+    incoming_builder = Mock(
+        name="build_incoming_panel",
+        return_value=incoming_panel,
+    )
+
+    monkeypatch.setattr(
+        service,
+        "build_incoming_panel",
+        incoming_builder,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=1,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=None,
+        interval_seconds=None,
+        paths=(),
+        total_inbound_bitrate_bps=0.0,
+        total_outbound_bitrate_bps=0.0,
+        quality=Mock(),
+    )
+
+    session_snapshot = SessionSnapshot(
+        captured_at=captured_at,
+        sessions=(),
+    )
+
+    service.build_dashboard_from_measurement(
+        hostname="ejtv-01",
+        mediamtx_online=True,
+        api_online=True,
+        snapshot=snapshot,
+        measurement=measurement,
+        session_snapshot=session_snapshot,
+        expected_incoming_origins=expected_incoming_origins,
+    )
+
+    incoming_builder.assert_called_once()
+
+    assert (
+        incoming_builder.call_args.kwargs[
+            "expected_incoming_origins"
+        ]
+        is expected_incoming_origins
+    )

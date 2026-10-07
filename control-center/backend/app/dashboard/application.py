@@ -225,6 +225,7 @@ class DashboardApplication:
         keyboard_input: PosixKeyboardInput | None = None,
         operational_projector: SessionOperationalProjector | None = None,
         media_profiles: tuple[ExpectedMediaProfile, ...] = (),
+        expected_incoming_origins: dict[str, str] | None = None,
         signal_health_current_state_repository: (
             SignalHealthCurrentStateRepository | None
         ) = None,
@@ -309,6 +310,7 @@ class DashboardApplication:
 
         self._operational_projector = operational_projector
         self._media_profiles = media_profiles
+        self._expected_incoming_origins = expected_incoming_origins
         self._signal_health_current_state_repository = (
             signal_health_current_state_repository
         )
@@ -649,6 +651,9 @@ class DashboardApplication:
                 signal_health_current_states
             ),
             "source_configurations": source_configurations,
+            "expected_incoming_origins": (
+                self._expected_incoming_origins
+            ),
         }
 
         if streaming_health is not None:

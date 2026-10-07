@@ -1151,3 +1151,41 @@ def test_render_incoming_view_reports_no_incoming_signals() -> None:
     assert "Incoming data unavailable." not in output
     assert "SERVER" not in output
     assert "PATHS" not in output
+
+
+def test_incoming_presentation_uses_origin_header_not_remote() -> None:
+    """Incoming endpoint semantics are presented as Origin."""
+    from app.dashboard.models.incoming_panel import (
+        IncomingPanelData,
+        IncomingRowData,
+    )
+    from app.dashboard.renderers.incoming_panel_renderer import (
+        IncomingPanelRenderer,
+    )
+
+    data = IncomingPanelData(
+        rows=(
+            IncomingRowData(
+                path_name="future-service",
+                source="MPEG-TS",
+                protocol="UDP",
+                remote_address="192.0.2.10:5000",
+                bitrate_receive_mbps=4.5,
+                status="ACTIVE",
+                health_status=HealthStatus.HEALTHY,
+            ),
+        )
+    )
+
+    rendered = IncomingPanelRenderer().render(data)
+
+    console = Console(
+        record=True,
+        width=160,
+    )
+    console.print(rendered)
+    output = console.export_text()
+
+    assert "Origin" in output
+    assert "Remote" not in output
+    assert "192.0.2.10:5000" in output
