@@ -81,8 +81,8 @@ def _schema_version(database_path) -> int:
         connection.close()
 
 
-def test_current_schema_version_is_five() -> None:
-    assert SCHEMA_VERSION == 5
+def test_current_schema_version_is_six() -> None:
+    assert SCHEMA_VERSION == 6
 
 
 def test_new_database_contains_media_health_current_state(
@@ -93,7 +93,7 @@ def test_new_database_contains_media_health_current_state(
     database = SQLiteHistoryDatabase(database_path)
     database.initialize()
 
-    assert _schema_version(database_path) == 5
+    assert _schema_version(database_path) == 6
 
     assert (
         "media_health_current_state"
@@ -245,7 +245,7 @@ def test_reinitializing_current_database_is_idempotent(
     database.initialize()
     database.initialize()
 
-    assert _schema_version(database_path) == 5
+    assert _schema_version(database_path) == 6
 
     assert (
         "media_health_current_state"

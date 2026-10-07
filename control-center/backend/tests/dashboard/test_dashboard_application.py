@@ -4284,6 +4284,7 @@ def test_application_reads_signal_health_current_state_for_media_profiles() -> N
         service_id='impact',
         path_name='impact',
         observed_at=captured_at,
+        health_since=captured_at,
         health=SignalHealth(
             profile_id='impact-main',
             service_id='impact',

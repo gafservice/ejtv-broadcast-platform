@@ -270,12 +270,34 @@ class SessionObservationRuntime:
                     signal_current_state_repository is not None
                     and current_signal_health.path_name is not None
                 ):
+                    previous_signal_current_state = (
+                        signal_current_state_repository.latest(
+                            profile_id=current_signal_health.profile_id,
+                            service_id=current_signal_health.service_id,
+                            path_name=current_signal_health.path_name,
+                        )
+                    )
+
+                    if (
+                        previous_signal_current_state is not None
+                        and previous_signal_current_state.observed_at
+                        <= media_snapshot.captured_at
+                        and previous_signal_current_state.health.status
+                        == current_signal_health.status
+                    ):
+                        health_since = (
+                            previous_signal_current_state.health_since
+                        )
+                    else:
+                        health_since = media_snapshot.captured_at
+
                     signal_current_state_repository.save(
                         state=SignalHealthCurrentState(
                             profile_id=current_signal_health.profile_id,
                             service_id=current_signal_health.service_id,
                             path_name=current_signal_health.path_name,
                             observed_at=media_snapshot.captured_at,
+                            health_since=health_since,
                             health=current_signal_health,
                         )
                     )

@@ -75,6 +75,7 @@ def _state(
         service_id=service_id,
         path_name=path_name,
         observed_at=observed_at,
+        health_since=observed_at,
         health=health,
     )
 
@@ -303,3 +304,258 @@ def test_latest_rejects_blank_identity(
         raise AssertionError(
             "blank profile_id must be rejected"
         )
+
+# ENG-013C 235E.23 — durable Health Since contract.
+
+def test_repository_round_trip_preserves_health_since(
+    tmp_path,
+) -> None:
+    repository = _repository(tmp_path)
+
+    health = SignalHealth(
+        profile_id="impact-main",
+        service_id="impact",
+        path_name="impact",
+        media_status=HealthStatus.HEALTHY,
+        transport_status=HealthStatus.HEALTHY,
+        status=HealthStatus.HEALTHY,
+    )
+
+    health_since = BASE_TIME - timedelta(minutes=7)
+
+    state = SignalHealthCurrentState(
+        profile_id=health.profile_id,
+        service_id=health.service_id,
+        path_name=health.path_name,
+        observed_at=BASE_TIME,
+        health_since=health_since,
+        health=health,
+    )
+
+    repository.save(state=state)
+
+    loaded = repository.latest(
+        profile_id=health.profile_id,
+        service_id=health.service_id,
+        path_name=health.path_name,
+    )
+
+    assert loaded is not None
+    assert loaded.observed_at == BASE_TIME
+    assert loaded.health_since == health_since
+    assert loaded.health.status is HealthStatus.HEALTHY
+
+
+# ENG-013C 235E.23J.4A — legacy NULL health_since contract.
+
+
+def test_latest_returns_none_for_legacy_row_without_known_health_since(
+    tmp_path,
+) -> None:
+    import sqlite3
+
+    from app.noc.current_state.sqlite_signal_health_current_state_repository import (
+        SQLiteSignalHealthCurrentStateRepository,
+    )
+    from app.noc.history.sqlite_database import SQLiteHistoryDatabase
+
+    database_path = tmp_path / "legacy-null-health-since.db"
+
+    database = SQLiteHistoryDatabase(database_path)
+    database.initialize()
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO signal_health_current_state (
+                profile_id,
+                service_id,
+                path_name,
+                observed_at,
+                health_since,
+                health_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "legacy-main",
+                "legacy-service",
+                "legacy-path",
+                "2026-10-07T16:00:00+00:00",
+                None,
+                (
+                    '{"profile_id":"legacy-main",'
+                    '"service_id":"legacy-service",'
+                    '"path_name":"legacy-path",'
+                    '"media_status":"HEALTHY",'
+                    '"transport_status":"HEALTHY",'
+                    '"status":"HEALTHY"}'
+                ),
+            ),
+        )
+
+    repository = SQLiteSignalHealthCurrentStateRepository(
+        database
+    )
+
+    state = repository.latest(
+        profile_id="legacy-main",
+        service_id="legacy-service",
+        path_name="legacy-path",
+    )
+
+    assert state is None
+
+
+def test_first_canonical_save_replaces_legacy_unknown_since(
+    tmp_path,
+) -> None:
+    import sqlite3
+    from datetime import datetime, timezone
+
+    from app.domain.streaming.health import HealthStatus
+    from app.domain.streaming.signal_health import SignalHealth
+    from app.noc.current_state.signal_health_current_state import (
+        SignalHealthCurrentState,
+    )
+    from app.noc.current_state.sqlite_signal_health_current_state_repository import (
+        SQLiteSignalHealthCurrentStateRepository,
+    )
+    from app.noc.history.sqlite_database import SQLiteHistoryDatabase
+
+    database_path = tmp_path / "legacy-replacement.db"
+
+    database = SQLiteHistoryDatabase(database_path)
+    database.initialize()
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO signal_health_current_state (
+                profile_id,
+                service_id,
+                path_name,
+                observed_at,
+                health_since,
+                health_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "legacy-main",
+                "legacy-service",
+                "legacy-path",
+                "2026-10-07T16:00:00+00:00",
+                None,
+                (
+                    '{"profile_id":"legacy-main",'
+                    '"service_id":"legacy-service",'
+                    '"path_name":"legacy-path",'
+                    '"media_status":"HEALTHY",'
+                    '"transport_status":"HEALTHY",'
+                    '"status":"HEALTHY"}'
+                ),
+            ),
+        )
+
+    repository = SQLiteSignalHealthCurrentStateRepository(
+        database
+    )
+
+    observed_at = datetime(
+        2026,
+        10,
+        7,
+        17,
+        30,
+        tzinfo=timezone.utc,
+    )
+
+    health = SignalHealth(
+        profile_id="legacy-main",
+        service_id="legacy-service",
+        path_name="legacy-path",
+        media_status=HealthStatus.HEALTHY,
+        transport_status=HealthStatus.HEALTHY,
+        status=HealthStatus.HEALTHY,
+    )
+
+    canonical = SignalHealthCurrentState(
+        profile_id=health.profile_id,
+        service_id=health.service_id,
+        path_name=health.path_name,
+        observed_at=observed_at,
+        health_since=observed_at,
+        health=health,
+    )
+
+    repository.save(state=canonical)
+
+    loaded = repository.latest(
+        profile_id=canonical.profile_id,
+        service_id=canonical.service_id,
+        path_name=canonical.path_name,
+    )
+
+    assert loaded == canonical
+    assert loaded.health_since == observed_at
+
+
+# ENG-013C 235E.23J.6B — out-of-order Health Since protection.
+
+
+def test_older_state_cannot_change_preserved_health_since(
+    tmp_path,
+) -> None:
+    repository = _repository(tmp_path)
+
+    preserved_since = BASE_TIME - timedelta(minutes=7)
+
+    newer_health = SignalHealth(
+        profile_id="impact-main",
+        service_id="impact",
+        path_name="impact",
+        media_status=HealthStatus.HEALTHY,
+        transport_status=HealthStatus.HEALTHY,
+        status=HealthStatus.HEALTHY,
+    )
+    newer = SignalHealthCurrentState(
+        profile_id=newer_health.profile_id,
+        service_id=newer_health.service_id,
+        path_name=newer_health.path_name,
+        observed_at=BASE_TIME + timedelta(seconds=10),
+        health_since=preserved_since,
+        health=newer_health,
+    )
+
+    stale_health = SignalHealth(
+        profile_id="impact-main",
+        service_id="impact",
+        path_name="impact",
+        media_status=HealthStatus.CRITICAL,
+        transport_status=HealthStatus.CRITICAL,
+        status=HealthStatus.CRITICAL,
+    )
+    stale = SignalHealthCurrentState(
+        profile_id=stale_health.profile_id,
+        service_id=stale_health.service_id,
+        path_name=stale_health.path_name,
+        observed_at=BASE_TIME + timedelta(seconds=5),
+        health_since=BASE_TIME + timedelta(seconds=5),
+        health=stale_health,
+    )
+
+    repository.save(state=newer)
+    repository.save(state=stale)
+
+    loaded = repository.latest(
+        profile_id="impact-main",
+        service_id="impact",
+        path_name="impact",
+    )
+
+    assert loaded == newer
+    assert loaded is not None
+    assert loaded.observed_at == newer.observed_at
+    assert loaded.health_since == preserved_since
+    assert loaded.health.status is HealthStatus.HEALTHY

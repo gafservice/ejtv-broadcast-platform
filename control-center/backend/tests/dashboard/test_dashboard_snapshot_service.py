@@ -756,6 +756,7 @@ def test_snapshot_service_transports_signal_health_current_states() -> None:
         service_id="impact",
         path_name="impact",
         observed_at=captured_at,
+        health_since=captured_at,
         health=SignalHealth(
             profile_id="impact-main",
             service_id="impact",

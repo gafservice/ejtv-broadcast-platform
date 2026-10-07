@@ -45,6 +45,7 @@ def test_current_state_preserves_canonical_signal_health() -> None:
         service_id="enlace",
         path_name="enlace",
         observed_at=OBSERVED_AT,
+        health_since=OBSERVED_AT,
         health=health,
     )
 
@@ -61,6 +62,7 @@ def test_current_state_is_immutable() -> None:
         service_id="enlace",
         path_name="enlace",
         observed_at=OBSERVED_AT,
+        health_since=OBSERVED_AT,
         health=_health(),
     )
 
@@ -74,6 +76,7 @@ def test_current_state_normalizes_identity() -> None:
         service_id=" enlace ",
         path_name=" enlace ",
         observed_at=OBSERVED_AT,
+        health_since=OBSERVED_AT,
         health=_health(),
     )
 
@@ -104,6 +107,7 @@ def test_current_state_rejects_blank_identity(
         SignalHealthCurrentState(
             **values,
             observed_at=OBSERVED_AT,
+        health_since=OBSERVED_AT,
             health=_health(),
         )
 
@@ -115,6 +119,7 @@ def test_current_state_requires_timezone_aware_observed_at() -> None:
             service_id="enlace",
             path_name="enlace",
             observed_at=datetime(2026, 10, 6, 12, 0, 0),
+        health_since=OBSERVED_AT,
             health=_health(),
         )
 
@@ -126,6 +131,7 @@ def test_current_state_requires_signal_health() -> None:
             service_id="enlace",
             path_name="enlace",
             observed_at=OBSERVED_AT,
+        health_since=OBSERVED_AT,
             health="not-health",  # type: ignore[arg-type]
         )
 
@@ -137,6 +143,7 @@ def test_current_state_identity_must_match_health() -> None:
             service_id="other-service",
             path_name="enlace",
             observed_at=OBSERVED_AT,
+        health_since=OBSERVED_AT,
             health=_health(),
         )
 
@@ -205,5 +212,53 @@ def test_current_state_rejects_non_string_identity(
         SignalHealthCurrentState(
             **values,
             observed_at=OBSERVED_AT,
+        health_since=OBSERVED_AT,
             health=_health(),
+        )
+
+# ENG-013C 235E.23 — Health Since temporal contract.
+
+def test_signal_health_current_state_requires_health_since() -> None:
+    health = _health()
+
+    state = SignalHealthCurrentState(
+        profile_id=health.profile_id,
+        service_id=health.service_id,
+        path_name=health.path_name,
+        observed_at=OBSERVED_AT,
+        health_since=OBSERVED_AT,
+        health=health,
+    )
+
+    assert state.health_since is OBSERVED_AT
+
+
+def test_signal_health_current_state_rejects_naive_health_since() -> None:
+    health = _health()
+    naive_since = OBSERVED_AT.replace(tzinfo=None)
+
+    with pytest.raises((TypeError, ValueError)):
+        SignalHealthCurrentState(
+            profile_id=health.profile_id,
+            service_id=health.service_id,
+            path_name=health.path_name,
+            observed_at=OBSERVED_AT,
+            health_since=naive_since,
+            health=health,
+        )
+
+def test_signal_health_current_state_rejects_future_health_since() -> None:
+    from datetime import timedelta
+
+    health = _health()
+    future_since = OBSERVED_AT + timedelta(microseconds=1)
+
+    with pytest.raises((TypeError, ValueError)):
+        SignalHealthCurrentState(
+            profile_id=health.profile_id,
+            service_id=health.service_id,
+            path_name=health.path_name,
+            observed_at=OBSERVED_AT,
+            health_since=future_since,
+            health=health,
         )

@@ -126,3 +126,77 @@ def test_renderer_presents_na_when_health_reason_is_unavailable() -> None:
 
     assert "Reason" in output
     assert "N/A" in output
+
+
+def test_renderer_presents_health_since_and_duration() -> None:
+    from datetime import datetime, timedelta, timezone
+
+    reference_at = datetime(
+        2026,
+        10,
+        7,
+        18,
+        5,
+        31,
+        tzinfo=timezone.utc,
+    )
+    health_since = reference_at - timedelta(
+        hours=1,
+        minutes=2,
+        seconds=3,
+    )
+
+    data = IncomingPanelData(
+        rows=(
+            IncomingRowData(
+                path_name="future-service",
+                source="SRT",
+                status="ACTIVE",
+                bitrate_receive_mbps=6.0,
+                health_status=HealthStatus.HEALTHY,
+                health_since=health_since,
+            ),
+        ),
+        reference_at=reference_at,
+    )
+
+    output = _render_text(data)
+
+    assert "Since" in output
+    assert "Duration" in output
+    assert "2026-10-07 17:03:28" in output
+    assert "01:02:03" in output
+
+
+def test_renderer_presents_na_when_health_timing_is_unavailable() -> None:
+    from datetime import datetime, timezone
+
+    reference_at = datetime(
+        2026,
+        10,
+        7,
+        18,
+        5,
+        31,
+        tzinfo=timezone.utc,
+    )
+
+    data = IncomingPanelData(
+        rows=(
+            IncomingRowData(
+                path_name="future-service",
+                source="MPEG-TS",
+                status="ACTIVE",
+                bitrate_receive_mbps=4.5,
+                health_status=None,
+                health_since=None,
+            ),
+        ),
+        reference_at=reference_at,
+    )
+
+    output = _render_text(data)
+
+    assert "Since" in output
+    assert "Duration" in output
+    assert "N/A" in output

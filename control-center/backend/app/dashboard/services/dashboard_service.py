@@ -131,6 +131,11 @@ class DashboardService:
                 if signal_health_state is not None
                 else None
             )
+            health_since = (
+                signal_health_state.health_since
+                if signal_health_state is not None
+                else None
+            )
 
             publishers = publishers_by_path.get(
                 media_path.name,
@@ -218,10 +223,14 @@ class DashboardService:
                     protocol=protocol,
                     remote_address=remote_address,
                     health_reason=health_reason,
+                    health_since=health_since,
                 )
             )
 
-        return IncomingPanelData(rows=tuple(rows))
+        return IncomingPanelData(
+            rows=tuple(rows),
+            reference_at=snapshot.captured_at,
+        )
 
     """Coordina la construcción de la información del dashboard."""
 

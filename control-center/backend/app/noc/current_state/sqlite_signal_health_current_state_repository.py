@@ -47,9 +47,10 @@ class SQLiteSignalHealthCurrentStateRepository(
                     service_id,
                     path_name,
                     observed_at,
+                    health_since,
                     health_json
                 )
-                VALUES (?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT (
                     profile_id,
                     service_id,
@@ -57,6 +58,7 @@ class SQLiteSignalHealthCurrentStateRepository(
                 )
                 DO UPDATE SET
                     observed_at = excluded.observed_at,
+                    health_since = excluded.health_since,
                     health_json = excluded.health_json
                 WHERE excluded.observed_at >=
                       signal_health_current_state.observed_at
@@ -66,6 +68,7 @@ class SQLiteSignalHealthCurrentStateRepository(
                     state.service_id,
                     state.path_name,
                     state.observed_at.isoformat(),
+                    state.health_since.isoformat(),
                     self._codec.encode(state.health),
                 ),
             )
@@ -96,6 +99,7 @@ class SQLiteSignalHealthCurrentStateRepository(
                 """
                 SELECT
                     observed_at,
+                    health_since,
                     health_json
                 FROM signal_health_current_state
                 WHERE profile_id = ?
@@ -112,12 +116,18 @@ class SQLiteSignalHealthCurrentStateRepository(
         if row is None:
             return None
 
+        if row["health_since"] is None:
+            return None
+
         return SignalHealthCurrentState(
             profile_id=normalized_profile_id,
             service_id=normalized_service_id,
             path_name=normalized_path_name,
             observed_at=datetime.fromisoformat(
                 row["observed_at"]
+            ),
+            health_since=datetime.fromisoformat(
+                row["health_since"]
             ),
             health=self._codec.decode(
                 row["health_json"]

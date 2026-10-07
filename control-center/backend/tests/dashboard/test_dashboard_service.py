@@ -4712,6 +4712,7 @@ def test_incoming_panel_prefers_canonical_signal_health_over_streaming_health() 
         service_id='impact',
         path_name='impact',
         observed_at=captured_at,
+        health_since=captured_at,
         health=SignalHealth(
             profile_id='impact-main',
             service_id='impact',
@@ -5318,6 +5319,7 @@ def test_incoming_panel_projects_reason_from_canonical_signal_health() -> None:
         service_id="future-service",
         path_name="future-service",
         observed_at=captured_at,
+        health_since=captured_at,
         health=SignalHealth(
             profile_id="future-profile",
             service_id="future-service",
@@ -5499,3 +5501,102 @@ def test_build_dashboard_from_measurement_forwards_expected_incoming_origins(
         ]
         is expected_incoming_origins
     )
+
+
+def test_incoming_panel_projects_canonical_health_since() -> None:
+    """INCOMING timing comes from the same canonical Signal Health state."""
+
+    from datetime import datetime, timedelta, timezone
+
+    from app.domain.sessions import SessionSnapshot
+    from app.domain.streaming import (
+        HealthStatus,
+        MediaMTXSnapshot,
+        MediaPath,
+        MediaPathStatus,
+        MediaSource,
+        MeasurementQuality,
+        StreamingMeasurement,
+    )
+    from app.domain.streaming.signal_health import SignalHealth
+    from app.noc.current_state.signal_health_current_state import (
+        SignalHealthCurrentState,
+    )
+
+    captured_at = datetime(
+        2026,
+        10,
+        7,
+        18,
+        5,
+        31,
+        tzinfo=timezone.utc,
+    )
+    health_since = captured_at - timedelta(
+        minutes=8,
+        seconds=4,
+    )
+
+    media_path = MediaPath(
+        name="future-service",
+        configuration_name="future-service",
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type="srtSource",
+            source_id="source-future-service",
+        ),
+        readers=(),
+        inbound_bytes=1_000_000,
+        outbound_bytes=0,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(media_path,),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=captured_at - timedelta(seconds=1),
+        interval_seconds=1.0,
+        paths=(),
+        total_inbound_bitrate_bps=0.0,
+        total_outbound_bitrate_bps=0.0,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    canonical_state = SignalHealthCurrentState(
+        profile_id="future-profile",
+        service_id="future-service",
+        path_name="future-service",
+        observed_at=captured_at,
+        health_since=health_since,
+        health=SignalHealth(
+            profile_id="future-profile",
+            service_id="future-service",
+            path_name="future-service",
+            media_status=HealthStatus.HEALTHY,
+            transport_status=HealthStatus.HEALTHY,
+            status=HealthStatus.HEALTHY,
+        ),
+    )
+
+    panel = DashboardService().build_incoming_panel(
+        snapshot=snapshot,
+        measurement=measurement,
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(),
+        ),
+        health=None,
+        signal_health_current_states=(canonical_state,),
+    )
+
+    assert len(panel.rows) == 1
+    assert panel.rows[0].health_since == health_since
+    assert panel.reference_at == captured_at

@@ -192,3 +192,52 @@ def test_incoming_row_defaults_health_reason_to_none() -> None:
     )
 
     assert row.health_reason is None
+
+
+# ENG-013C 235E.23K — INCOMING canonical Health Since presentation contract.
+
+
+def test_incoming_row_carries_canonical_health_since() -> None:
+    from datetime import datetime, timezone
+
+    health_since = datetime(
+        2026,
+        10,
+        7,
+        17,
+        57,
+        27,
+        tzinfo=timezone.utc,
+    )
+
+    row = IncomingRowData(
+        path_name="future-service",
+        source="SRT",
+        status="ACTIVE",
+        bitrate_receive_mbps=6.0,
+        health_status=HealthStatus.HEALTHY,
+        health_since=health_since,
+    )
+
+    assert row.health_since == health_since
+
+
+def test_incoming_panel_carries_duration_reference_time() -> None:
+    from datetime import datetime, timezone
+
+    reference_at = datetime(
+        2026,
+        10,
+        7,
+        18,
+        5,
+        31,
+        tzinfo=timezone.utc,
+    )
+
+    panel = IncomingPanelData(
+        rows=(),
+        reference_at=reference_at,
+    )
+
+    assert panel.reference_at == reference_at

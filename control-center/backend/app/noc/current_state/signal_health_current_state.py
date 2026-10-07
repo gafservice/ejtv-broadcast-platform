@@ -21,6 +21,7 @@ class SignalHealthCurrentState:
     service_id: str
     path_name: str
     observed_at: datetime
+    health_since: datetime
     health: SignalHealth
 
     def __post_init__(self) -> None:
@@ -45,6 +46,20 @@ class SignalHealthCurrentState:
             or self.observed_at.utcoffset() is None
         ):
             raise ValueError("observed_at must be timezone-aware")
+
+        if not isinstance(self.health_since, datetime):
+            raise TypeError("health_since must be a datetime")
+
+        if (
+            self.health_since.tzinfo is None
+            or self.health_since.utcoffset() is None
+        ):
+            raise ValueError("health_since must be timezone-aware")
+
+        if self.health_since > self.observed_at:
+            raise ValueError(
+                "health_since must not be after observed_at"
+            )
 
         if not isinstance(self.health, SignalHealth):
             raise TypeError("health must be a SignalHealth")

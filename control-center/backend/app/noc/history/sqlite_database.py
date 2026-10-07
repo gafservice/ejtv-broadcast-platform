@@ -16,7 +16,7 @@ import sqlite3
 from pathlib import Path
 
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 class SQLiteHistoryDatabase:
@@ -116,6 +116,14 @@ class SQLiteHistoryDatabase:
                     5,
                 )
                 current_version = 5
+
+            if current_version == 5:
+                self._migrate_v6(connection)
+                self._set_version(
+                    connection,
+                    6,
+                )
+                current_version = 6
 
             if current_version != SCHEMA_VERSION:
                 raise RuntimeError(
@@ -382,5 +390,17 @@ class SQLiteHistoryDatabase:
                     path_name
                 )
             );
+            """
+        )
+
+    @staticmethod
+    def _migrate_v6(
+        connection: sqlite3.Connection,
+    ) -> None:
+        """Add canonical Signal Health state-start persistence."""
+        connection.execute(
+            """
+            ALTER TABLE signal_health_current_state
+            ADD COLUMN health_since TEXT
             """
         )
