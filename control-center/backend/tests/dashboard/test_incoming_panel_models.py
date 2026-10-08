@@ -241,3 +241,20 @@ def test_incoming_panel_carries_duration_reference_time() -> None:
     )
 
     assert panel.reference_at == reference_at
+
+
+def test_incoming_row_carries_alarm_indicator_contract() -> None:
+    """INCOMING transports an already-projected alarm indicator."""
+
+    row = IncomingRowData(
+        path_name="future-service",
+        source="SRT",
+        status="ACTIVE",
+        bitrate_receive_mbps=5.0,
+        health_status=None,
+        alarm_count=2,
+        alarm_severity="CRITICAL",
+    )
+
+    assert row.alarm_count == 2
+    assert row.alarm_severity == "CRITICAL"

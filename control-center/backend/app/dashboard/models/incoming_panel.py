@@ -21,6 +21,8 @@ class IncomingRowData:
     remote_address: str | None = None
     health_reason: str | None = None
     health_since: datetime | None = None
+    alarm_count: int = 0
+    alarm_severity: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

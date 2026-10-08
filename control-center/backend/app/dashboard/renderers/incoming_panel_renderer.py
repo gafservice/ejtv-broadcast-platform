@@ -42,6 +42,7 @@ class IncomingPanelRenderer:
         table.add_column("Receive")
         table.add_column("Status")
         table.add_column("Health")
+        table.add_column("Alarms")
         table.add_column("Since")
         table.add_column("Duration")
         table.add_column("Reason")
@@ -57,6 +58,7 @@ class IncomingPanelRenderer:
                 ),
                 row.status,
                 self._format_health(row),
+                self._format_alarm_indicator(row),
                 self._format_health_since(row.health_since),
                 self._format_health_duration(
                     health_since=row.health_since,
@@ -94,6 +96,18 @@ class IncomingPanelRenderer:
 
         return row.health_status.value
 
+
+    @staticmethod
+    def _format_alarm_indicator(row: IncomingRowData) -> str:
+        """Present an already-projected canonical alarm indicator."""
+
+        if row.alarm_count == 0:
+            return "—"
+
+        if row.alarm_severity is None:
+            return str(row.alarm_count)
+
+        return f"{row.alarm_count} {row.alarm_severity}"
 
     @staticmethod
     def _format_health_since(value) -> str:

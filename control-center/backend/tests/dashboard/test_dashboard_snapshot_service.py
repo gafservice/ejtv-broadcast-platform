@@ -795,3 +795,60 @@ def test_snapshot_service_transports_signal_health_current_states() -> None:
         service.kwargs["signal_health_current_states"]
         == (signal_state,)
     )
+
+def test_snapshot_service_transports_canonical_alarm_records() -> None:
+    """Canonical alarms cross the snapshot boundary without pagination."""
+    from unittest.mock import Mock
+
+    from app.noc.domain.node_alarm import AlarmRecord
+
+    captured_at = datetime(2026, 10, 8, 18, 0, tzinfo=UTC)
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=0,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=None,
+        interval_seconds=None,
+        paths=(),
+        total_inbound_bitrate_bps=None,
+        total_outbound_bitrate_bps=None,
+        quality=MeasurementQuality.NOT_AVAILABLE,
+    )
+
+    first_alarm = Mock(spec=AlarmRecord)
+    second_alarm = Mock(spec=AlarmRecord)
+    records = (first_alarm, second_alarm)
+
+    class CapturingDashboardService:
+        def __init__(self) -> None:
+            self.kwargs = None
+
+        def build_dashboard_from_measurement(self, **kwargs):
+            self.kwargs = kwargs
+            return object()
+
+    service = CapturingDashboardService()
+
+    snapshot_input = DashboardSnapshotInput(
+        hostname="test-node",
+        mediamtx_online=True,
+        api_online=True,
+        snapshot=snapshot,
+        measurement=measurement,
+        alarm_records=records,
+    )
+
+    DashboardSnapshotService(service).build_snapshot(snapshot_input)
+
+    assert service.kwargs is not None
+    assert service.kwargs["alarm_records"] is records
+    assert service.kwargs["alarm_records"] == (
+        first_alarm,
+        second_alarm,
+    )

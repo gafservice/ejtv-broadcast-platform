@@ -553,6 +553,7 @@ class DashboardApplication:
         node_health = None
         recent_events = None
         active_alarms = None
+        alarm_records = ()
 
         if self._health_diagnostic_repository is not None:
             health_diagnostic = (
@@ -650,6 +651,7 @@ class DashboardApplication:
             "signal_health_current_states": (
                 signal_health_current_states
             ),
+            "alarm_records": alarm_records,
             "source_configurations": source_configurations,
             "expected_incoming_origins": (
                 self._expected_incoming_origins

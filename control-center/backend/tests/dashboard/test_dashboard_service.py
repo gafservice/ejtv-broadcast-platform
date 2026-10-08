@@ -5600,3 +5600,341 @@ def test_incoming_panel_projects_canonical_health_since() -> None:
     assert len(panel.rows) == 1
     assert panel.rows[0].health_since == health_since
     assert panel.reference_at == captured_at
+
+
+def test_incoming_alarm_indicator_correlates_complete_signal_identity() -> None:
+    """INCOMING must correlate canonical alarms by complete identity."""
+
+    from datetime import datetime, timedelta, timezone
+
+    from app.domain.streaming.health import HealthStatus
+    from app.domain.streaming.signal_health import SignalHealth
+    from app.noc.current_state.signal_health_current_state import (
+        SignalHealthCurrentState,
+    )
+    from app.noc.domain.node_alarm import (
+        AlarmRecord,
+        AlarmSeverity,
+        AlarmState,
+    )
+    from app.noc.domain.node_instance import NodeInstanceId
+
+    captured_at = datetime(
+        2026, 10, 8, 18, 0, tzinfo=timezone.utc
+    )
+
+    path_name = "future-service"
+    profile_id = "future-profile"
+    service_id = "future-service-id"
+
+    media_path = MediaPath(
+        name=path_name,
+        configuration_name=path_name,
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type="srtSource",
+            source_id="future-source",
+        ),
+        readers=(),
+        inbound_bytes=1_000_000,
+        outbound_bytes=0,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(media_path,),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=captured_at - timedelta(seconds=1),
+        interval_seconds=1.0,
+        paths=(),
+        total_inbound_bitrate_bps=0.0,
+        total_outbound_bitrate_bps=0.0,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    canonical_state = SignalHealthCurrentState(
+        profile_id=profile_id,
+        service_id=service_id,
+        path_name=path_name,
+        observed_at=captured_at,
+        health_since=captured_at,
+        health=SignalHealth(
+            profile_id=profile_id,
+            service_id=service_id,
+            path_name=path_name,
+            media_status=HealthStatus.DEGRADED,
+            transport_status=HealthStatus.HEALTHY,
+            status=HealthStatus.DEGRADED,
+        ),
+    )
+
+    alarm = AlarmRecord(
+        alarm_id="alm-future-001",
+        alarm_type="SIGNAL_HEALTH",
+        severity=AlarmSeverity.MAJOR,
+        state=AlarmState.ACTIVE,
+        timestamp=captured_at,
+        source=NodeInstanceId("streaming-primary"),
+        title="Future signal degraded",
+        description="Canonical Signal Health alarm",
+        attributes={
+            "profile_id": profile_id,
+            "service_id": service_id,
+            "path_name": path_name,
+        },
+    )
+
+    panel = DashboardService().build_incoming_panel(
+        snapshot=snapshot,
+        measurement=measurement,
+        session_snapshot=SessionSnapshot(
+            captured_at=captured_at,
+            sessions=(),
+        ),
+        health=None,
+        signal_health_current_states=(canonical_state,),
+        alarms=(alarm,),
+    )
+
+    assert len(panel.rows) == 1
+    assert panel.rows[0].path_name == path_name
+    assert panel.rows[0].alarm_count == 1
+    assert panel.rows[0].alarm_severity == "MAJOR"
+
+def test_incoming_alarm_indicator_edge_cases() -> None:
+    """Canonical alarm correlation handles lifecycle and identity."""
+
+
+    from datetime import datetime, timedelta, timezone
+
+    from app.domain.streaming.health import HealthStatus
+    from app.domain.streaming.signal_health import SignalHealth
+    from app.noc.current_state.signal_health_current_state import (
+        SignalHealthCurrentState,
+    )
+    from app.noc.domain.node_alarm import (
+        AlarmRecord,
+        AlarmSeverity,
+        AlarmState,
+    )
+    from app.noc.domain.node_instance import NodeInstanceId
+
+    captured_at = datetime(
+        2026, 10, 8, 18, 0, tzinfo=timezone.utc
+    )
+
+    path_name = "future-service"
+    profile_id = "future-profile"
+    service_id = "future-service-id"
+
+    media_path = MediaPath(
+        name=path_name,
+        configuration_name=path_name,
+        status=MediaPathStatus.ACTIVE,
+        ready=True,
+        available=True,
+        online=True,
+        source=MediaSource(
+            source_type="srtSource",
+            source_id="future-source",
+        ),
+        readers=(),
+        inbound_bytes=1_000_000,
+        outbound_bytes=0,
+    )
+
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(media_path,),
+        reported_item_count=1,
+        reported_page_count=1,
+    )
+
+    measurement = StreamingMeasurement(
+        captured_at=captured_at,
+        previous_captured_at=captured_at - timedelta(seconds=1),
+        interval_seconds=1.0,
+        paths=(),
+        total_inbound_bitrate_bps=0.0,
+        total_outbound_bitrate_bps=0.0,
+        quality=MeasurementQuality.AVAILABLE,
+    )
+
+    canonical_state = SignalHealthCurrentState(
+        profile_id=profile_id,
+        service_id=service_id,
+        path_name=path_name,
+        observed_at=captured_at,
+        health_since=captured_at,
+        health=SignalHealth(
+            profile_id=profile_id,
+            service_id=service_id,
+            path_name=path_name,
+            media_status=HealthStatus.DEGRADED,
+            transport_status=HealthStatus.HEALTHY,
+            status=HealthStatus.DEGRADED,
+        ),
+    )
+
+    alarm = AlarmRecord(
+        alarm_id="alm-future-001",
+        alarm_type="SIGNAL_HEALTH",
+        severity=AlarmSeverity.MAJOR,
+        state=AlarmState.ACTIVE,
+        timestamp=captured_at,
+        source=NodeInstanceId("streaming-primary"),
+        title="Future signal degraded",
+        description="Canonical Signal Health alarm",
+        attributes={
+            "profile_id": profile_id,
+            "service_id": service_id,
+            "path_name": path_name,
+        },
+    )
+
+
+    from dataclasses import replace
+
+    identity = {
+        "profile_id": profile_id,
+        "service_id": service_id,
+        "path_name": path_name,
+    }
+
+    def make_alarm(
+        alarm_id,
+        *,
+        severity=AlarmSeverity.MAJOR,
+        state=AlarmState.ACTIVE,
+        attributes=None,
+        alarm_type="SIGNAL_HEALTH",
+    ):
+        kwargs = {}
+
+        if state is AlarmState.ACKNOWLEDGED:
+            kwargs.update(
+                acknowledged=True,
+                acknowledged_by="operator",
+                acknowledged_at=captured_at + timedelta(seconds=1),
+            )
+
+        if state is AlarmState.RESOLVED:
+            kwargs["resolved_at"] = (
+                captured_at + timedelta(seconds=2)
+            )
+
+        values = {
+            "alarm_id": alarm_id,
+            "alarm_type": alarm_type,
+            "severity": severity,
+            "state": state,
+            "attributes": (
+                identity if attributes is None else attributes
+            ),
+            "acknowledged": False,
+            "acknowledged_by": None,
+            "acknowledged_at": None,
+            "resolved_at": None,
+            "closed_at": None,
+        }
+
+        values.update(kwargs)
+
+        return replace(alarm, **values)
+
+    def project(alarms, states=(canonical_state,)):
+        panel = DashboardService().build_incoming_panel(
+            snapshot=snapshot,
+            measurement=measurement,
+            session_snapshot=SessionSnapshot(
+                captured_at=captured_at,
+                sessions=(),
+            ),
+            health=None,
+            signal_health_current_states=states,
+            alarms=tuple(alarms),
+        )
+        assert len(panel.rows) == 1
+        return panel.rows[0]
+
+    valid = [
+        make_alarm("active-major"),
+        make_alarm(
+            "ack-critical",
+            severity=AlarmSeverity.CRITICAL,
+            state=AlarmState.ACKNOWLEDGED,
+        ),
+    ]
+
+    excluded = [
+        make_alarm(
+            "resolved",
+            severity=AlarmSeverity.CRITICAL,
+            state=AlarmState.RESOLVED,
+        ),
+        make_alarm(
+            "wrong-profile",
+            attributes={**identity, "profile_id": "other-profile"},
+        ),
+        make_alarm(
+            "wrong-service",
+            attributes={**identity, "service_id": "other-service"},
+        ),
+        make_alarm(
+            "missing-profile",
+            attributes={
+                "service_id": service_id,
+                "path_name": path_name,
+            },
+        ),
+        make_alarm(
+            "wrong-type",
+            alarm_type="NODE_HEALTH_DEGRADED",
+        ),
+    ]
+
+    row = project(valid + excluded)
+
+    assert row.alarm_count == 2
+    assert row.alarm_severity == "CRITICAL"
+
+    empty_row = project(excluded)
+
+    assert empty_row.alarm_count == 0
+    assert empty_row.alarm_severity is None
+
+    second_profile = "future-profile-secondary"
+
+    second_state = replace(
+        canonical_state,
+        profile_id=second_profile,
+        health=replace(
+            canonical_state.health,
+            profile_id=second_profile,
+        ),
+    )
+
+    second_alarm = make_alarm(
+        "second-profile",
+        severity=AlarmSeverity.WARNING,
+        attributes={
+            **identity,
+            "profile_id": second_profile,
+        },
+    )
+
+    multi_row = project(
+        [valid[0], second_alarm],
+        states=(canonical_state, second_state),
+    )
+
+    assert multi_row.alarm_count == 2
+    assert multi_row.alarm_severity == "MAJOR"

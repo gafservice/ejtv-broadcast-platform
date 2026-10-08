@@ -84,6 +84,7 @@ class DashboardService:
         signal_health_current_states: tuple[
             SignalHealthCurrentState, ...
         ] = (),
+        alarms: tuple[AlarmRecord, ...] = (),
     ) -> IncomingPanelData:
         """Project canonical incoming-path evidence for presentation."""
 
@@ -96,6 +97,82 @@ class DashboardService:
             state.path_name: state
             for state in signal_health_current_states
         }
+
+        severity_rank = {
+            "INFO": 0,
+            "WARNING": 1,
+            "MINOR": 2,
+            "MAJOR": 3,
+            "CRITICAL": 4,
+        }
+
+        identities_by_path: dict[
+            str, set[tuple[str, str, str]]
+        ] = {}
+
+        for state in signal_health_current_states:
+            identities_by_path.setdefault(
+                state.path_name, set()
+            ).add(
+                (
+                    state.profile_id,
+                    state.service_id,
+                    state.path_name,
+                )
+            )
+
+        alarms_by_path: dict[str, list[AlarmRecord]] = {}
+
+        for alarm in alarms:
+            if (
+                alarm.alarm_type != "SIGNAL_HEALTH"
+                or not alarm.requires_attention
+                or alarm.attributes is None
+            ):
+                continue
+
+            identity = (
+                alarm.attributes.get("profile_id"),
+                alarm.attributes.get("service_id"),
+                alarm.attributes.get("path_name"),
+            )
+
+            if not all(
+                isinstance(value, str) and value
+                for value in identity
+            ):
+                continue
+
+            path_name = identity[2]
+
+            if identity not in identities_by_path.get(
+                path_name, set()
+            ):
+                continue
+
+            alarms_by_path.setdefault(
+                path_name, []
+            ).append(alarm)
+
+        def alarm_indicator(
+            path_name: str,
+        ) -> tuple[int, str | None]:
+            matching = alarms_by_path.get(
+                path_name, []
+            )
+
+            if not matching:
+                return 0, None
+
+            highest = max(
+                matching,
+                key=lambda alarm: severity_rank[
+                    alarm.severity.value
+                ],
+            )
+
+            return len(matching), highest.severity.value
+
 
         publishers_by_path: dict[str, list[ActiveSession]] = {}
 
@@ -210,6 +287,10 @@ class DashboardService:
                     media_path.name
                 )
 
+            alarm_count, alarm_severity = alarm_indicator(
+                media_path.name
+            )
+
             rows.append(
                 IncomingRowData(
                     path_name=media_path.name,
@@ -224,6 +305,8 @@ class DashboardService:
                     remote_address=remote_address,
                     health_reason=health_reason,
                     health_since=health_since,
+                    alarm_count=alarm_count,
+                    alarm_severity=alarm_severity,
                 )
             )
 
@@ -1211,6 +1294,7 @@ class DashboardService:
         node_health: NodeHealthPanelData | None = None,
         recent_events: RecentEventsPanelData | None = None,
         active_alarms: ActiveAlarmsPanelData | None = None,
+        alarm_records: tuple[AlarmRecord, ...] = (),
         platform_health: PlatformHealth | None = None,
         noc_snapshot: NodeSnapshot | None = None,
         active_connections_viewport: PanelViewport | None = None,
@@ -1292,6 +1376,7 @@ class DashboardService:
                 signal_health_current_states=(
                     signal_health_current_states
                 ),
+                alarms=alarm_records,
                 source_configurations=source_configurations,
                 expected_incoming_origins=expected_incoming_origins,
             )

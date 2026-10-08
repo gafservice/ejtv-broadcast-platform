@@ -200,3 +200,72 @@ def test_renderer_presents_na_when_health_timing_is_unavailable() -> None:
     assert "Since" in output
     assert "Duration" in output
     assert "N/A" in output
+
+def test_renderer_presents_canonical_alarm_indicators() -> None:
+    """Render already-projected alarm count and maximum severity."""
+    from rich.table import Table
+
+    data = IncomingPanelData(
+        rows=(
+            IncomingRowData(
+                path_name="future-clear",
+                source="SRT",
+                status="ACTIVE",
+                bitrate_receive_mbps=4.0,
+                health_status=HealthStatus.HEALTHY,
+                alarm_count=0,
+                alarm_severity=None,
+            ),
+            IncomingRowData(
+                path_name="future-major",
+                source="SRT",
+                status="ACTIVE",
+                bitrate_receive_mbps=4.0,
+                health_status=HealthStatus.DEGRADED,
+                alarm_count=1,
+                alarm_severity="MAJOR",
+            ),
+            IncomingRowData(
+                path_name="future-critical",
+                source="MPEG-TS",
+                status="ACTIVE",
+                bitrate_receive_mbps=4.0,
+                health_status=HealthStatus.CRITICAL,
+                alarm_count=2,
+                alarm_severity="CRITICAL",
+            ),
+            IncomingRowData(
+                path_name="future-warning",
+                source="MPEG-TS",
+                status="ACTIVE",
+                bitrate_receive_mbps=4.0,
+                health_status=HealthStatus.DEGRADED,
+                alarm_count=3,
+                alarm_severity="WARNING",
+            ),
+        ),
+    )
+
+    panel = IncomingPanelRenderer().render(data)
+    table = panel.renderable
+
+    assert isinstance(table, Table)
+
+    columns = tuple(
+        column.header
+        for column in table.columns
+    )
+
+    assert "Alarms" in columns
+    assert columns.index("Alarms") == columns.index("Health") + 1
+
+    alarm_column = table.columns[
+        columns.index("Alarms")
+    ]
+
+    assert tuple(alarm_column.cells) == (
+        "—",
+        "1 MAJOR",
+        "2 CRITICAL",
+        "3 WARNING",
+    )
