@@ -23,6 +23,7 @@ from app.domain.streaming import (
     MediaMTXSnapshot,
     StreamingMeasurement,
 )
+from app.dashboard.models.incoming_panel import IncomingPanelData
 
 
 def test_run_once_builds_and_renders_dashboard() -> None:
@@ -58,6 +59,7 @@ def test_run_once_builds_and_renders_dashboard() -> None:
     session_measurement = Mock()
 
     dashboard_data = Mock(spec=DashboardData)
+    dashboard_data.incoming = IncomingPanelData()
     rendered_dashboard = Mock(spec=Layout)
 
     mediamtx_adapter = Mock()
@@ -182,6 +184,7 @@ def test_run_once_builds_and_renders_dashboard() -> None:
         dashboard_data,
         navigation_state=application.navigation_state,
         terminal_navigation_state=application.terminal_navigation_state,
+        incoming_selection_state=application.incoming_selection_state,
     )
 
 
@@ -248,7 +251,9 @@ def test_run_once_uses_previous_snapshot_on_second_execution() -> None:
     second_session_measurement = Mock()
 
     first_dashboard_data = Mock(spec=DashboardData)
+    first_dashboard_data.incoming = IncomingPanelData()
     second_dashboard_data = Mock(spec=DashboardData)
+    second_dashboard_data.incoming = IncomingPanelData()
 
     first_layout = Mock(spec=Layout)
     second_layout = Mock(spec=Layout)
@@ -428,11 +433,13 @@ def test_run_once_uses_previous_snapshot_on_second_execution() -> None:
                 first_dashboard_data,
                 navigation_state=application.navigation_state,
         terminal_navigation_state=application.terminal_navigation_state,
+        incoming_selection_state=application.incoming_selection_state,
             ),
             call(
                 second_dashboard_data,
                 navigation_state=application.navigation_state,
         terminal_navigation_state=application.terminal_navigation_state,
+        incoming_selection_state=application.incoming_selection_state,
             ),
         ]
     )
@@ -545,6 +552,7 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
     )
 
     dashboard_data = Mock(spec=DashboardData)
+    dashboard_data.incoming = IncomingPanelData()
     rendered_dashboard = Mock(spec=Layout)
 
     mediamtx_adapter = Mock()
@@ -723,6 +731,7 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         dashboard_data,
         navigation_state=application.navigation_state,
         terminal_navigation_state=application.terminal_navigation_state,
+        incoming_selection_state=application.incoming_selection_state,
     )
 
 
@@ -902,6 +911,7 @@ def test_application_transports_node_health_from_noc_runtime() -> None:
     )
 
     dashboard_data = Mock(spec=DashboardData)
+    dashboard_data.incoming = IncomingPanelData()
 
     dashboard_data.active_connections = Mock()
     dashboard_data.active_connections.total_items = 10
@@ -1240,6 +1250,7 @@ def test_application_reads_durable_history_without_noc_runtime() -> None:
     )
 
     dashboard_data = Mock(spec=DashboardData)
+    dashboard_data.incoming = IncomingPanelData()
 
     dashboard_data.active_connections = Mock()
     dashboard_data.active_connections.total_items = 0
@@ -1385,6 +1396,7 @@ def test_application_keeps_node_health_empty_when_shared_diagnostic_is_absent() 
     health_diagnostic_repository.latest.return_value = None
 
     dashboard_data = Mock(spec=DashboardData)
+    dashboard_data.incoming = IncomingPanelData()
 
     dashboard_data.active_connections = Mock()
     dashboard_data.active_connections.total_items = 0
@@ -1834,6 +1846,7 @@ def test_run_once_passes_current_navigation_state_to_renderer() -> None:
     terminal_navigation_state = TerminalNavigationState()
 
     dashboard_data = Mock(spec=DashboardData)
+    dashboard_data.incoming = IncomingPanelData()
     rendered_dashboard = Mock(spec=Layout)
 
     application.build_dashboard.return_value = dashboard_data
@@ -1852,6 +1865,7 @@ def test_run_once_passes_current_navigation_state_to_renderer() -> None:
         dashboard_data,
         navigation_state=navigation_state,
         terminal_navigation_state=terminal_navigation_state,
+        incoming_selection_state=application.incoming_selection_state,
     )
 
 def test_run_once_preserves_temporal_stream_health_across_cycles() -> None:
@@ -2032,6 +2046,9 @@ def test_run_once_preserves_temporal_stream_health_across_cycles() -> None:
         Mock(spec=DashboardData),
         Mock(spec=DashboardData),
     )
+
+    for item in dashboard_data:
+        item.incoming = IncomingPanelData()
 
     dashboard_service.build_dashboard_from_measurement.side_effect = (
         dashboard_data
@@ -2299,11 +2316,16 @@ def test_build_dashboard_detects_stream_health_transition_once_across_cycles() -
     session_service.measure.return_value = Mock()
 
     dashboard_service = Mock()
-    dashboard_service.build_dashboard_from_measurement.side_effect = [
+    dashboard_results = [
         Mock(spec=DashboardData),
         Mock(spec=DashboardData),
         Mock(spec=DashboardData),
     ]
+
+    for item in dashboard_results:
+        item.incoming = IncomingPanelData()
+
+    dashboard_service.build_dashboard_from_measurement.side_effect = dashboard_results
 
     dashboard_renderer = Mock()
     system_service = Mock()
@@ -2478,6 +2500,9 @@ def test_build_dashboard_records_one_stream_health_event_per_effective_transitio
             stream_event_service
         ),
     )
+    dashboard_service.build_dashboard_from_measurement.return_value.incoming = (
+        IncomingPanelData()
+    )
 
     application._streaming_health_transition_detector = (
         StreamingHealthTransitionDetector()
@@ -2612,6 +2637,9 @@ def test_stream_health_transition_is_shared_with_event_and_alarm_services():
         streaming_health_transition_alarm_service=(
             stream_alarm_service
         ),
+    )
+    dashboard_service.build_dashboard_from_measurement.return_value.incoming = (
+        IncomingPanelData()
     )
 
     application._build_streaming_health = Mock(
@@ -2762,6 +2790,7 @@ def test_application_builds_platform_health_from_effective_streaming_health() ->
     streaming_health_aggregator.build.return_value = platform_health
 
     dashboard_data = Mock(spec=DashboardData)
+    dashboard_data.incoming = IncomingPanelData()
 
     dashboard_service = Mock()
     dashboard_service.build_dashboard_from_measurement.return_value = (
@@ -2909,6 +2938,7 @@ def test_application_transports_platform_health_to_dashboard_snapshot() -> None:
     dashboard_snapshot_service.build_snapshot.return_value = Mock(
         spec=DashboardData
     )
+    dashboard_snapshot_service.build_snapshot.return_value.incoming = IncomingPanelData()
 
     dashboard_renderer = Mock()
     dashboard_renderer.render.return_value = Mock(spec=Layout)
@@ -3024,6 +3054,7 @@ def test_application_wires_temporal_rtmp_health_into_platform_aggregation() -> N
     dashboard_snapshot_service.build_snapshot.return_value = Mock(
         spec=DashboardData
     )
+    dashboard_snapshot_service.build_snapshot.return_value.incoming = IncomingPanelData()
 
     system_service = Mock()
     system_service.get_system_info.return_value = Mock(
@@ -3140,6 +3171,7 @@ def test_application_stabilizes_rtmp_health_before_aggregation() -> None:
     dashboard_snapshot_service.build_snapshot.return_value = Mock(
         spec=DashboardData
     )
+    dashboard_snapshot_service.build_snapshot.return_value.incoming = IncomingPanelData()
 
     system_service = Mock()
     system_service.get_system_info.return_value = Mock(
@@ -3261,6 +3293,7 @@ def test_application_builds_rtsp_health_from_previous_session_snapshot() -> None
     dashboard_snapshot_service.build_snapshot.return_value = Mock(
         spec=DashboardData
     )
+    dashboard_snapshot_service.build_snapshot.return_value.incoming = IncomingPanelData()
 
     system_service = Mock()
     system_service.get_system_info.return_value = Mock(
@@ -3412,6 +3445,7 @@ def test_application_builds_hls_health_from_previous_session_snapshot() -> None:
     dashboard_snapshot_service.build_snapshot.return_value = Mock(
         spec=DashboardData
     )
+    dashboard_snapshot_service.build_snapshot.return_value.incoming = IncomingPanelData()
 
     system_service = Mock()
     system_service.get_system_info.return_value = Mock(
@@ -3564,6 +3598,7 @@ def test_application_builds_webrtc_health_from_previous_session_snapshot() -> No
     dashboard_snapshot_service.build_snapshot.return_value = Mock(
         spec=DashboardData
     )
+    dashboard_snapshot_service.build_snapshot.return_value.incoming = IncomingPanelData()
 
     system_service = Mock()
     system_service.get_system_info.return_value = Mock(
@@ -3739,6 +3774,7 @@ def test_dashboard_excludes_internal_observer_from_operational_sessions() -> Non
     dashboard_service.build_dashboard_from_measurement.return_value = Mock(
         spec=DashboardData
     )
+    dashboard_service.build_dashboard_from_measurement.return_value.incoming = IncomingPanelData()
 
     dashboard_renderer = Mock()
     dashboard_renderer.render.return_value = Mock(spec=Layout)
@@ -3949,6 +3985,7 @@ def test_dashboard_temporal_services_receive_only_operational_snapshots() -> Non
     dashboard_service.build_dashboard_from_measurement.return_value = Mock(
         spec=DashboardData
     )
+    dashboard_service.build_dashboard_from_measurement.return_value.incoming = IncomingPanelData()
 
     dashboard_renderer = Mock()
     dashboard_renderer.render.return_value = Mock(spec=Layout)
@@ -4040,6 +4077,7 @@ def test_view_navigation_state_reaches_renderer_across_run_once() -> None:
     application = DashboardApplication.__new__(DashboardApplication)
 
     dashboard_data = Mock(spec=DashboardData)
+    dashboard_data.incoming = IncomingPanelData()
     rendered_dashboard = Mock(spec=Layout)
 
     application.build_dashboard = Mock(return_value=dashboard_data)
@@ -4073,6 +4111,7 @@ def test_view_navigation_state_reaches_renderer_across_run_once() -> None:
         terminal_navigation_state=TerminalNavigationState(
             active_view=TerminalView.INCOMING,
         ),
+        incoming_selection_state=application.incoming_selection_state,
     )
 
     application._dashboard_renderer.reset_mock()
@@ -4096,6 +4135,7 @@ def test_view_navigation_state_reaches_renderer_across_run_once() -> None:
         terminal_navigation_state=TerminalNavigationState(
             active_view=TerminalView.GENERAL,
         ),
+        incoming_selection_state=application.incoming_selection_state,
     )
 
 def test_application_transports_session_snapshot_into_dashboard_snapshot_input() -> None:
@@ -4144,6 +4184,7 @@ def test_application_transports_session_snapshot_into_dashboard_snapshot_input()
     dashboard_service = Mock()
 
     dashboard_data = Mock(spec=DashboardData)
+    dashboard_data.incoming = IncomingPanelData()
     dashboard_data.active_connections = None
     dashboard_data.active_alarms = None
     dashboard_data.recent_events = None
@@ -4255,6 +4296,7 @@ def test_application_reads_signal_health_current_state_for_media_profiles() -> N
 
     dashboard_service = Mock()
     dashboard_data = Mock(spec=DashboardData)
+    dashboard_data.incoming = IncomingPanelData()
     dashboard_data.active_connections = Mock()
     dashboard_data.active_connections.total_items = 0
     dashboard_data.active_alarms = None
@@ -4399,6 +4441,7 @@ def test_dashboard_cycle_forwards_source_configurations() -> None:
     )
 
     dashboard_data = Mock(name="dashboard-data")
+    dashboard_data.incoming = IncomingPanelData()
     dashboard_data.active_connections = Mock()
     dashboard_data.active_connections.total_items = 0
     dashboard_data.active_alarms = None
@@ -4528,6 +4571,7 @@ def test_application_transports_canonical_alarm_records_to_snapshot() -> None:
 
     dashboard_service = Mock()
     dashboard_data = Mock(spec=DashboardData)
+    dashboard_data.incoming = IncomingPanelData()
     dashboard_data.active_connections = Mock()
     dashboard_data.active_connections.total_items = 0
     dashboard_data.active_alarms = None

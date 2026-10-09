@@ -15,6 +15,8 @@ class IncomingPanelRenderer:
     def render(
         self,
         data: IncomingPanelData | None,
+        *,
+        selected_path_name: str | None = None,
     ) -> Panel:
         """Render the incoming signals panel."""
 
@@ -65,6 +67,12 @@ class IncomingPanelRenderer:
                     reference_at=data.reference_at,
                 ),
                 self._format_optional(row.health_reason),
+                style=(
+                    "reverse"
+                    if row.path_name == selected_path_name
+                    and selected_path_name is not None
+                    else None
+                ),
             )
 
         return Panel(

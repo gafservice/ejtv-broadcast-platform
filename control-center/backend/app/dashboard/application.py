@@ -24,8 +24,12 @@ from app.dashboard.models.dashboard_navigation_state import (
 from app.dashboard.models.dashboard_navigation_totals import (
     DashboardNavigationTotals,
 )
+from app.dashboard.models.incoming_selection_state import (
+    IncomingSelectionState,
+)
 from app.dashboard.models.terminal_navigation_state import (
     TerminalNavigationState,
+    TerminalView,
 )
 from app.dashboard.models import DashboardData
 from app.dashboard.services.dashboard_navigation_controller import (
@@ -287,6 +291,8 @@ class DashboardApplication:
             else DashboardNavigationState()
         )
         self._terminal_navigation_state = TerminalNavigationState()
+        self._incoming_selection_state = IncomingSelectionState()
+        self._incoming_path_names: tuple[str, ...] = ()
 
         self._navigation_totals = DashboardNavigationTotals()
 
@@ -338,6 +344,25 @@ class DashboardApplication:
         return self._terminal_navigation_state
 
     @property
+    def incoming_selection_state(self) -> IncomingSelectionState:
+        """Current INCOMING selection."""
+        return getattr(
+            self,
+            '_incoming_selection_state',
+            IncomingSelectionState(),
+        )
+
+    def reconcile_incoming_selection(
+        self,
+        path_names: tuple[str, ...],
+    ) -> None:
+        """Reconcile against the latest incoming paths."""
+        current = self.incoming_selection_state
+        updated = current.reconcile(path_names)
+        self._incoming_path_names = path_names
+        self._incoming_selection_state = updated
+
+    @property
     def navigation_totals(self) -> DashboardNavigationTotals:
         """Totales navegables de la última captura."""
 
@@ -384,6 +409,29 @@ class DashboardApplication:
                 self._terminal_navigation_state.select_previous()
             )
             return
+
+        if (
+            self._terminal_navigation_state.active_view
+            is TerminalView.INCOMING
+        ):
+            paths = getattr(self, '_incoming_path_names', ())
+            selection = self.incoming_selection_state
+
+            if action is DashboardNavigationAction.SCROLL_UP:
+                self._incoming_selection_state = selection.move(-1, paths)
+                return
+
+            if action is DashboardNavigationAction.SCROLL_DOWN:
+                self._incoming_selection_state = selection.move(1, paths)
+                return
+
+            if action is DashboardNavigationAction.HOME:
+                self._incoming_selection_state = selection.home(paths)
+                return
+
+            if action is DashboardNavigationAction.END:
+                self._incoming_selection_state = selection.end(paths)
+                return
 
         total_items = self._navigation_totals.for_panel(
             self._navigation_state.active_panel
@@ -681,6 +729,14 @@ class DashboardApplication:
             snapshot_input
         )
 
+        incoming = dashboard_data.incoming
+        path_names = (
+            tuple(row.path_name for row in incoming.rows)
+            if incoming is not None
+            else ()
+        )
+        self.reconcile_incoming_selection(path_names)
+
         self._navigation_totals = DashboardNavigationTotals(
             active_connections=self._panel_total(
                 dashboard_data.active_connections
@@ -744,6 +800,7 @@ class DashboardApplication:
             dashboard_data,
             navigation_state=self._navigation_state,
             terminal_navigation_state=self._terminal_navigation_state,
+            incoming_selection_state=self.incoming_selection_state,
         )
 
     def run(

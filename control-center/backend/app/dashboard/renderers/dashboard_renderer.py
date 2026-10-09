@@ -8,6 +8,9 @@ from app.dashboard.models.dashboard_navigation_state import (
     DashboardNavigationState,
     NavigablePanel,
 )
+from app.dashboard.models.incoming_selection_state import (
+    IncomingSelectionState,
+)
 from app.dashboard.models.terminal_navigation_state import (
     TerminalNavigationState,
     TerminalView,
@@ -91,6 +94,7 @@ class DashboardRenderer:
         *,
         navigation_state: DashboardNavigationState | None = None,
         terminal_navigation_state: TerminalNavigationState | None = None,
+        incoming_selection_state: IncomingSelectionState | None = None,
     ) -> Layout:
         """Convierte DashboardData en un layout completo de Rich."""
 
@@ -150,7 +154,12 @@ class DashboardRenderer:
 
             layout["incoming"].update(
                 self._incoming_panel_renderer.render(
-                    data.incoming
+                    data.incoming,
+                    selected_path_name=(
+                        incoming_selection_state.selected_path_name
+                        if incoming_selection_state is not None
+                        else None
+                    ),
                 )
             )
 
