@@ -188,3 +188,51 @@ Warnings         1
 
 Estado: implementación y validación funcional completadas.
 Pendiente únicamente commit, push y verificación de sincronización con origin.
+
+---
+
+## ENG-013C — 235E.25 Checkpoint
+
+### 2026-10-09 — INCOMING Row Selection / Navigation
+
+**Status:** CLOSED / GREEN
+
+**Functional commit:**
+
+`2ec9590cb79d42fb0d190ec2c1d482839e3667c0`
+
+**Parent:**
+
+`66abcbcefff1e594a64cf35d2290fd0e6edbf028`
+
+### Changes
+
+- Incoming row selection state.
+- Navigation integration in DashboardApplication.
+- Selection reconciliation with observed incoming rows.
+- Selected-row highlighting in the terminal renderer.
+- Selection propagation through the rendering pipeline.
+- Contractual and regression tests.
+
+### Validation
+
+- Targeted regression: 109 passed.
+- Physical visual validation: EJTV, ENLACE, IMPACT.
+- Functional commit: 10 files.
+- Push: successful.
+- Remote synchronization: verified.
+- Force push: not used.
+
+### Continuity
+
+Last completed block:
+
+`235E.25 — CLOSED / GREEN`
+
+Next authorized block:
+
+`235E.26 — INCOMING Signal Detail`
+
+Documentation checkpoint:
+
+Pending documentation commit and remote verification.

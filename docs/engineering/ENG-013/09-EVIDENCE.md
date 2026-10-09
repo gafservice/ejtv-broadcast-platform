@@ -277,3 +277,48 @@ Pendiente:
 - verificación de sincronización con origin.
 
 ENG-014 permanece fuera de alcance hasta el cierre formal de ENG-013B.
+
+---
+
+## ENG-013C — 235E.25 Checkpoint
+
+**Date:** 2026-10-09
+
+**Block:** INCOMING Row Selection / Navigation
+
+**Status:** CLOSED / GREEN
+
+### Functional Git reference
+
+- Branch: `eng-013c-media-track-health`
+- Commit: `2ec9590cb79d42fb0d190ec2c1d482839e3667c0`
+- Parent: `66abcbcefff1e594a64cf35d2290fd0e6edbf028`
+- Push: verified against `origin`
+- Committed files: 10
+
+### Automated verification
+
+Targeted dashboard regression:
+
+- 109 passed
+- 0 failed
+- pytest return code: 0
+
+This is a targeted regression, not a full backend suite.
+
+### Physical verification
+
+Visual selection confirmed for:
+
+- EJTV
+- ENLACE
+- IMPACT
+
+Individual physical testing of every navigation key and
+disappearance scenario was not separately documented.
+
+### Next engineering block
+
+`235E.26 — INCOMING Signal Detail`
+
+Status: NOT STARTED.

@@ -99,3 +99,51 @@ Pendiente para cierre formal:
 5. verificación local/origin.
 
 ENG-014 permanece fuera de alcance hasta completar estos pasos.
+
+
+---
+
+## ENG-013C — Current Engineering Checkpoint
+
+### Reference
+
+- Date: 2026-10-09
+- Project: Enlace Broadcast Platform
+- Branch: `eng-013c-media-track-health`
+- Last completed block: `235E.25`
+- Functionality: INCOMING Row Selection / Navigation
+- Functional commit: `2ec9590cb79d42fb0d190ec2c1d482839e3667c0`
+- Parent commit: `66abcbcefff1e594a64cf35d2290fd0e6edbf028`
+- Remote: `origin`
+- Push: VERIFIED
+- Local/remote synchronization: GREEN
+
+### Acceptance evidence
+
+- Targeted regression: 109 passed.
+- Physical visual validation: EJTV, ENLACE, IMPACT.
+- Committed files: 10.
+- Staged diff integrity: GREEN.
+- Force push: not used.
+- Services restarted during commit/push: no.
+
+### Current state
+
+`235E.25 — CLOSED / GREEN`
+
+### Next authorized block
+
+`235E.26 — INCOMING Signal Detail`
+
+Status: NOT STARTED.
+
+### Checkpoint management rule
+
+Every functional push must be followed by a verified
+documentation checkpoint before beginning the next block.
+
+Functional commits and documentation commits are tracked
+separately.
+
+Historical documentation must be preserved unless a
+specific correction is supported by Git evidence.
