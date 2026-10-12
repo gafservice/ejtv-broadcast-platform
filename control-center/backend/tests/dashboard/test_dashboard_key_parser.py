@@ -93,3 +93,23 @@ def test_parser_rejects_non_bytes(
         match="sequence must be bytes",
     ):
         parser.parse(invalid)
+
+
+@pytest.mark.parametrize(
+    ("sequence", "expected"),
+    (
+        (b"\x1bOA", DashboardNavigationAction.SCROLL_UP),
+        (b"\x1bOB", DashboardNavigationAction.SCROLL_DOWN),
+        (b"\x1bOC", DashboardNavigationAction.NEXT_VIEW),
+        (b"\x1bOD", DashboardNavigationAction.PREVIOUS_VIEW),
+    ),
+)
+def test_parser_supports_ss3_arrow_sequences(
+    sequence: bytes,
+    expected: DashboardNavigationAction,
+) -> None:
+    """Acepta flechas SS3 utilizadas por terminales SSH."""
+
+    parser = DashboardKeyParser()
+
+    assert parser.parse(sequence) is expected
