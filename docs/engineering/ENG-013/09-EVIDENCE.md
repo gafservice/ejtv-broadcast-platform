@@ -322,3 +322,47 @@ disappearance scenario was not separately documented.
 `235E.26 — INCOMING Signal Detail`
 
 Status: NOT STARTED.
+
+---
+
+## ENG-013C — SS3 Navigation Correction Evidence
+
+Date: 2026-10-14
+
+Related block: 235E.25 — Row Selection / Navigation.
+
+Correction commit:
+`2fc58f1661d2724e0c085bbff082e0ccc335da30`
+
+Subject:
+`fix(noc): support SS3 arrow keys in dashboard navigation`
+
+Changed files:
+- `control-center/backend/app/dashboard/services/dashboard_key_parser.py`
+- `control-center/backend/tests/dashboard/test_dashboard_key_parser.py`
+
+Commit summary:
+- 2 files changed.
+- 25 insertions.
+- 0 deletions.
+
+SS3 mappings:
+- ESC O A -> SCROLL_UP
+- ESC O B -> SCROLL_DOWN
+- ESC O C -> NEXT_VIEW
+- ESC O D -> PREVIOUS_VIEW
+
+Targeted regression:
+
+    24 passed in 0.37s
+    pytest_rc=0
+
+Evidence limitations:
+- Full backend regression not executed for this correction.
+- Physical SS3 acceptance not separately documented.
+- Independent live remote verification remains pending.
+
+Engineering continuity:
+- 235E.25 remains CLOSED.
+- 235E.26 — Signal Detail remains NOT STARTED.
+- Initial inspection 235E.26A has not been executed.

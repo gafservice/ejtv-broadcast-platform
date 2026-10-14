@@ -40,3 +40,16 @@ separately.
 - Branch: eng-013c-media-track-health
 - Remote synchronization: VERIFIED
 - Next block: 235E.26 — Signal Detail
+
+---
+
+## 2026-10-14 — SS3 Navigation Follow-up
+
+- Related block: 235E.25 — Row Selection / Navigation.
+- Functional commit: 2ec9590cb79d42fb0d190ec2c1d482839e3667c0.
+- Documentation checkpoint: d61ce325549a01ebe5efa82e37d4c1d9e316cf82.
+- SS3 correction: 2fc58f1661d2724e0c085bbff082e0ccc335da30.
+- Targeted regression: 24 passed, 0 failed.
+- Physical SS3 acceptance: not separately documented.
+- Next block: 235E.26 — Signal Detail.
+- Initial inspection 235E.26A: NOT EXECUTED.

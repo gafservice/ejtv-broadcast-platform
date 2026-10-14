@@ -236,3 +236,39 @@ Next authorized block:
 Documentation checkpoint:
 
 Pending documentation commit and remote verification.
+
+---
+
+## 2026-10-14 — ENG-013C SS3 Navigation Follow-up
+
+Related block:
+`235E.25 — INCOMING Row Selection / Navigation`
+
+Original functional commit:
+`2ec9590cb79d42fb0d190ec2c1d482839e3667c0`
+
+Original documentation checkpoint:
+`d61ce325549a01ebe5efa82e37d4c1d9e316cf82`
+
+The original documentation checkpoint was committed and
+remotely verified after the historical pending-status entry.
+
+Follow-up correction:
+`2fc58f1661d2724e0c085bbff082e0ccc335da30`
+
+Changes:
+- Support SS3 terminal arrow-key sequences.
+- Preserve existing navigation action mapping.
+- Add focused key-parser regression tests.
+
+Verification:
+- 24 targeted tests passed.
+- 0 failed.
+- pytest_rc=0.
+- Physical SS3 acceptance not separately documented.
+- Full backend regression not executed for this correction.
+
+Continuity:
+- 235E.25 remains CLOSED.
+- 235E.26 — Signal Detail remains NOT STARTED.
+- Initial inspection 235E.26A: NOT EXECUTED.

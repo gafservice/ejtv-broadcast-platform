@@ -147,3 +147,36 @@ separately.
 
 Historical documentation must be preserved unless a
 specific correction is supported by Git evidence.
+
+---
+
+## ENG-013C — SS3 Navigation Follow-up
+
+Date: 2026-10-14
+
+Related block: 235E.25 — Row Selection / Navigation.
+
+Original functional commit:
+`2ec9590cb79d42fb0d190ec2c1d482839e3667c0`
+
+Documentation checkpoint:
+`d61ce325549a01ebe5efa82e37d4c1d9e316cf82`
+
+Correction commit:
+`2fc58f1661d2724e0c085bbff082e0ccc335da30`
+
+Scope:
+- Support SS3 arrow-key sequences in DashboardKeyParser.
+- Preserve existing navigation behavior.
+
+Verification:
+- Targeted regression: 24 passed.
+- Failed tests: 0.
+- pytest_rc: 0.
+- Full backend regression: not executed for this correction.
+- Physical SS3 acceptance: not separately documented.
+
+Continuity:
+- 235E.25 remains CLOSED.
+- 235E.26 — Signal Detail remains NOT STARTED.
+- Initial inspection 235E.26A: NOT EXECUTED.
