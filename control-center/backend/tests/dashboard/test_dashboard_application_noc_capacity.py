@@ -268,6 +268,10 @@ def test_dashboard_reuses_same_capture_for_capacity_and_projection():
     dashboard_data.active_alarms = None
     dashboard_data.recent_events = None
 
+    from app.dashboard.models.incoming_panel import IncomingPanelData
+
+    dashboard_data.incoming = IncomingPanelData()
+
     dashboard_snapshot_service = Mock()
     dashboard_snapshot_service.build_snapshot.return_value = (
         dashboard_data

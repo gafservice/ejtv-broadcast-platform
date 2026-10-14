@@ -27,6 +27,7 @@ from app.dashboard.models.dashboard_navigation_totals import (
 from app.dashboard.models.incoming_selection_state import (
     IncomingSelectionState,
 )
+from app.dashboard.models.panel_viewport import PanelViewport
 from app.dashboard.models.terminal_navigation_state import (
     TerminalNavigationState,
     TerminalView,
@@ -293,6 +294,7 @@ class DashboardApplication:
         self._terminal_navigation_state = TerminalNavigationState()
         self._incoming_selection_state = IncomingSelectionState()
         self._incoming_path_names: tuple[str, ...] = ()
+        self._incoming_viewport = PanelViewport(page_size=5)
 
         self._navigation_totals = DashboardNavigationTotals()
 
@@ -361,6 +363,25 @@ class DashboardApplication:
         updated = current.reconcile(path_names)
         self._incoming_path_names = path_names
         self._incoming_selection_state = updated
+        self.synchronize_incoming_viewport()
+
+    @property
+    def incoming_viewport(self) -> PanelViewport:
+        """Persistent presentation viewport for INCOMING signals."""
+        return getattr(
+            self,
+            "_incoming_viewport",
+            PanelViewport(page_size=5),
+        )
+
+    def synchronize_incoming_viewport(self) -> None:
+        """Keep the selected incoming identity visible."""
+        self._incoming_viewport = (
+            self.incoming_selection_state.ensure_visible(
+                self.incoming_viewport,
+                getattr(self, "_incoming_path_names", ()),
+            )
+        )
 
     @property
     def navigation_totals(self) -> DashboardNavigationTotals:
@@ -419,18 +440,22 @@ class DashboardApplication:
 
             if action is DashboardNavigationAction.SCROLL_UP:
                 self._incoming_selection_state = selection.move(-1, paths)
+                self.synchronize_incoming_viewport()
                 return
 
             if action is DashboardNavigationAction.SCROLL_DOWN:
                 self._incoming_selection_state = selection.move(1, paths)
+                self.synchronize_incoming_viewport()
                 return
 
             if action is DashboardNavigationAction.HOME:
                 self._incoming_selection_state = selection.home(paths)
+                self.synchronize_incoming_viewport()
                 return
 
             if action is DashboardNavigationAction.END:
                 self._incoming_selection_state = selection.end(paths)
+                self.synchronize_incoming_viewport()
                 return
 
         total_items = self._navigation_totals.for_panel(
@@ -791,8 +816,41 @@ class DashboardApplication:
         return dashboard_data
 
 
-    def run_once(self) -> Layout:
+    def run_once(
+        self,
+        *,
+        terminal_width: int | None = None,
+        incoming_height: int | None = None,
+    ) -> Layout:
         """Obtiene una medición y renderiza una iteración del dashboard."""
+
+        if (terminal_width is None) != (incoming_height is None):
+            raise ValueError(
+                'terminal_width and incoming_height must be provided together'
+            )
+
+        incoming_presentation_mode = "full"
+        incoming_visible_capacity = None
+
+        if terminal_width is not None:
+            from app.dashboard.services.incoming_presentation_policy import (
+                IncomingPresentationPolicy,
+            )
+
+            presentation = IncomingPresentationPolicy().calculate(
+                terminal_width=terminal_width,
+                incoming_height=incoming_height,
+            )
+
+            incoming_presentation_mode = presentation.mode
+            incoming_visible_capacity = presentation.page_size
+
+            if presentation.page_size > 0:
+                self._incoming_viewport = PanelViewport(
+                    offset=self.incoming_viewport.offset,
+                    page_size=presentation.page_size,
+                )
+                self.synchronize_incoming_viewport()
 
         dashboard_data = self.build_dashboard()
 
@@ -801,6 +859,9 @@ class DashboardApplication:
             navigation_state=self._navigation_state,
             terminal_navigation_state=self._terminal_navigation_state,
             incoming_selection_state=self.incoming_selection_state,
+            incoming_viewport=self.incoming_viewport,
+            incoming_presentation_mode=incoming_presentation_mode,
+            incoming_visible_capacity=incoming_visible_capacity,
         )
 
     def run(
@@ -841,7 +902,16 @@ class DashboardApplication:
                 max_iterations is None
                 or iteration < max_iterations
             ):
-                rendered_dashboard = self.run_once()
+                terminal_size = live.console.size
+                incoming_height = max(
+                    1,
+                    terminal_size.height - 23,
+                )
+
+                rendered_dashboard = self.run_once(
+                    terminal_width=terminal_size.width,
+                    incoming_height=incoming_height,
+                )
 
                 live.update(
                     rendered_dashboard,

@@ -185,6 +185,9 @@ def test_run_once_builds_and_renders_dashboard() -> None:
         navigation_state=application.navigation_state,
         terminal_navigation_state=application.terminal_navigation_state,
         incoming_selection_state=application.incoming_selection_state,
+        incoming_viewport=application.incoming_viewport,
+        incoming_presentation_mode="full",
+        incoming_visible_capacity=None,
     )
 
 
@@ -434,12 +437,18 @@ def test_run_once_uses_previous_snapshot_on_second_execution() -> None:
                 navigation_state=application.navigation_state,
         terminal_navigation_state=application.terminal_navigation_state,
         incoming_selection_state=application.incoming_selection_state,
+        incoming_viewport=application.incoming_viewport,
+        incoming_presentation_mode="full",
+        incoming_visible_capacity=None,
             ),
             call(
                 second_dashboard_data,
                 navigation_state=application.navigation_state,
         terminal_navigation_state=application.terminal_navigation_state,
         incoming_selection_state=application.incoming_selection_state,
+        incoming_viewport=application.incoming_viewport,
+        incoming_presentation_mode="full",
+        incoming_visible_capacity=None,
             ),
         ]
     )
@@ -459,6 +468,8 @@ def test_run_updates_live_dashboard_repeatedly() -> None:
     )
 
     live_instance = Mock()
+    live_instance.console.size.width = 100
+    live_instance.console.size.height = 30
 
     live_context = Mock()
     live_context.__enter__ = Mock(
@@ -732,6 +743,9 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         navigation_state=application.navigation_state,
         terminal_navigation_state=application.terminal_navigation_state,
         incoming_selection_state=application.incoming_selection_state,
+        incoming_viewport=application.incoming_viewport,
+        incoming_presentation_mode="full",
+        incoming_visible_capacity=None,
     )
 
 
@@ -1590,6 +1604,8 @@ def test_run_quit_key_stops_before_next_refresh() -> None:
     application._keyboard_input = keyboard_input
 
     live_instance = Mock()
+    live_instance.console.size.width = 100
+    live_instance.console.size.height = 30
 
     live_context = Mock()
     live_context.__enter__ = Mock(
@@ -1614,7 +1630,10 @@ def test_run_quit_key_stops_before_next_refresh() -> None:
             max_iterations=2,
         )
 
-    application.run_once.assert_called_once_with()
+    application.run_once.assert_called_once_with(
+        terminal_width=100,
+        incoming_height=7,
+    )
 
     live_instance.update.assert_called_once_with(
         first_layout,
@@ -1671,6 +1690,8 @@ def test_run_navigation_key_preserves_normal_refresh_cadence() -> None:
     application._keyboard_input = keyboard_input
 
     live_instance = Mock()
+    live_instance.console.size.width = 100
+    live_instance.console.size.height = 30
 
     live_context = Mock()
     live_context.__enter__ = Mock(
@@ -1765,6 +1786,8 @@ def test_run_multiple_navigation_keys_do_not_add_refreshes() -> None:
     application._keyboard_input = keyboard_input
 
     live_instance = Mock()
+    live_instance.console.size.width = 100
+    live_instance.console.size.height = 30
 
     live_context = Mock()
     live_context.__enter__ = Mock(
@@ -1866,6 +1889,9 @@ def test_run_once_passes_current_navigation_state_to_renderer() -> None:
         navigation_state=navigation_state,
         terminal_navigation_state=terminal_navigation_state,
         incoming_selection_state=application.incoming_selection_state,
+        incoming_viewport=application.incoming_viewport,
+        incoming_presentation_mode="full",
+        incoming_visible_capacity=None,
     )
 
 def test_run_once_preserves_temporal_stream_health_across_cycles() -> None:
@@ -4112,6 +4138,9 @@ def test_view_navigation_state_reaches_renderer_across_run_once() -> None:
             active_view=TerminalView.INCOMING,
         ),
         incoming_selection_state=application.incoming_selection_state,
+        incoming_viewport=application.incoming_viewport,
+        incoming_presentation_mode="full",
+        incoming_visible_capacity=None,
     )
 
     application._dashboard_renderer.reset_mock()
@@ -4136,6 +4165,9 @@ def test_view_navigation_state_reaches_renderer_across_run_once() -> None:
             active_view=TerminalView.GENERAL,
         ),
         incoming_selection_state=application.incoming_selection_state,
+        incoming_viewport=application.incoming_viewport,
+        incoming_presentation_mode="full",
+        incoming_visible_capacity=None,
     )
 
 def test_application_transports_session_snapshot_into_dashboard_snapshot_input() -> None:

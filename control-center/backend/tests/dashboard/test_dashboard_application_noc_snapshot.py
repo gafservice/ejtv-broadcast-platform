@@ -191,6 +191,10 @@ def test_build_dashboard_projects_same_system_capture_into_noc() -> None:
     dashboard_data.active_alarms = None
     dashboard_data.recent_events = None
 
+    from app.dashboard.models.incoming_panel import IncomingPanelData
+
+    dashboard_data.incoming = IncomingPanelData()
+
     dashboard_snapshot_service = Mock()
     dashboard_snapshot_service.build_snapshot.return_value = (
         dashboard_data

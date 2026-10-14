@@ -3,6 +3,8 @@
 from rich.panel import Panel
 from rich.table import Table
 
+from app.dashboard.models.panel_viewport import PanelViewport
+
 from app.dashboard.models.incoming_panel import (
     IncomingPanelData,
     IncomingRowData,
@@ -17,6 +19,8 @@ class IncomingPanelRenderer:
         data: IncomingPanelData | None,
         *,
         selected_path_name: str | None = None,
+        viewport: PanelViewport | None = None,
+        presentation_mode: str = "full",
     ) -> Panel:
         """Render the incoming signals panel."""
 
@@ -32,41 +36,105 @@ class IncomingPanelRenderer:
                 title="INCOMING SIGNALS",
             )
 
+        if viewport is not None and not isinstance(viewport, PanelViewport):
+            raise TypeError("viewport must be a PanelViewport or None")
+
+        visible_rows = data.rows
+        title = "INCOMING SIGNALS"
+
+        if viewport is not None:
+            start, end = viewport.bounds(len(data.rows))
+            visible_rows = data.rows[start:end]
+            title = (
+                f"INCOMING SIGNALS [{start + 1}-{end} / {len(data.rows)}]"
+            )
+
+        if presentation_mode not in (
+            "compact",
+            "operational",
+            "full",
+        ):
+            raise ValueError(
+                "presentation_mode must be "
+                "'compact', 'operational' or 'full'"
+            )
+
         table = Table(
             box=None,
             expand=True,
         )
 
-        table.add_column("Path")
-        table.add_column("Source")
-        table.add_column("Protocol")
-        table.add_column("Origin")
-        table.add_column("Receive")
-        table.add_column("Status")
-        table.add_column("Health")
-        table.add_column("Alarms")
-        table.add_column("Since")
-        table.add_column("Duration")
-        table.add_column("Reason")
+        compact_columns = (
+            "Path",
+            "Source",
+            "Protocol",
+            "Receive",
+            "Status",
+            "Health",
+            "Alarms",
+        )
 
-        for row in data.rows:
-            table.add_row(
-                row.path_name,
-                row.source,
-                self._format_optional(row.protocol),
-                self._format_optional(row.remote_address),
-                self._format_bitrate(
+        full_columns = (
+            "Path",
+            "Source",
+            "Protocol",
+            "Origin",
+            "Receive",
+            "Status",
+            "Health",
+            "Alarms",
+            "Since",
+            "Duration",
+            "Reason",
+        )
+
+        operational_columns = (
+            "Path",
+            "Source",
+            "Protocol",
+            "Origin",
+            "Receive",
+            "Status",
+            "Health",
+            "Alarms",
+        )
+
+        if presentation_mode == "compact":
+            columns = compact_columns
+        elif presentation_mode == "operational":
+            columns = operational_columns
+        else:
+            columns = full_columns
+
+        for column in columns:
+            table.add_column(column)
+
+        for row in visible_rows:
+            values = {
+                "Path": row.path_name,
+                "Source": row.source,
+                "Protocol": self._format_optional(row.protocol),
+                "Origin": self._format_optional(row.remote_address),
+                "Receive": self._format_bitrate(
                     row.bitrate_receive_mbps
                 ),
-                row.status,
-                self._format_health(row),
-                self._format_alarm_indicator(row),
-                self._format_health_since(row.health_since),
-                self._format_health_duration(
+                "Status": row.status,
+                "Health": self._format_health(row),
+                "Alarms": self._format_alarm_indicator(row),
+                "Since": self._format_health_since(
+                    row.health_since
+                ),
+                "Duration": self._format_health_duration(
                     health_since=row.health_since,
                     reference_at=data.reference_at,
                 ),
-                self._format_optional(row.health_reason),
+                "Reason": self._format_optional(
+                    row.health_reason
+                ),
+            }
+
+            table.add_row(
+                *(values[column] for column in columns),
                 style=(
                     "reverse"
                     if row.path_name == selected_path_name
@@ -77,7 +145,7 @@ class IncomingPanelRenderer:
 
         return Panel(
             table,
-            title="INCOMING SIGNALS",
+            title=title,
         )
 
     @staticmethod

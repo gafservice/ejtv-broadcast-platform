@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
+from app.dashboard.models.panel_viewport import PanelViewport
+
 
 @dataclass(frozen=True, slots=True)
 class IncomingSelectionState:
@@ -96,6 +98,45 @@ class IncomingSelectionState:
         return replace(
             current,
             selected_path_name=path_names[next_index],
+        )
+
+    def ensure_visible(
+        self,
+        viewport: PanelViewport,
+        path_names: tuple[str, ...],
+    ) -> PanelViewport:
+        """Keep the selected incoming identity inside the visible window."""
+
+        if not isinstance(viewport, PanelViewport):
+            raise TypeError("viewport must be a PanelViewport")
+
+        self._validate_paths(path_names)
+
+        if (
+            self.selected_path_name is None
+            or self.selected_path_name not in path_names
+        ):
+            return PanelViewport(
+                offset=viewport.normalized_offset(len(path_names)),
+                page_size=viewport.page_size,
+            )
+
+        selected_index = path_names.index(
+            self.selected_path_name
+        )
+
+        start, end = viewport.bounds(len(path_names))
+
+        if selected_index < start:
+            offset = selected_index
+        elif selected_index >= end:
+            offset = selected_index - viewport.page_size + 1
+        else:
+            offset = start
+
+        return PanelViewport(
+            offset=offset,
+            page_size=viewport.page_size,
         )
 
     def home(

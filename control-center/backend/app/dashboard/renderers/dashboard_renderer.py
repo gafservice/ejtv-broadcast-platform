@@ -8,6 +8,7 @@ from app.dashboard.models.dashboard_navigation_state import (
     DashboardNavigationState,
     NavigablePanel,
 )
+from app.dashboard.models.panel_viewport import PanelViewport
 from app.dashboard.models.incoming_selection_state import (
     IncomingSelectionState,
 )
@@ -38,6 +39,9 @@ from app.dashboard.renderers.recent_events_panel_renderer import (
 )
 from app.dashboard.renderers.incoming_panel_renderer import (
     IncomingPanelRenderer,
+)
+from app.dashboard.renderers.signal_detail_renderer import (
+    SignalDetailRenderer,
 )
 from app.dashboard.renderers.path_table_renderer import PathTableRenderer
 from app.dashboard.renderers.server_panel_renderer import (
@@ -86,6 +90,7 @@ class DashboardRenderer:
             RecentEventsPanelRenderer()
         )
         self._incoming_panel_renderer = IncomingPanelRenderer()
+        self._signal_detail_renderer = SignalDetailRenderer()
         self._path_table_renderer = PathTableRenderer()
 
     def render(
@@ -95,6 +100,9 @@ class DashboardRenderer:
         navigation_state: DashboardNavigationState | None = None,
         terminal_navigation_state: TerminalNavigationState | None = None,
         incoming_selection_state: IncomingSelectionState | None = None,
+        incoming_viewport: PanelViewport | None = None,
+        incoming_presentation_mode: str = "full",
+        incoming_visible_capacity: int | None = None,
     ) -> Layout:
         """Convierte DashboardData en un layout completo de Rich."""
 
@@ -152,14 +160,44 @@ class DashboardRenderer:
                 *sections
             )
 
-            layout["incoming"].update(
-                self._incoming_panel_renderer.render(
+            detail_height = (
+                12 if incoming_visible_capacity == 0 else 20
+            )
+
+            layout["incoming"].split_column(
+                Layout(name="incoming_list"),
+                Layout(name="signal_detail", size=detail_height),
+            )
+
+            selected_path_name = (
+                incoming_selection_state.selected_path_name
+                if incoming_selection_state is not None
+                else None
+            )
+
+            if incoming_visible_capacity == 0:
+                layout["incoming_list"].update(
+                    Panel(
+                        "Insufficient terminal height. "
+                        "Enlarge the terminal to display incoming signals.",
+                        title="INCOMING SIGNALS",
+                    )
+                )
+            else:
+                layout["incoming_list"].update(
+                    self._incoming_panel_renderer.render(
+                        data.incoming,
+                        selected_path_name=selected_path_name,
+                        viewport=incoming_viewport,
+                        presentation_mode=incoming_presentation_mode,
+                    )
+                )
+
+            layout["signal_detail"].update(
+                self._signal_detail_renderer.render(
                     data.incoming,
-                    selected_path_name=(
-                        incoming_selection_state.selected_path_name
-                        if incoming_selection_state is not None
-                        else None
-                    ),
+                    selected_path_name=selected_path_name,
+                    compact=(incoming_visible_capacity == 0),
                 )
             )
 
