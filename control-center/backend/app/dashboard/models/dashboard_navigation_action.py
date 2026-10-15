@@ -23,4 +23,11 @@ class DashboardNavigationAction(str, Enum):
     HOME = "home"
     END = "end"
 
+    SELECT_SIGNAL_TAB = "select_signal_tab"
+    SELECT_TRANSPORT_TAB = "select_transport_tab"
+    SELECT_VIDEO_TAB = "select_video_tab"
+    SELECT_AUDIO_TAB = "select_audio_tab"
+    SELECT_EVENTS_TAB = "select_events_tab"
+    SELECT_STATISTICS_TAB = "select_statistics_tab"
+
     QUIT = "quit"

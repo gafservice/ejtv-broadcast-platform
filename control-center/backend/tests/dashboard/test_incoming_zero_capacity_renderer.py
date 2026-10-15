@@ -44,7 +44,9 @@ def test_zero_capacity_shows_explicit_notice_without_losing_detail():
 
     assert selection.selected_path_name == "enlace"
 
-    assert layout["signal_detail"].renderable.title == "SIGNAL DETAIL"
+    detail = layout["signal_detail"].renderable
+    assert "No incoming signal selected" in detail.title.plain
+    assert detail.renderable == "SELECTED SIGNAL DETAIL"
 
     incoming_panel = layout["incoming_list"].renderable
 

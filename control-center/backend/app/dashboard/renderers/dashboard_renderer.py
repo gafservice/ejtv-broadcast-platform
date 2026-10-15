@@ -1,5 +1,6 @@
 """Renderizador principal del dashboard."""
 
+from rich.console import Group
 from rich.layout import Layout
 from rich.panel import Panel
 
@@ -9,6 +10,16 @@ from app.dashboard.models.dashboard_navigation_state import (
     NavigablePanel,
 )
 from app.dashboard.models.panel_viewport import PanelViewport
+from app.dashboard.services.incoming_vertical_geometry_policy import (
+    IncomingVerticalGeometry,
+)
+from app.dashboard.models.incoming_detail_tab_state import (
+    IncomingDetailTab,
+    IncomingDetailTabState,
+)
+from app.dashboard.models.incoming_panel import (
+    IncomingPanelData,
+)
 from app.dashboard.models.incoming_selection_state import (
     IncomingSelectionState,
 )
@@ -40,8 +51,17 @@ from app.dashboard.renderers.recent_events_panel_renderer import (
 from app.dashboard.renderers.incoming_panel_renderer import (
     IncomingPanelRenderer,
 )
+from app.dashboard.renderers.incoming_signal_cards_renderer import (
+    IncomingSignalCardsRenderer,
+)
 from app.dashboard.renderers.signal_detail_renderer import (
     SignalDetailRenderer,
+)
+from app.dashboard.renderers.incoming_signal_header_renderer import (
+    IncomingSignalHeaderRenderer,
+)
+from app.dashboard.renderers.incoming_detail_tab_strip import (
+    IncomingDetailTabStrip,
 )
 from app.dashboard.renderers.path_table_renderer import PathTableRenderer
 from app.dashboard.renderers.server_panel_renderer import (
@@ -91,6 +111,9 @@ class DashboardRenderer:
         )
         self._incoming_panel_renderer = IncomingPanelRenderer()
         self._signal_detail_renderer = SignalDetailRenderer()
+        self._incoming_signal_header_renderer = (
+            IncomingSignalHeaderRenderer()
+        )
         self._path_table_renderer = PathTableRenderer()
 
     def render(
@@ -100,9 +123,12 @@ class DashboardRenderer:
         navigation_state: DashboardNavigationState | None = None,
         terminal_navigation_state: TerminalNavigationState | None = None,
         incoming_selection_state: IncomingSelectionState | None = None,
+        incoming_detail_tab_state: IncomingDetailTabState | None = None,
         incoming_viewport: PanelViewport | None = None,
         incoming_presentation_mode: str = "full",
         incoming_visible_capacity: int | None = None,
+        incoming_vertical_geometry: IncomingVerticalGeometry | None = None,
+        terminal_width: int | None = None,
     ) -> Layout:
         """Convierte DashboardData en un layout completo de Rich."""
 
@@ -160,12 +186,26 @@ class DashboardRenderer:
                 *sections
             )
 
-            detail_height = (
-                12 if incoming_visible_capacity == 0 else 20
-            )
+            if incoming_vertical_geometry is None:
+                list_height = None
+                detail_height = (
+                    12 if incoming_visible_capacity == 0 else 20
+                )
+            else:
+                if not isinstance(
+                    incoming_vertical_geometry,
+                    IncomingVerticalGeometry,
+                ):
+                    raise TypeError(
+                        "incoming_vertical_geometry must be an "
+                        "IncomingVerticalGeometry or None"
+                    )
+
+                list_height = incoming_vertical_geometry.list_height
+                detail_height = incoming_vertical_geometry.detail_height
 
             layout["incoming"].split_column(
-                Layout(name="incoming_list"),
+                Layout(name="incoming_list", size=list_height),
                 Layout(name="signal_detail", size=detail_height),
             )
 
@@ -193,13 +233,79 @@ class DashboardRenderer:
                     )
                 )
 
-            layout["signal_detail"].update(
-                self._signal_detail_renderer.render(
-                    data.incoming,
-                    selected_path_name=selected_path_name,
-                    compact=(incoming_visible_capacity == 0),
-                )
+            active_tab = (
+                incoming_detail_tab_state.active_tab
+                if incoming_detail_tab_state is not None
+                else IncomingDetailTab.SIGNAL
             )
+
+            if active_tab is IncomingDetailTab.SIGNAL:
+                use_signal_cards_v2 = (
+                    incoming_vertical_geometry is not None
+                    and incoming_vertical_geometry.detail_height >= 20
+                    and isinstance(data.incoming, IncomingPanelData)
+                )
+
+                if use_signal_cards_v2:
+                    detail_panel = IncomingSignalCardsRenderer().render(
+                        data.incoming,
+                        selected_path_name=selected_path_name,
+                    )
+                else:
+                    detail_panel = self._signal_detail_renderer.render(
+                        data.incoming,
+                        selected_path_name=selected_path_name,
+                        compact=(
+                            incoming_visible_capacity == 0
+                            if incoming_vertical_geometry is None
+                            else incoming_vertical_geometry.detail_height < 20
+                        ),
+                    )
+            else:
+                detail_panel = Panel(
+                    (
+                        "No incoming signal selected."
+                        if selected_path_name is None
+                        else (
+                            f"Signal: {selected_path_name}\n"
+                            "Metrics: N/A"
+                        )
+                    ),
+                    title=f"{active_tab.name} DETAIL",
+                )
+
+            if active_tab is IncomingDetailTab.SIGNAL:
+                detail_panel.title = (
+                    self._incoming_signal_header_renderer.render(
+                        data.incoming,
+                        selected_path_name=selected_path_name,
+                    )
+                )
+
+            if terminal_width is not None and terminal_width <= 0:
+                raise ValueError("terminal_width must be positive")
+
+            available_width = (
+                max(1, terminal_width - 4)
+                if terminal_width is not None
+                else 80
+            )
+
+            tab_strip = IncomingDetailTabStrip.render(
+                active_tab=active_tab,
+                width=available_width,
+            )
+
+            if incoming_vertical_geometry is not None:
+                detail_panel.renderable = Group(
+                    tab_strip,
+                    detail_panel.renderable,
+                )
+                detail_panel.subtitle = None
+            else:
+                detail_panel.subtitle = tab_strip
+
+            layout["signal_detail"].update(detail_panel)
 
             return layout
 

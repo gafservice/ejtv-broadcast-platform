@@ -31,6 +31,13 @@ class DashboardKeyParser:
         b"\x1b[H": DashboardNavigationAction.HOME,
         b"\x1b[F": DashboardNavigationAction.END,
 
+        b"1": DashboardNavigationAction.SELECT_SIGNAL_TAB,
+        b"2": DashboardNavigationAction.SELECT_TRANSPORT_TAB,
+        b"3": DashboardNavigationAction.SELECT_VIDEO_TAB,
+        b"4": DashboardNavigationAction.SELECT_AUDIO_TAB,
+        b"5": DashboardNavigationAction.SELECT_EVENTS_TAB,
+        b"6": DashboardNavigationAction.SELECT_STATISTICS_TAB,
+
         b"q": DashboardNavigationAction.QUIT,
         b"Q": DashboardNavigationAction.QUIT,
     }

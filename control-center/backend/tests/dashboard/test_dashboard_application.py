@@ -185,9 +185,11 @@ def test_run_once_builds_and_renders_dashboard() -> None:
         navigation_state=application.navigation_state,
         terminal_navigation_state=application.terminal_navigation_state,
         incoming_selection_state=application.incoming_selection_state,
+        incoming_detail_tab_state=application.incoming_detail_tab_state,
         incoming_viewport=application.incoming_viewport,
         incoming_presentation_mode="full",
         incoming_visible_capacity=None,
+        terminal_width=None,
     )
 
 
@@ -437,18 +439,22 @@ def test_run_once_uses_previous_snapshot_on_second_execution() -> None:
                 navigation_state=application.navigation_state,
         terminal_navigation_state=application.terminal_navigation_state,
         incoming_selection_state=application.incoming_selection_state,
+        incoming_detail_tab_state=application.incoming_detail_tab_state,
         incoming_viewport=application.incoming_viewport,
         incoming_presentation_mode="full",
         incoming_visible_capacity=None,
+        terminal_width=None,
             ),
             call(
                 second_dashboard_data,
                 navigation_state=application.navigation_state,
         terminal_navigation_state=application.terminal_navigation_state,
         incoming_selection_state=application.incoming_selection_state,
+        incoming_detail_tab_state=application.incoming_detail_tab_state,
         incoming_viewport=application.incoming_viewport,
         incoming_presentation_mode="full",
         incoming_visible_capacity=None,
+        terminal_width=None,
             ),
         ]
     )
@@ -743,9 +749,11 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         navigation_state=application.navigation_state,
         terminal_navigation_state=application.terminal_navigation_state,
         incoming_selection_state=application.incoming_selection_state,
+        incoming_detail_tab_state=application.incoming_detail_tab_state,
         incoming_viewport=application.incoming_viewport,
         incoming_presentation_mode="full",
         incoming_visible_capacity=None,
+        terminal_width=None,
     )
 
 
@@ -1889,9 +1897,11 @@ def test_run_once_passes_current_navigation_state_to_renderer() -> None:
         navigation_state=navigation_state,
         terminal_navigation_state=terminal_navigation_state,
         incoming_selection_state=application.incoming_selection_state,
+        incoming_detail_tab_state=application.incoming_detail_tab_state,
         incoming_viewport=application.incoming_viewport,
         incoming_presentation_mode="full",
         incoming_visible_capacity=None,
+        terminal_width=None,
     )
 
 def test_run_once_preserves_temporal_stream_health_across_cycles() -> None:
@@ -4138,9 +4148,11 @@ def test_view_navigation_state_reaches_renderer_across_run_once() -> None:
             active_view=TerminalView.INCOMING,
         ),
         incoming_selection_state=application.incoming_selection_state,
+        incoming_detail_tab_state=application.incoming_detail_tab_state,
         incoming_viewport=application.incoming_viewport,
         incoming_presentation_mode="full",
         incoming_visible_capacity=None,
+        terminal_width=None,
     )
 
     application._dashboard_renderer.reset_mock()
@@ -4165,9 +4177,11 @@ def test_view_navigation_state_reaches_renderer_across_run_once() -> None:
             active_view=TerminalView.GENERAL,
         ),
         incoming_selection_state=application.incoming_selection_state,
+        incoming_detail_tab_state=application.incoming_detail_tab_state,
         incoming_viewport=application.incoming_viewport,
         incoming_presentation_mode="full",
         incoming_visible_capacity=None,
+        terminal_width=None,
     )
 
 def test_application_transports_session_snapshot_into_dashboard_snapshot_input() -> None:

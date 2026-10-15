@@ -24,6 +24,10 @@ from app.dashboard.models.dashboard_navigation_state import (
 from app.dashboard.models.dashboard_navigation_totals import (
     DashboardNavigationTotals,
 )
+from app.dashboard.models.incoming_detail_tab_state import (
+    IncomingDetailTab,
+    IncomingDetailTabState,
+)
 from app.dashboard.models.incoming_selection_state import (
     IncomingSelectionState,
 )
@@ -293,6 +297,7 @@ class DashboardApplication:
         )
         self._terminal_navigation_state = TerminalNavigationState()
         self._incoming_selection_state = IncomingSelectionState()
+        self._incoming_detail_tab_state = IncomingDetailTabState()
         self._incoming_path_names: tuple[str, ...] = ()
         self._incoming_viewport = PanelViewport(page_size=5)
 
@@ -405,6 +410,22 @@ class DashboardApplication:
 
         self._navigation_state = state
 
+    @property
+    def incoming_detail_tab_state(self) -> IncomingDetailTabState:
+        """Current contextual tab selection within INCOMING."""
+
+        state = getattr(
+            self,
+            "_incoming_detail_tab_state",
+            None,
+        )
+
+        if state is None:
+            state = IncomingDetailTabState()
+            self._incoming_detail_tab_state = state
+
+        return state
+
     def apply_navigation_action(
         self,
         action: DashboardNavigationAction,
@@ -435,6 +456,31 @@ class DashboardApplication:
             self._terminal_navigation_state.active_view
             is TerminalView.INCOMING
         ):
+            tab_actions = {
+                DashboardNavigationAction.SELECT_SIGNAL_TAB:
+                    IncomingDetailTab.SIGNAL,
+                DashboardNavigationAction.SELECT_TRANSPORT_TAB:
+                    IncomingDetailTab.TRANSPORT,
+                DashboardNavigationAction.SELECT_VIDEO_TAB:
+                    IncomingDetailTab.VIDEO,
+                DashboardNavigationAction.SELECT_AUDIO_TAB:
+                    IncomingDetailTab.AUDIO,
+                DashboardNavigationAction.SELECT_EVENTS_TAB:
+                    IncomingDetailTab.EVENTS,
+                DashboardNavigationAction.SELECT_STATISTICS_TAB:
+                    IncomingDetailTab.STATISTICS,
+            }
+
+            selected_tab = tab_actions.get(action)
+
+            if selected_tab is not None:
+                self._incoming_detail_tab_state = (
+                    self.incoming_detail_tab_state.select(
+                        selected_tab
+                    )
+                )
+                return
+
             paths = getattr(self, '_incoming_path_names', ())
             selection = self.incoming_selection_state
 
@@ -457,6 +503,16 @@ class DashboardApplication:
                 self._incoming_selection_state = selection.end(paths)
                 self.synchronize_incoming_viewport()
                 return
+
+        if action in (
+            DashboardNavigationAction.SELECT_SIGNAL_TAB,
+            DashboardNavigationAction.SELECT_TRANSPORT_TAB,
+            DashboardNavigationAction.SELECT_VIDEO_TAB,
+            DashboardNavigationAction.SELECT_AUDIO_TAB,
+            DashboardNavigationAction.SELECT_EVENTS_TAB,
+            DashboardNavigationAction.SELECT_STATISTICS_TAB,
+        ):
+            return
 
         total_items = self._navigation_totals.for_panel(
             self._navigation_state.active_panel
@@ -821,13 +877,29 @@ class DashboardApplication:
         *,
         terminal_width: int | None = None,
         incoming_height: int | None = None,
+        terminal_height: int | None = None,
     ) -> Layout:
-        """Obtiene una medición y renderiza una iteración del dashboard."""
+        """Capture and render one dashboard iteration."""
 
         if (terminal_width is None) != (incoming_height is None):
             raise ValueError(
-                'terminal_width and incoming_height must be provided together'
+                "terminal_width and incoming_height must be provided together"
             )
+
+        if terminal_height is not None:
+            if (
+                isinstance(terminal_height, bool)
+                or not isinstance(terminal_height, int)
+                or terminal_height <= 0
+            ):
+                raise ValueError(
+                    "terminal_height must be a positive integer"
+                )
+
+            if terminal_width is None:
+                raise ValueError(
+                    "terminal_height requires terminal_width and incoming_height"
+                )
 
         incoming_presentation_mode = "full"
         incoming_visible_capacity = None
@@ -845,7 +917,7 @@ class DashboardApplication:
             incoming_presentation_mode = presentation.mode
             incoming_visible_capacity = presentation.page_size
 
-            if presentation.page_size > 0:
+            if terminal_height is None and presentation.page_size > 0:
                 self._incoming_viewport = PanelViewport(
                     offset=self.incoming_viewport.offset,
                     page_size=presentation.page_size,
@@ -854,14 +926,55 @@ class DashboardApplication:
 
         dashboard_data = self.build_dashboard()
 
+        renderer_kwargs = {
+            "navigation_state": self._navigation_state,
+            "terminal_navigation_state": self._terminal_navigation_state,
+            "incoming_selection_state": self.incoming_selection_state,
+            "incoming_detail_tab_state": self.incoming_detail_tab_state,
+            "incoming_viewport": self.incoming_viewport,
+            "incoming_presentation_mode": incoming_presentation_mode,
+            "incoming_visible_capacity": incoming_visible_capacity,
+            "terminal_width": terminal_width,
+        }
+
+        if terminal_height is not None:
+            from app.dashboard.services.incoming_vertical_geometry_policy import (
+                IncomingVerticalGeometryPolicy,
+            )
+
+            incoming_data = dashboard_data.incoming
+
+            signal_count = (
+                len(incoming_data.rows)
+                if incoming_data is not None
+                else 0
+            )
+
+            geometry = IncomingVerticalGeometryPolicy().calculate(
+                terminal_height=terminal_height,
+                signal_count=signal_count,
+                maximum_visible_rows=8,
+            )
+
+            incoming_visible_capacity = geometry.visible_rows
+
+            if geometry.visible_rows > 0:
+                self._incoming_viewport = PanelViewport(
+                    offset=self.incoming_viewport.offset,
+                    page_size=geometry.visible_rows,
+                )
+                self.synchronize_incoming_viewport()
+
+            renderer_kwargs.update(
+                incoming_selection_state=self.incoming_selection_state,
+                incoming_viewport=self.incoming_viewport,
+                incoming_visible_capacity=incoming_visible_capacity,
+                incoming_vertical_geometry=geometry,
+            )
+
         return self._dashboard_renderer.render(
             dashboard_data,
-            navigation_state=self._navigation_state,
-            terminal_navigation_state=self._terminal_navigation_state,
-            incoming_selection_state=self.incoming_selection_state,
-            incoming_viewport=self.incoming_viewport,
-            incoming_presentation_mode=incoming_presentation_mode,
-            incoming_visible_capacity=incoming_visible_capacity,
+            **renderer_kwargs,
         )
 
     def run(
@@ -908,9 +1021,31 @@ class DashboardApplication:
                     terminal_size.height - 23,
                 )
 
+                run_once_kwargs = {
+                    "terminal_width": terminal_size.width,
+                    "incoming_height": incoming_height,
+                }
+
+                terminal_navigation_state = getattr(
+                    self,
+                    "_terminal_navigation_state",
+                    None,
+                )
+
+                if (
+                    isinstance(
+                        terminal_navigation_state,
+                        TerminalNavigationState,
+                    )
+                    and terminal_navigation_state.active_view
+                    is TerminalView.INCOMING
+                ):
+                    run_once_kwargs["terminal_height"] = (
+                        terminal_size.height
+                    )
+
                 rendered_dashboard = self.run_once(
-                    terminal_width=terminal_size.width,
-                    incoming_height=incoming_height,
+                    **run_once_kwargs,
                 )
 
                 live.update(
