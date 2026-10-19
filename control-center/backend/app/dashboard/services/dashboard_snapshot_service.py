@@ -19,6 +19,7 @@ from app.dashboard.models import (
 )
 from app.dashboard.models.panel_viewport import PanelViewport
 from app.dashboard.services.dashboard_service import DashboardService
+from app.dashboard.services.incoming_transport_bitrate_window import IncomingTransportBitrateStatistics
 from app.domain.sessions import SessionSnapshot
 from app.domain.sessions.measurement import SessionMeasurement
 from app.domain.streaming import (
@@ -73,6 +74,7 @@ class DashboardSnapshotInput:
     signal_health_current_states: tuple[SignalHealthCurrentState, ...] = ()
     source_configurations: dict[str, str] | None = None
     expected_incoming_origins: dict[str, str] | None = None
+    incoming_transport_bitrate_statistics: dict[str, IncomingTransportBitrateStatistics] | None = None
 
 
 class DashboardSnapshotService:
@@ -163,5 +165,8 @@ class DashboardSnapshotService:
             ),
             expected_incoming_origins=(
                 snapshot_input.expected_incoming_origins
+            ),
+            incoming_transport_bitrate_statistics=(
+                snapshot_input.incoming_transport_bitrate_statistics
             ),
         )

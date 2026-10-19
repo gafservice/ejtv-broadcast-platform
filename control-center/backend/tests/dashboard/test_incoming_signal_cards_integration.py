@@ -5,6 +5,7 @@ from unittest.mock import Mock
 import pytest
 from rich.console import Console, Group
 from rich.panel import Panel
+from rich.table import Table
 
 from app.dashboard.models.incoming_detail_tab_state import (
     IncomingDetailTab,
@@ -191,8 +192,14 @@ def test_other_tabs_do_not_activate_signal_cards(tab):
     panel, _, renderer = render_detail(tab=tab)
 
     assert isinstance(panel.renderable, Group)
-    assert any(
-        isinstance(item, str) and "Metrics: N/A" in item
-        for item in panel.renderable.renderables
-    )
+    if tab is IncomingDetailTab.TRANSPORT:
+        assert any(
+            isinstance(item, Table)
+            for item in panel.renderable.renderables
+        )
+    else:
+        assert any(
+            isinstance(item, str) and "Metrics: N/A" in item
+            for item in panel.renderable.renderables
+        )
     renderer._signal_detail_renderer.render.assert_not_called()

@@ -132,6 +132,7 @@ def test_build_dashboard_projects_same_system_capture_into_noc() -> None:
 
     snapshot = Mock()
     snapshot.captured_at = Mock()
+    snapshot.paths = ()
 
     session_snapshot = Mock()
 

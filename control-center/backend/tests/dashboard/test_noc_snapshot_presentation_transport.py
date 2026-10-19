@@ -98,6 +98,7 @@ def test_snapshot_service_preserves_same_noc_snapshot_instance() -> None:
 def test_dashboard_application_transports_projected_noc_snapshot() -> None:
     snapshot = Mock()
     snapshot.captured_at = Mock()
+    snapshot.paths = ()
 
     session_snapshot = Mock()
 

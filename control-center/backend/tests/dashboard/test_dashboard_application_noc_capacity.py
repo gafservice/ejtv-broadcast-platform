@@ -195,6 +195,7 @@ def test_dashboard_reuses_same_capture_for_capacity_and_projection():
 
     snapshot = Mock()
     snapshot.captured_at = Mock()
+    snapshot.paths = ()
 
     session_snapshot = Mock()
 

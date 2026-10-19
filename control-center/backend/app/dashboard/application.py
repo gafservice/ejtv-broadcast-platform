@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from contextlib import ExitStack
 from datetime import datetime
 from time import monotonic, sleep
@@ -52,7 +53,7 @@ from app.dashboard.services.dashboard_snapshot_service import (
     DashboardSnapshotService,
 )
 from app.domain.sessions import SessionSnapshot
-from app.domain.streaming import MediaMTXSnapshot, StreamingHealth
+from app.domain.streaming import MediaMTXSnapshot, StreamingHealth, MeasurementQuality
 from app.domain.streaming.expected_media_profile import (
     ExpectedMediaProfile,
 )
@@ -104,6 +105,7 @@ from app.services.streaming_health_transition_alarm_service import (
 )
 from app.services.streaming_service import StreamingService
 from app.services.system_service import SystemService
+from app.dashboard.services.incoming_transport_bitrate_window import IncomingTransportBitrateWindow
 
 
 class NocCapacityInitializer:
@@ -238,6 +240,7 @@ class DashboardApplication:
         signal_health_current_state_repository: (
             SignalHealthCurrentStateRepository | None
         ) = None,
+        incoming_transport_bitrate_window: IncomingTransportBitrateWindow | None = None,
     ) -> None:
         self._noc_capacity_initializer = noc_capacity_initializer
         self._noc_snapshot_projection = noc_snapshot_projection
@@ -326,6 +329,12 @@ class DashboardApplication:
         self._expected_incoming_origins = expected_incoming_origins
         self._signal_health_current_state_repository = (
             signal_health_current_state_repository
+        )
+
+        self._incoming_transport_bitrate_window = (
+            incoming_transport_bitrate_window
+            if incoming_transport_bitrate_window is not None
+            else IncomingTransportBitrateWindow(window_seconds=60)
         )
 
         self._previous_snapshot: MediaMTXSnapshot | None = None
@@ -567,6 +576,87 @@ class DashboardApplication:
             snapshot,
         )
 
+        # Build a transaction candidate without mutating committed history.
+        incoming_window_candidate = deepcopy(
+            self._incoming_transport_bitrate_window
+        )
+
+        incoming_paths = tuple(
+            path
+            for path in snapshot.paths
+            if path.source is not None
+        )
+
+        incoming_window_candidate.reconcile_paths(
+            tuple(path.name for path in incoming_paths)
+        )
+
+        previous_paths = (
+            {
+                path.name: path
+                for path in self._previous_snapshot.paths
+            }
+            if self._previous_snapshot is not None
+            else {}
+        )
+
+        for path in incoming_paths:
+            previous_path = previous_paths.get(path.name)
+
+            if previous_path is None:
+                continue
+
+            source_changed = (
+                previous_path.source != path.source
+            )
+
+            session_changed = (
+                previous_path.ready_time is not None
+                and path.ready_time is not None
+                and previous_path.ready_time != path.ready_time
+            )
+
+            if source_changed or session_changed:
+                incoming_window_candidate.reset(path.name)
+
+        measurements_by_name = (
+            {
+                path.name: path
+                for path in measurement.paths
+            }
+            if incoming_paths
+            else {}
+        )
+
+        incoming_transport_bitrate_statistics = (
+            {} if incoming_paths else None
+        )
+
+        for path in incoming_paths:
+            path_measurement = measurements_by_name.get(path.name)
+
+            if (
+                path_measurement is not None
+                and path_measurement.quality
+                is MeasurementQuality.AVAILABLE
+                and path_measurement.inbound_bitrate_bps is not None
+            ):
+                incoming_window_candidate.observe(
+                    path.name,
+                    observed_at=snapshot.captured_at,
+                    bitrate_mbps=(
+                        path_measurement.inbound_bitrate_bps
+                        / 1_000_000
+                    ),
+                )
+
+            incoming_transport_bitrate_statistics[path.name] = (
+                incoming_window_candidate.get(
+                    path.name,
+                    observed_at=snapshot.captured_at,
+                )
+            )
+
         session_measurement = self._session_service.measure(
             session_snapshot,
         )
@@ -804,6 +894,10 @@ class DashboardApplication:
         if active_alarms is not None:
             snapshot_kwargs["active_alarms"] = active_alarms
 
+        snapshot_kwargs[
+            "incoming_transport_bitrate_statistics"
+        ] = incoming_transport_bitrate_statistics
+
         snapshot_input = DashboardSnapshotInput(**snapshot_kwargs)
 
         dashboard_data = self._dashboard_snapshot_service.build_snapshot(
@@ -868,6 +962,10 @@ class DashboardApplication:
             )
 
         self._latest_health = streaming_health
+
+        self._incoming_transport_bitrate_window = (
+            incoming_window_candidate
+        )
 
         return dashboard_data
 

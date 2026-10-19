@@ -23,6 +23,20 @@ class IncomingRowData:
     health_since: datetime | None = None
     alarm_count: int = 0
     alarm_severity: str | None = None
+    transport_health_status: HealthStatus | None = None
+    transport_source_type: str | None = None
+    transport_ready: bool | None = None
+    transport_available: bool | None = None
+    transport_online: bool | None = None
+    transport_available_since: datetime | None = None
+    transport_online_since: datetime | None = None
+    transport_received_bytes: int | None = None
+    transport_inbound_frames_in_error: int | None = None
+    transport_observed_at: datetime | None = None
+    transport_health_since: datetime | None = None
+    bitrate_average_mbps: float | None = None
+    bitrate_minimum_mbps: float | None = None
+    bitrate_maximum_mbps: float | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -70,7 +70,7 @@ class MediaMTXAdapter:
         """Obtiene el estado normalizado del servidor multimedia."""
         payload = self._client.get_paths()
 
-        raw_items = payload.get("items", [])
+        raw_items = payload.get("items")
 
         if not isinstance(raw_items, list):
             raise MediaMTXInvalidResponseError(
@@ -88,17 +88,46 @@ class MediaMTXAdapter:
                 "Uno o más elementos de 'items' no son objetos válidos."
             )
 
+        reported_item_count = payload.get("itemCount")
+        reported_page_count = payload.get("pageCount")
+
+        if (
+            not isinstance(reported_item_count, int)
+            or isinstance(reported_item_count, bool)
+            or reported_item_count < 0
+        ):
+            raise MediaMTXInvalidResponseError(
+                "El campo 'itemCount' debe ser un entero no negativo."
+            )
+
+        if (
+            not isinstance(reported_page_count, int)
+            or isinstance(reported_page_count, bool)
+            or reported_page_count < 0
+        ):
+            raise MediaMTXInvalidResponseError(
+                "El campo 'pageCount' debe ser un entero no negativo."
+            )
+
+        expected_pages = 0 if reported_item_count == 0 else 1
+
+        if reported_page_count != expected_pages:
+            raise MediaMTXInvalidResponseError(
+                "El inventario MediaMTX no corresponde "
+                "a una página completa."
+            )
+
+        if reported_item_count != len(paths):
+            raise MediaMTXInvalidResponseError(
+                "El inventario MediaMTX está incompleto "
+                "o contiene una cantidad inconsistente de paths."
+            )
+
         return MediaMTXSnapshot(
             captured_at=datetime.now(timezone.utc),
             paths=paths,
-            reported_item_count=self._safe_int(
-                payload.get("itemCount"),
-                default=len(paths),
-            ),
-            reported_page_count=self._safe_int(
-                payload.get("pageCount"),
-                default=0,
-            ),
+            reported_item_count=reported_item_count,
+            reported_page_count=reported_page_count,
         )
 
     def _parse_path(self, item: Mapping[str, Any]) -> MediaPath:

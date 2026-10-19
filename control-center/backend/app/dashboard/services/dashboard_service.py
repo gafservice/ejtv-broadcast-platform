@@ -4,6 +4,9 @@ from urllib.parse import urlsplit
 
 from app.dashboard.models.panel_viewport import PanelViewport
 from app.dashboard.models.incoming_panel import IncomingPanelData, IncomingRowData
+from app.dashboard.services.incoming_transport_bitrate_window import (
+    IncomingTransportBitrateStatistics,
+)
 from app.noc.current_state.signal_health_current_state import (
     SignalHealthCurrentState,
 )
@@ -85,6 +88,7 @@ class DashboardService:
             SignalHealthCurrentState, ...
         ] = (),
         alarms: tuple[AlarmRecord, ...] = (),
+        incoming_transport_bitrate_statistics: dict[str, IncomingTransportBitrateStatistics] | None = None,
     ) -> IncomingPanelData:
         """Project canonical incoming-path evidence for presentation."""
 
@@ -97,6 +101,12 @@ class DashboardService:
             state.path_name: state
             for state in signal_health_current_states
         }
+
+        transport_states_by_path = {}
+        for state in signal_health_current_states:
+            transport_states_by_path.setdefault(
+                state.path_name, []
+            ).append(state)
 
         severity_rank = {
             "INFO": 0,
@@ -300,6 +310,24 @@ class DashboardService:
                     ),
                     status=media_path.status.value.upper(),
                     bitrate_receive_mbps=bitrate_receive_mbps,
+                    bitrate_average_mbps=(
+                        incoming_transport_bitrate_statistics[media_path.name].average_mbps
+                        if incoming_transport_bitrate_statistics is not None
+                        and media_path.name in incoming_transport_bitrate_statistics
+                        else None
+                    ),
+                    bitrate_minimum_mbps=(
+                        incoming_transport_bitrate_statistics[media_path.name].minimum_mbps
+                        if incoming_transport_bitrate_statistics is not None
+                        and media_path.name in incoming_transport_bitrate_statistics
+                        else None
+                    ),
+                    bitrate_maximum_mbps=(
+                        incoming_transport_bitrate_statistics[media_path.name].maximum_mbps
+                        if incoming_transport_bitrate_statistics is not None
+                        and media_path.name in incoming_transport_bitrate_statistics
+                        else None
+                    ),
                     health_status=health_status,
                     protocol=protocol,
                     remote_address=remote_address,
@@ -307,6 +335,50 @@ class DashboardService:
                     health_since=health_since,
                     alarm_count=alarm_count,
                     alarm_severity=alarm_severity,
+                    transport_source_type=(
+                        media_path.source.source_type
+                        if media_path.source is not None
+                        else None
+                    ),
+                    transport_ready=media_path.ready,
+                    transport_available=media_path.available,
+                    transport_online=media_path.online,
+                    transport_available_since=media_path.available_time,
+                    transport_online_since=media_path.online_time,
+                    transport_received_bytes=media_path.inbound_bytes,
+                    transport_inbound_frames_in_error=(
+                        media_path.inbound_frames_in_error
+                    ),
+                    transport_observed_at=(
+                        transport_states_by_path[media_path.name][0]
+                        .observed_at
+                        if len(
+                            transport_states_by_path.get(
+                                media_path.name, ()
+                            )
+                        ) == 1
+                        else None
+                    ),
+                    transport_health_since=(
+                        transport_states_by_path[media_path.name][0]
+                        .health_since
+                        if len(
+                            transport_states_by_path.get(
+                                media_path.name, ()
+                            )
+                        ) == 1
+                        else None
+                    ),
+                    transport_health_status=(
+                        transport_states_by_path[media_path.name][0]
+                        .health.transport_status
+                        if len(
+                            transport_states_by_path.get(
+                                media_path.name, ()
+                            )
+                        ) == 1
+                        else None
+                    ),
                 )
             )
 
@@ -1301,6 +1373,7 @@ class DashboardService:
         signal_health_current_states: tuple[SignalHealthCurrentState, ...] = (),
         source_configurations: dict[str, str] | None = None,
         expected_incoming_origins: dict[str, str] | None = None,
+        incoming_transport_bitrate_statistics: dict[str, IncomingTransportBitrateStatistics] | None = None,
     ) -> DashboardData:
         """Construye el dashboard completo desde snapshot y medición."""
 
@@ -1379,6 +1452,7 @@ class DashboardService:
                 alarms=alarm_records,
                 source_configurations=source_configurations,
                 expected_incoming_origins=expected_incoming_origins,
+                incoming_transport_bitrate_statistics=incoming_transport_bitrate_statistics,
             )
             if session_snapshot is not None
             else None

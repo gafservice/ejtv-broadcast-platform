@@ -181,8 +181,15 @@ def test_v2_specialized_tabs_are_top_positioned(tab):
     assert panel.subtitle is None
 
     assert "1 SIGNAL" in screen
-    assert "Metrics: N/A" in screen
-    assert "Signal: impact" in screen
+
+    if tab is IncomingDetailTab.TRANSPORT:
+        assert "CONNECTION" in screen
+        assert "TRAFFIC" in screen
+        assert "TRANSPORT HEALTH" in screen
+        assert "Metrics: N/A" not in screen
+    else:
+        assert "Metrics: N/A" in screen
+        assert "Signal: impact" in screen
 
 
 @pytest.mark.parametrize(

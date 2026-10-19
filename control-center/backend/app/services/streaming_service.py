@@ -143,6 +143,22 @@ class StreamingService:
                 previous=None,
             )
 
+        if previous.source != current.source:
+            return self._build_unavailable_path(
+                current=current,
+                previous=previous,
+            )
+
+        if (
+            previous.ready_time is not None
+            and current.ready_time is not None
+            and previous.ready_time != current.ready_time
+        ):
+            return self._build_unavailable_path(
+                current=current,
+                previous=previous,
+            )
+
         inbound_delta = current.inbound_bytes - previous.inbound_bytes
         outbound_delta = current.outbound_bytes - previous.outbound_bytes
 

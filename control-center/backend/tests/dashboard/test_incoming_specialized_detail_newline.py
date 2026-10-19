@@ -25,7 +25,6 @@ from tests.dashboard.test_dashboard_renderer import (
 
 
 SPECIALIZED_TABS = (
-    IncomingDetailTab.TRANSPORT,
     IncomingDetailTab.VIDEO,
     IncomingDetailTab.AUDIO,
     IncomingDetailTab.EVENTS,

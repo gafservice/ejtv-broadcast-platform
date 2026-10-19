@@ -54,6 +54,9 @@ from app.dashboard.renderers.incoming_panel_renderer import (
 from app.dashboard.renderers.incoming_signal_cards_renderer import (
     IncomingSignalCardsRenderer,
 )
+from app.dashboard.renderers.incoming_transport_cards_renderer import (
+    IncomingTransportCardsRenderer,
+)
 from app.dashboard.renderers.signal_detail_renderer import (
     SignalDetailRenderer,
 )
@@ -261,6 +264,15 @@ class DashboardRenderer:
                             else incoming_vertical_geometry.detail_height < 20
                         ),
                     )
+            elif active_tab is IncomingDetailTab.TRANSPORT:
+                detail_panel = IncomingTransportCardsRenderer().render(
+                    data.incoming,
+                    selected_path_name=selected_path_name,
+                    compact=(
+                        incoming_vertical_geometry is not None
+                        and incoming_vertical_geometry.detail_height < 20
+                    ),
+                )
             else:
                 detail_panel = Panel(
                     (

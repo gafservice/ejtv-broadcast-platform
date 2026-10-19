@@ -178,6 +178,7 @@ def test_run_once_builds_and_renders_dashboard() -> None:
         signal_health_current_states=(),
         source_configurations=source_configurations,
         expected_incoming_origins=None,
+        incoming_transport_bitrate_statistics=None,
     )
 
     dashboard_renderer.render.assert_called_once_with(
@@ -742,6 +743,7 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         signal_health_current_states=(),
         source_configurations=source_configurations,
         expected_incoming_origins=None,
+        incoming_transport_bitrate_statistics=None,
     )
 
     dashboard_renderer.render.assert_called_once_with(
@@ -2489,7 +2491,7 @@ def test_build_dashboard_records_one_stream_health_event_per_effective_transitio
     ]
 
     mediamtx_adapter = Mock()
-    mediamtx_adapter.capture.side_effect = snapshots
+    mediamtx_adapter.get_snapshot.side_effect = snapshots
 
     session_adapter = Mock()
     session_adapter.capture.return_value = ()
@@ -2618,8 +2620,12 @@ def test_stream_health_transition_is_shared_with_event_and_alarm_services():
     mediamtx_adapter = Mock()
     mediamtx_adapter.health.return_value = True
 
-    snapshot = Mock()
-    snapshot.captured_at = captured_at
+    snapshot = MediaMTXSnapshot(
+        captured_at=captured_at,
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=0,
+    )
     mediamtx_adapter.get_snapshot.return_value = snapshot
 
     session_adapter = Mock()
@@ -3800,8 +3806,12 @@ def test_dashboard_excludes_internal_observer_from_operational_sessions() -> Non
     session_adapter = Mock()
     session_adapter.get_snapshot.return_value = raw_session_snapshot
 
+    from app.services.streaming_service import StreamingService
+
     streaming_service = Mock()
-    streaming_service.compare.return_value = Mock()
+    streaming_service.compare.side_effect = (
+        StreamingService().compare
+    )
 
     session_service = Mock()
     session_service.measure.return_value = Mock()
@@ -4008,8 +4018,12 @@ def test_dashboard_temporal_services_receive_only_operational_snapshots() -> Non
         session_second,
     )
 
+    from app.services.streaming_service import StreamingService
+
     streaming_service = Mock()
-    streaming_service.compare.return_value = Mock()
+    streaming_service.compare.side_effect = (
+        StreamingService().compare
+    )
 
     session_service = Mock()
     session_service.measure.return_value = Mock()
@@ -4438,8 +4452,14 @@ def test_application_reads_signal_health_current_state_for_media_profiles() -> N
 def test_dashboard_cycle_forwards_source_configurations() -> None:
     """One dashboard cycle forwards effective source configuration evidence."""
 
-    snapshot = Mock(name="mediamtx-snapshot")
-    snapshot.captured_at = Mock(name="captured-at")
+    snapshot = MediaMTXSnapshot(
+        captured_at=datetime(
+            2026, 9, 22, 12, 0, tzinfo=timezone.utc
+        ),
+        paths=(),
+        reported_item_count=0,
+        reported_page_count=0,
+    )
 
     source_configurations = {
         "future-listener": "udp+mpegts://:12001",

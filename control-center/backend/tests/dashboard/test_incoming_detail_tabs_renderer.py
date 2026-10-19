@@ -123,7 +123,6 @@ def test_signal_tab_reuses_existing_signal_detail():
 @pytest.mark.parametrize(
     "tab",
     (
-        IncomingDetailTab.TRANSPORT,
         IncomingDetailTab.VIDEO,
         IncomingDetailTab.AUDIO,
         IncomingDetailTab.EVENTS,

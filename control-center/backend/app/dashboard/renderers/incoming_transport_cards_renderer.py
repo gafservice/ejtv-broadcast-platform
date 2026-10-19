@@ -1,0 +1,272 @@
+"""Six-card TRANSPORT presentation for INCOMING V2.
+
+Presentation only: no health evaluation or metric inference.
+"""
+
+from __future__ import annotations
+
+from datetime import timezone
+
+from rich.panel import Panel
+from rich.table import Table
+
+from app.dashboard.models.incoming_panel import IncomingPanelData
+
+
+class IncomingTransportCardsRenderer:
+    """Render available incoming transport evidence."""
+
+    @staticmethod
+    def _available(value: object | None) -> str:
+        if value is None or value == "":
+            return "N/A"
+        return str(value)
+
+    @staticmethod
+    def _format_bitrate(value: float | None) -> str:
+        if value is None:
+            return "N/A"
+        return f"{value:.2f} Mbps"
+
+    @staticmethod
+    def _format_bytes(value: int | None) -> str:
+        if value is None:
+            return "N/A"
+        return f"{value:,} bytes"
+
+    @staticmethod
+    def _format_availability(value: bool | None) -> str:
+        if value is None:
+            return "N/A"
+        return "YES" if value else "NO"
+
+    @staticmethod
+    def _format_observed_at(value) -> str:
+        if value is None:
+            return "N/A"
+
+        if value.tzinfo is None or value.utcoffset() is None:
+            return "N/A"
+
+        utc_value = value.astimezone(timezone.utc)
+        return utc_value.strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    @staticmethod
+    def _format_evidence_age(observed_at, reference_at) -> str:
+        if observed_at is None or reference_at is None:
+            return "N/A"
+
+        if observed_at.tzinfo is None or reference_at.tzinfo is None:
+            return "N/A"
+
+        seconds = (reference_at - observed_at).total_seconds()
+
+        if seconds < 0:
+            return "N/A"
+
+        total_seconds = int(seconds)
+
+        if total_seconds >= 3600:
+            hours = total_seconds // 3600
+            return f"{hours}h"
+
+        if total_seconds >= 60:
+            minutes = total_seconds // 60
+            return f"{minutes}m"
+
+        return f"{total_seconds}s"
+
+    @staticmethod
+    def _card(
+        title: str,
+        fields: tuple[tuple[str, str], ...],
+    ) -> Panel:
+        table = Table(
+            show_header=False,
+            show_edge=False,
+            box=None,
+            expand=False,
+            padding=(0, 1),
+        )
+
+        table.add_column(
+            "Field",
+            style="bold",
+            no_wrap=True,
+        )
+
+        table.add_column(
+            "Value",
+            overflow="ellipsis",
+        )
+
+        for label, value in fields:
+            table.add_row(label, value)
+
+        return Panel(
+            table,
+            title=title,
+            expand=True,
+        )
+
+    def render(
+        self,
+        data: IncomingPanelData | None,
+        *,
+        selected_path_name: str | None = None,
+        compact: bool = False,
+    ) -> Panel:
+        selected = None
+
+        if data is not None and selected_path_name is not None:
+            selected = next(
+                (
+                    row
+                    for row in data.rows
+                    if row.path_name == selected_path_name
+                ),
+                None,
+            )
+
+        if selected is None:
+            return Panel(
+                "No incoming signal selected.",
+                title="TRANSPORT DETAIL",
+            )
+
+        available = self._available
+
+        bitrate = (
+            f"{selected.bitrate_receive_mbps:.2f} Mbps"
+            if selected.bitrate_receive_mbps is not None
+            else "N/A"
+        )
+
+        transport_health = (
+            selected.transport_health_status.value
+            if selected.transport_health_status is not None
+            else "N/A"
+        )
+
+        if compact:
+            compact_table = Table(
+                show_header=False,
+                show_edge=False,
+                box=None,
+                expand=False,
+                padding=(0, 1),
+            )
+
+            compact_table.add_column(
+                "Field",
+                style="bold",
+                no_wrap=True,
+            )
+
+            compact_table.add_column(
+                "Value",
+                overflow="ellipsis",
+            )
+
+            for label, value in (
+                ("Path", selected.path_name),
+                ("Protocol", available(selected.protocol)),
+                (
+                    "Remote / Expected",
+                    available(selected.remote_address),
+                ),
+                ("Path Status", available(selected.status)),
+                ("Receive", bitrate),
+                ("Transport Health", transport_health),
+                ("Packet Loss", "N/A"),
+                ("RTT", "N/A"),
+            ):
+                compact_table.add_row(label, value)
+
+            return Panel(
+                compact_table,
+                title="TRANSPORT DETAIL",
+            )
+
+        connection = self._card(
+            "CONNECTION",
+            (
+                ("Path", selected.path_name),
+                ("Protocol", available(selected.protocol)),
+                (
+                    "Remote / Expected",
+                    available(selected.remote_address),
+                ),
+                ("Path Status", available(selected.status)),
+                ("Connection Mode", available(selected.transport_source_type)),
+            ),
+        )
+
+        traffic = self._card(
+            "TRAFFIC",
+            (
+                ("Receive", bitrate),
+                ("Average", self._format_bitrate(selected.bitrate_average_mbps)),
+                ("Minimum", self._format_bitrate(selected.bitrate_minimum_mbps)),
+                ("Maximum", self._format_bitrate(selected.bitrate_maximum_mbps)),
+                ("Received Data", self._format_bytes(selected.transport_received_bytes)),
+            ),
+        )
+
+        packet_quality = self._card(
+            "PACKET QUALITY",
+            (
+                ("Packet Loss", "N/A"),
+                ("Retransmissions", "N/A"),
+                ("Jitter", "N/A"),
+                ("TS Continuity", "N/A"),
+            ),
+        )
+
+        latency = self._card(
+            "LATENCY",
+            (
+                ("RTT", "N/A"),
+                ("SRT Latency", "N/A"),
+                ("Network One-Way", "N/A"),
+                ("Reception Delay", "N/A"),
+            ),
+        )
+
+        stability = self._card(
+            "STABILITY",
+            (
+                ("Uptime", "N/A"),
+                ("Reconnections", "N/A"),
+                ("Interruptions", "N/A"),
+                ("Availability", self._format_availability(selected.transport_available)),
+            ),
+        )
+
+        health = self._card(
+            "TRANSPORT HEALTH",
+            (
+                ("Status", transport_health),
+                ("Reason", "N/A"),
+                ("Evidence Age", self._format_evidence_age(selected.transport_observed_at, data.reference_at)),
+                ("Last Evaluation", self._format_observed_at(selected.transport_observed_at)),
+                ("Duration", "N/A"),
+            ),
+        )
+
+        content = Table.grid(
+            padding=(0, 1),
+            expand=True,
+        )
+
+        content.add_column(ratio=1)
+        content.add_column(ratio=1)
+
+        content.add_row(connection, traffic)
+        content.add_row(packet_quality, latency)
+        content.add_row(stability, health)
+
+        return Panel(
+            content,
+            title="TRANSPORT DETAIL",
+        )
