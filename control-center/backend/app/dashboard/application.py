@@ -13,7 +13,16 @@ from rich.live import Live
 
 from app.adapters.mediamtx.adapter import MediaMTXAdapter
 from app.adapters.mediamtx.metrics_client import MediaMTXMetricsClient
+from app.adapters.mediamtx.metrics_acquisition import (
+    MediaMTXMetricsAcquisition,
+)
 from app.adapters.mediamtx.metrics_parser import MediaMTXMetricsParser
+from app.services.mediamtx_metrics_acquisition_service import (
+    MediaMTXMetricsAcquisitionService,
+)
+from app.services.transport_quality_producer import (
+    TransportQualityProducer,
+)
 from app.adapters.mediamtx.session_adapter import MediaMTXSessionAdapter
 from app.dashboard.renderers.dashboard_renderer import DashboardRenderer
 from app.dashboard.models.dashboard_navigation_action import (
@@ -205,6 +214,12 @@ class DashboardApplication:
         system_service: SystemService,
         metrics_client: MediaMTXMetricsClient | None = None,
         metrics_parser: MediaMTXMetricsParser | None = None,
+        metrics_acquisition_service: (
+            MediaMTXMetricsAcquisitionService | None
+        ) = None,
+        transport_quality_producer: (
+            TransportQualityProducer | None
+        ) = None,
         streaming_health_service: StreamingHealthService | None = None,
         streaming_health_stabilizer: StreamingHealthStabilizer | None = None,
         streaming_health_aggregator: StreamingHealthAggregator | None = None,
@@ -266,6 +281,8 @@ class DashboardApplication:
 
         self._metrics_client = metrics_client
         self._metrics_parser = metrics_parser
+        self._metrics_acquisition_service = metrics_acquisition_service
+        self._transport_quality_producer = transport_quality_producer
         self._streaming_health_service = streaming_health_service
         self._streaming_health_stabilizer = streaming_health_stabilizer
         self._streaming_health_aggregator = streaming_health_aggregator
@@ -661,9 +678,63 @@ class DashboardApplication:
             session_snapshot,
         )
 
+        transport_quality_observations = ()
+        shared_acquisition = None
+
+        if self._transport_quality_producer is not None:
+            if self._metrics_acquisition_service is None:
+                raise ValueError(
+                    'Transport Quality requires shared metrics acquisition.'
+                )
+
+            shared_acquisition = self._metrics_acquisition_service.acquire()
+
+            paths_by_name = {
+                path.name: path
+                for path in snapshot.paths
+            }
+
+            observations = []
+            observed_identities = set()
+
+            for profile in self._media_profiles:
+                if profile.path_name is None:
+                    continue
+
+                identity = (
+                    profile.service_id,
+                    profile.path_name,
+                )
+
+                if identity in observed_identities:
+                    continue
+
+                observed_identities.add(identity)
+
+                path = paths_by_name.get(profile.path_name)
+
+                if path is None or path.source is None:
+                    continue
+
+                observations.append(
+                    self._transport_quality_producer.build(
+                        snapshot=shared_acquisition.snapshot,
+                        observed_at=snapshot.captured_at,
+                        service_id=profile.service_id,
+                        path_name=profile.path_name,
+                        source_type=path.source.source_type,
+                        source_id=path.source.source_id,
+                        session_snapshot=session_snapshot,
+                        acquisition_interval=shared_acquisition.interval,
+                    )
+                )
+
+            transport_quality_observations = tuple(observations)
+
         streaming_health = self._build_streaming_health(
             captured_at=snapshot.captured_at,
             session_snapshot=session_snapshot,
+            acquisition=shared_acquisition,
         )
 
         rtmp_connections = ()
@@ -897,6 +968,10 @@ class DashboardApplication:
         snapshot_kwargs[
             "incoming_transport_bitrate_statistics"
         ] = incoming_transport_bitrate_statistics
+
+        snapshot_kwargs[
+            'transport_quality_observations'
+        ] = transport_quality_observations
 
         snapshot_input = DashboardSnapshotInput(**snapshot_kwargs)
 
@@ -1261,10 +1336,11 @@ class DashboardApplication:
         )
 
     def _build_streaming_health(
-    self,
-    *,
-    captured_at: datetime,
-    session_snapshot: SessionSnapshot,
+        self,
+        *,
+        captured_at: datetime,
+        session_snapshot: SessionSnapshot,
+        acquisition: MediaMTXMetricsAcquisition | None = None,
     ) -> StreamingHealth | None:
         """Obtiene y transforma las métricas Prometheus disponibles."""
 
@@ -1277,11 +1353,17 @@ class DashboardApplication:
         if self._streaming_health_service is None:
             return None
 
-        metrics_text = self._metrics_client.get_metrics_text()
+        if acquisition is not None:
+            metrics_snapshot = acquisition.snapshot
+        elif self._metrics_acquisition_service is not None:
+            acquired = self._metrics_acquisition_service.acquire()
+            metrics_snapshot = acquired.snapshot
+        else:
+            metrics_text = self._metrics_client.get_metrics_text()
 
-        metrics_snapshot = self._metrics_parser.parse(
-            metrics_text
-        )
+            metrics_snapshot = self._metrics_parser.parse(
+                metrics_text
+            )
 
         instantaneous_health = self._streaming_health_service.build(
             snapshot=metrics_snapshot,

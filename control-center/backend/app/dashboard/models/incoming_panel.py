@@ -37,6 +37,7 @@ class IncomingRowData:
     bitrate_average_mbps: float | None = None
     bitrate_minimum_mbps: float | None = None
     bitrate_maximum_mbps: float | None = None
+    transport_source_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

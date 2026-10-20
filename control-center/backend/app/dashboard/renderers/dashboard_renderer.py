@@ -267,6 +267,9 @@ class DashboardRenderer:
             elif active_tab is IncomingDetailTab.TRANSPORT:
                 detail_panel = IncomingTransportCardsRenderer().render(
                     data.incoming,
+                    transport_quality_observations=(
+                        data.transport_quality_observations
+                    ),
                     selected_path_name=selected_path_name,
                     compact=(
                         incoming_vertical_geometry is not None

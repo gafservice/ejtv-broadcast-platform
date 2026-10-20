@@ -36,6 +36,7 @@ from app.noc.domain.node_snapshot import NodeSnapshot
 from app.noc.domain.node_alarm import AlarmRecord
 from app.noc.current_state.signal_health_current_state import SignalHealthCurrentState
 from app.domain.system import SystemResources
+from app.domain.streaming.transport_quality_observation import TransportQualityObservation
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +76,7 @@ class DashboardSnapshotInput:
     source_configurations: dict[str, str] | None = None
     expected_incoming_origins: dict[str, str] | None = None
     incoming_transport_bitrate_statistics: dict[str, IncomingTransportBitrateStatistics] | None = None
+    transport_quality_observations: tuple[TransportQualityObservation, ...] = ()
 
 
 class DashboardSnapshotService:
@@ -168,5 +170,8 @@ class DashboardSnapshotService:
             ),
             incoming_transport_bitrate_statistics=(
                 snapshot_input.incoming_transport_bitrate_statistics
+            ),
+            transport_quality_observations=(
+                snapshot_input.transport_quality_observations
             ),
         )

@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
+from app.domain.streaming.evidence_acquisition_interval import (
+    EvidenceAcquisitionInterval,
+)
+
 from app.core.http import (
     HttpClient,
     HttpConnectionError,
@@ -46,6 +52,24 @@ class MediaMTXMetricsClient:
 
     def get_metrics_text(self) -> str:
         """Obtiene el documento Prometheus sin procesar."""
+        return self._fetch_metrics_text()
+
+    def get_metrics_with_acquisition_interval(
+        self,
+    ) -> tuple[str, EvidenceAcquisitionInterval]:
+        """Obtiene métricas y registra su intervalo de adquisición UTC."""
+        started_at = datetime.now(UTC)
+        metrics_text = self._fetch_metrics_text()
+        completed_at = datetime.now(UTC)
+
+        return metrics_text, EvidenceAcquisitionInterval(
+            started_at=started_at,
+            completed_at=completed_at,
+            source="mediamtx.metrics",
+        )
+
+    def _fetch_metrics_text(self) -> str:
+        """Ejecuta una adquisición reutilizando el contrato HTTP."""
         try:
             response = self._http_client.get(
                 self.METRICS_ENDPOINT,

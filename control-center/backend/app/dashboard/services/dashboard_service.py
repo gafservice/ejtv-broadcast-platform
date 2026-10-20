@@ -48,6 +48,7 @@ from app.domain.streaming import (
     StreamingMeasurement,
 )
 from app.domain.streaming.aggregation import PlatformHealth
+from app.domain.streaming.transport_quality_observation import TransportQualityObservation
 from app.noc.domain.node_event import EventRecord
 from app.noc.domain.node_alarm import AlarmRecord
 from app.noc.domain.node_health_diagnostic import (
@@ -337,6 +338,11 @@ class DashboardService:
                     alarm_severity=alarm_severity,
                     transport_source_type=(
                         media_path.source.source_type
+                        if media_path.source is not None
+                        else None
+                    ),
+                    transport_source_id=(
+                        media_path.source.source_id
                         if media_path.source is not None
                         else None
                     ),
@@ -1324,6 +1330,7 @@ class DashboardService:
         noc_snapshot: NodeSnapshot | None = None,
         active_connections_viewport: PanelViewport | None = None,
         incoming: IncomingPanelData | None = None,
+        transport_quality_observations: tuple[TransportQualityObservation, ...] = (),
     ) -> DashboardData:
         """Agrupa todas las secciones del dashboard."""
 
@@ -1343,6 +1350,7 @@ class DashboardService:
             noc_snapshot=noc_snapshot,
             capacity=self.build_capacity_panel(noc_snapshot),
             incoming=incoming,
+            transport_quality_observations=transport_quality_observations,
         )
 
     def build_dashboard_from_measurement(
@@ -1374,6 +1382,7 @@ class DashboardService:
         source_configurations: dict[str, str] | None = None,
         expected_incoming_origins: dict[str, str] | None = None,
         incoming_transport_bitrate_statistics: dict[str, IncomingTransportBitrateStatistics] | None = None,
+        transport_quality_observations: tuple[TransportQualityObservation, ...] = (),
     ) -> DashboardData:
         """Construye el dashboard completo desde snapshot y medición."""
 
@@ -1500,6 +1509,7 @@ class DashboardService:
             streaming=streaming,
             sessions=sessions,
             incoming=incoming,
+            transport_quality_observations=transport_quality_observations,
             active_connections=active_connections,
             system=system,
             paths=paths,

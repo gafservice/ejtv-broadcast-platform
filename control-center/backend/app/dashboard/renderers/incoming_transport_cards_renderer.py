@@ -11,10 +11,124 @@ from rich.panel import Panel
 from rich.table import Table
 
 from app.dashboard.models.incoming_panel import IncomingPanelData
+from app.domain.sessions.protocol import SessionRole
+from app.domain.streaming.media_observation import (
+    EvidenceAvailability,
+)
+from app.domain.streaming.transport_quality_observation import (
+    TransportMetricObservation,
+    TransportQualityObservation,
+)
 
 
 class IncomingTransportCardsRenderer:
     """Render available incoming transport evidence."""
+
+    @staticmethod
+    def _select_transport_quality_observation(
+        observations: tuple[TransportQualityObservation, ...],
+        *,
+        path_name: str | None,
+        source_type: str | None,
+        source_id: str | None = None,
+    ) -> TransportQualityObservation | None:
+        """Select unique path/type/source-compatible evidence.
+
+        Matching absent IDs does not prove physical source identity.
+        """
+
+        if not path_name or not source_type:
+            return None
+
+        matches = tuple(
+            observation
+            for observation in observations
+            if observation.path_name == path_name
+            and observation.source_type == source_type
+            and observation.source_id == source_id
+        )
+
+        if len(matches) != 1:
+            return None
+
+        return matches[0]
+
+    @staticmethod
+    def _select_srt_ingress_rtt_candidate(
+        observation: TransportQualityObservation,
+    ) -> TransportMetricObservation | None:
+        """Identify a candidate, not proven ingress RTT."""
+
+        if observation.source_type != "srtConn":
+            return None
+
+        if observation.availability is not EvidenceAvailability.AVAILABLE:
+            return None
+
+        candidates = []
+
+        for metric in observation.metrics:
+            if metric.metric_name != "srt.connection.rtt":
+                continue
+
+            if metric.connection_role is SessionRole.UNKNOWN:
+                return None
+
+            if metric.connection_role is None:
+                return None
+
+            if metric.connection_role is SessionRole.READER:
+                continue
+
+            if metric.connection_role is not SessionRole.PUBLISHER:
+                return None
+
+            if metric.availability is not EvidenceAvailability.AVAILABLE:
+                return None
+
+            if metric.unit != "ms":
+                return None
+
+            if metric.measurement_scope != "CONNECTION":
+                return None
+
+            if not metric.connection_id:
+                return None
+
+            if metric.value is None:
+                return None
+
+            candidates.append(metric)
+
+        if len(candidates) != 1:
+            return None
+
+        return candidates[0]
+
+    @staticmethod
+    def _select_srt_ingress_rtt_attributed(
+        observation: TransportQualityObservation,
+    ) -> TransportMetricObservation | None:
+        """Apply a conservative source-identity gate to SRT RTT."""
+
+        candidate = (
+            IncomingTransportCardsRenderer
+            ._select_srt_ingress_rtt_candidate(observation)
+        )
+
+        if candidate is None:
+            return None
+
+        if observation.source_id is None:
+            return None
+
+        if candidate.connection_id is None:
+            return None
+
+        if observation.source_id != candidate.connection_id:
+            return None
+
+        return candidate
 
     @staticmethod
     def _available(value: object | None) -> str:
@@ -115,6 +229,9 @@ class IncomingTransportCardsRenderer:
         *,
         selected_path_name: str | None = None,
         compact: bool = False,
+        transport_quality_observations: tuple[
+            TransportQualityObservation, ...
+        ] = (),
     ) -> Panel:
         selected = None
 
@@ -133,6 +250,15 @@ class IncomingTransportCardsRenderer:
                 "No incoming signal selected.",
                 title="TRANSPORT DETAIL",
             )
+
+        selected_quality_observation = (
+            self._select_transport_quality_observation(
+                transport_quality_observations,
+                path_name=selected.path_name,
+                source_type=selected.transport_source_type,
+                source_id=getattr(selected, "transport_source_id", None),
+            )
+        )
 
         available = self._available
 

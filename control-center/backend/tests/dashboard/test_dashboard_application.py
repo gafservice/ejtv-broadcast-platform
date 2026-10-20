@@ -179,6 +179,7 @@ def test_run_once_builds_and_renders_dashboard() -> None:
         source_configurations=source_configurations,
         expected_incoming_origins=None,
         incoming_transport_bitrate_statistics=None,
+        transport_quality_observations=(),
     )
 
     dashboard_renderer.render.assert_called_once_with(
@@ -744,6 +745,7 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         source_configurations=source_configurations,
         expected_incoming_origins=None,
         incoming_transport_bitrate_statistics=None,
+        transport_quality_observations=(),
     )
 
     dashboard_renderer.render.assert_called_once_with(

@@ -10,6 +10,7 @@ from app.dashboard.models.incoming_panel import IncomingPanelData
 from app.noc.domain.node_snapshot import NodeSnapshot
 
 from app.domain.streaming import StreamingHealth
+from app.domain.streaming.transport_quality_observation import TransportQualityObservation
 from app.dashboard.models.network_interfaces_panel import NetworkInterfacesPanelData
 from app.dashboard.models.node_health_panel import NodeHealthPanelData
 from app.dashboard.models.platform_health_panel import PlatformHealthPanelData
@@ -105,3 +106,4 @@ class DashboardData:
     noc_snapshot: NodeSnapshot | None = None
     capacity: CapacityPanelData | None = None
     incoming: IncomingPanelData | None = None
+    transport_quality_observations: tuple[TransportQualityObservation, ...] = ()
