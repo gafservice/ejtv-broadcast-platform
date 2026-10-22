@@ -306,3 +306,60 @@ def test_run_forever_rejects_non_positive_interval() -> None:
                 interval_seconds=0,
             )
         )
+
+
+def test_run_forever_retries_after_run_once_failure(
+    monkeypatch,
+) -> None:
+    import asyncio
+
+    runtime, _, _, _ = build_runtime(
+        media_snapshots=(),
+        session_snapshots=(),
+    )
+
+    calls = []
+
+    def failing_then_cancelled_run_once(
+        *,
+        node_id,
+        instance_id,
+    ):
+        calls.append((node_id, instance_id))
+
+        if len(calls) == 1:
+            raise RuntimeError(
+                "synthetic session observation failure"
+            )
+
+        raise asyncio.CancelledError
+
+    runtime.run_once = failing_then_cancelled_run_once
+
+    sleep_calls = []
+
+    async def fake_sleep(seconds):
+        sleep_calls.append(seconds)
+
+    monkeypatch.setattr(
+        asyncio,
+        "sleep",
+        fake_sleep,
+    )
+
+    async def scenario() -> None:
+        with pytest.raises(asyncio.CancelledError):
+            await runtime.run_forever(
+                node_id=NODE_ID,
+                instance_id=INSTANCE_ID,
+                interval_seconds=5.0,
+            )
+
+    asyncio.run(scenario())
+
+    assert len(calls) == 2
+    assert calls == [
+        (NODE_ID, INSTANCE_ID),
+        (NODE_ID, INSTANCE_ID),
+    ]
+    assert sleep_calls == [5.0]

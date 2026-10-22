@@ -15,6 +15,7 @@ It does not render dashboards and does not own persistence.
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass
 
 from app.adapters.mediamtx.adapter import MediaMTXAdapter
@@ -50,6 +51,9 @@ from app.services.signal_health_transition_alarm_service import (
     SignalHealthTransitionAlarmService,
 )
 from app.services.streaming_service import StreamingService
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -378,9 +382,16 @@ class SessionObservationRuntime:
             )
 
         while True:
-            self.run_once(
-                node_id=node_id,
-                instance_id=instance_id,
-            )
+            try:
+                self.run_once(
+                    node_id=node_id,
+                    instance_id=instance_id,
+                )
+            except Exception:
+                logger.exception(
+                    "Session observation cycle failed; "
+                    "retrying in %.1f seconds",
+                    interval_seconds,
+                )
 
             await asyncio.sleep(interval_seconds)
