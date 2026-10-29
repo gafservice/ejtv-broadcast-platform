@@ -200,9 +200,12 @@ class MediaMTXAdapter:
 
         source_id = value.get("id")
 
+        if not isinstance(source_id, str) or not source_id.strip():
+            source_id = None
+
         return MediaSource(
             source_type=source_type,
-            source_id=source_id if isinstance(source_id, str) else None,
+            source_id=source_id,
         )
 
     @staticmethod
