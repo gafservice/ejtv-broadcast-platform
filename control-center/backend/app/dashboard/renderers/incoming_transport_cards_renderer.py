@@ -131,6 +131,58 @@ class IncomingTransportCardsRenderer:
         return candidate
 
     @staticmethod
+    def _select_srt_ingress_receive_metric(
+        observation: TransportQualityObservation,
+        *,
+        metric_name: str,
+        unit: str,
+    ) -> TransportMetricObservation | None:
+        """Select uniquely attributable SRT ingress receive evidence."""
+
+        if observation.source_type != "srtConn":
+            return None
+
+        if observation.availability is not EvidenceAvailability.AVAILABLE:
+            return None
+
+        if observation.source_id is None:
+            return None
+
+        matches = []
+
+        for metric in observation.metrics:
+            if metric.metric_name != metric_name:
+                continue
+
+            if metric.connection_role is not SessionRole.PUBLISHER:
+                return None
+
+            if metric.availability is not EvidenceAvailability.AVAILABLE:
+                return None
+
+            if metric.unit != unit:
+                return None
+
+            if metric.measurement_scope != "CONNECTION":
+                return None
+
+            if metric.connection_id != observation.source_id:
+                return None
+
+            if metric.value is None or metric.value < 0:
+                return None
+
+            if unit == "packets" and not float(metric.value).is_integer():
+                return None
+
+            matches.append(metric)
+
+        if len(matches) != 1:
+            return None
+
+        return matches[0]
+
+    @staticmethod
     def _available(value: object | None) -> str:
         if value is None or value == "":
             return "N/A"
@@ -272,6 +324,28 @@ class IncomingTransportCardsRenderer:
             if attributed_rtt is not None:
                 rtt_value = f"{attributed_rtt.value:.2f} ms"
 
+        packet_loss_value = "N/A"
+        reception_delay_value = "N/A"
+
+        if selected_quality_observation is not None:
+            packet_loss = self._select_srt_ingress_receive_metric(
+                selected_quality_observation,
+                metric_name="srt.connection.receive.loss_packets",
+                unit="packets",
+            )
+
+            reception_delay = self._select_srt_ingress_receive_metric(
+                selected_quality_observation,
+                metric_name="srt.connection.receive.tsbpd_delay",
+                unit="ms",
+            )
+
+            if packet_loss is not None:
+                packet_loss_value = f"{int(packet_loss.value)} packets"
+
+            if reception_delay is not None:
+                reception_delay_value = f"{reception_delay.value:.2f} ms"
+
         bitrate = (
             f"{selected.bitrate_receive_mbps:.2f} Mbps"
             if selected.bitrate_receive_mbps is not None
@@ -314,7 +388,7 @@ class IncomingTransportCardsRenderer:
                 ("Path Status", available(selected.status)),
                 ("Receive", bitrate),
                 ("Transport Health", transport_health),
-                ("Packet Loss", "N/A"),
+                ("Packet Loss", packet_loss_value),
                 ("RTT", rtt_value),
             ):
                 compact_table.add_row(label, value)
@@ -352,7 +426,7 @@ class IncomingTransportCardsRenderer:
         packet_quality = self._card(
             "PACKET QUALITY",
             (
-                ("Packet Loss", "N/A"),
+                ("Packet Loss", packet_loss_value),
                 ("Retransmissions", "N/A"),
                 ("Jitter", "N/A"),
                 ("TS Continuity", "N/A"),
@@ -365,7 +439,7 @@ class IncomingTransportCardsRenderer:
                 ("RTT", rtt_value),
                 ("SRT Latency", "N/A"),
                 ("Network One-Way", "N/A"),
-                ("Reception Delay", "N/A"),
+                ("Reception Delay", reception_delay_value),
             ),
         )
 
