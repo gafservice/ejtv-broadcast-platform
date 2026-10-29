@@ -475,6 +475,24 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
 
     assert result is dashboard_application
 
+    application_kwargs = dashboard_application_class.call_args.kwargs
+
+    acquisition = application_kwargs['metrics_acquisition_service']
+    producer = application_kwargs['transport_quality_producer']
+
+    from app.services.mediamtx_metrics_acquisition_service import (
+        MediaMTXMetricsAcquisitionService,
+    )
+    from app.services.transport_quality_producer import (
+        TransportQualityProducer,
+    )
+
+    assert isinstance(acquisition, MediaMTXMetricsAcquisitionService)
+    assert acquisition._metrics_client is metrics_client
+    assert acquisition._metrics_parser is metrics_parser
+    assert isinstance(producer, TransportQualityProducer)
+
+
     assert http_client_class.call_args_list == [
         call(
             base_url="http://127.0.0.1:9997",
@@ -632,6 +650,8 @@ def test_build_dashboard_application_composes_shared_read_dependencies() -> None
         system_service=system_service,
         metrics_client=metrics_client,
         metrics_parser=metrics_parser,
+        metrics_acquisition_service=ANY,
+        transport_quality_producer=ANY,
         streaming_health_service=streaming_health_service,
         streaming_health_aggregator=streaming_health_aggregator,
         rtmp_connection_health_service=rtmp_connection_health_service,

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from app.services.mediamtx_metrics_acquisition_service import MediaMTXMetricsAcquisitionService
+from app.services.transport_quality_producer import TransportQualityProducer
+
 from pathlib import Path
 
 from app.adapters.linux.linux_system_adapter import LinuxSystemAdapter
@@ -159,6 +162,15 @@ def build_dashboard_application() -> DashboardApplication:
     )
 
     metrics_parser = MediaMTXMetricsParser()
+
+    metrics_acquisition_service = (
+        MediaMTXMetricsAcquisitionService(
+            metrics_client,
+            metrics_parser,
+        )
+    )
+
+    transport_quality_producer = TransportQualityProducer()
     streaming_health_service = StreamingHealthService()
     streaming_health_aggregator = StreamingHealthAggregator()
     rtmp_connection_health_service = RTMPConnectionHealthService()
@@ -355,6 +367,8 @@ def build_dashboard_application() -> DashboardApplication:
         system_service=system_service,
         metrics_client=metrics_client,
         metrics_parser=metrics_parser,
+        metrics_acquisition_service=metrics_acquisition_service,
+        transport_quality_producer=transport_quality_producer,
         streaming_health_service=streaming_health_service,
         streaming_health_aggregator=streaming_health_aggregator,
         rtmp_connection_health_service=rtmp_connection_health_service,
