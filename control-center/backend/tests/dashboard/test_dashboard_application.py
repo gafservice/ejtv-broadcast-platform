@@ -180,6 +180,7 @@ def test_run_once_builds_and_renders_dashboard() -> None:
         expected_incoming_origins=None,
         incoming_transport_bitrate_statistics=None,
         transport_quality_observations=(),
+        incoming_path_stability={},
     )
 
     dashboard_renderer.render.assert_called_once_with(
@@ -746,6 +747,7 @@ def test_run_once_builds_streaming_health_when_configured() -> None:
         expected_incoming_origins=None,
         incoming_transport_bitrate_statistics=None,
         transport_quality_observations=(),
+        incoming_path_stability={},
     )
 
     dashboard_renderer.render.assert_called_once_with(

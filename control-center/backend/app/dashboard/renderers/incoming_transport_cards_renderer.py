@@ -514,8 +514,8 @@ class IncomingTransportCardsRenderer:
                         reference_at=data.reference_at,
                     ),
                 ),
-                ("Reconnections", "N/A"),
-                ("Interruptions", "N/A"),
+                ("Observed Recoveries", (str(getattr(selected, 'transport_observed_recoveries')) if getattr(selected, 'transport_observed_recoveries', None) is not None else "N/A")),
+                ("Interruptions", (str(getattr(selected, 'transport_observed_interruptions')) if getattr(selected, 'transport_observed_interruptions', None) is not None else "N/A")),
                 ("Availability", self._format_availability(selected.transport_available)),
             ),
         )

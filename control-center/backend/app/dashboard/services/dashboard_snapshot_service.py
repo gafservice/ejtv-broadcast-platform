@@ -20,6 +20,7 @@ from app.dashboard.models import (
 from app.dashboard.models.panel_viewport import PanelViewport
 from app.dashboard.services.dashboard_service import DashboardService
 from app.dashboard.services.incoming_transport_bitrate_window import IncomingTransportBitrateStatistics
+from app.dashboard.services.incoming_path_stability_tracker import IncomingPathStability
 from app.domain.sessions import SessionSnapshot
 from app.domain.sessions.measurement import SessionMeasurement
 from app.domain.streaming import (
@@ -77,6 +78,7 @@ class DashboardSnapshotInput:
     expected_incoming_origins: dict[str, str] | None = None
     incoming_transport_bitrate_statistics: dict[str, IncomingTransportBitrateStatistics] | None = None
     transport_quality_observations: tuple[TransportQualityObservation, ...] = ()
+    incoming_path_stability: dict[str, IncomingPathStability] | None = None
 
 
 class DashboardSnapshotService:
@@ -173,5 +175,8 @@ class DashboardSnapshotService:
             ),
             transport_quality_observations=(
                 snapshot_input.transport_quality_observations
+            ),
+            incoming_path_stability=(
+                snapshot_input.incoming_path_stability
             ),
         )

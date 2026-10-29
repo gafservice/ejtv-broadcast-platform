@@ -345,6 +345,19 @@ def test_failure_after_snapshot_build_does_not_commit_window():
         snapshot_service,
     )
 
+    committed_tracker = application._incoming_path_stability_tracker
+
+    baseline = committed_tracker.observe(
+        path_name="impact",
+        available=False,
+    )
+
+    assert baseline.interruptions == 0
+    assert baseline.recoveries == 0
+
+    # The application's current available=True observation
+    # creates a candidate recovery.
+
     application.reconcile_incoming_selection = Mock(
         side_effect=RuntimeError("controlled late failure")
     )
@@ -361,3 +374,17 @@ def test_failure_after_snapshot_build_does_not_commit_window():
     ).average_mbps == 4.0
 
     assert application._previous_snapshot is None
+
+    # A late failure must not commit the candidate recovery.
+    assert (
+        application._incoming_path_stability_tracker
+        is committed_tracker
+    )
+
+    committed_state = committed_tracker.observe(
+        path_name="impact",
+        available=False,
+    )
+
+    assert committed_state.interruptions == 0
+    assert committed_state.recoveries == 0

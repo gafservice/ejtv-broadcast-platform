@@ -114,7 +114,7 @@ def test_transport_unavailable_metrics_are_explicit():
         "Jitter",
         "RTT",
         "SRT Latency",
-        "Reconnections",
+        "Observed Recoveries",
         "Availability",
     ):
         assert label in screen
@@ -168,3 +168,56 @@ def test_transport_requires_valid_selection(selected_path_name):
     assert "No incoming signal selected." in screen
     assert "10.0.18.51:3000" not in screen
     assert "192.0.2.30:8050" not in screen
+
+
+def test_stability_renders_observed_counter_values():
+    original_data = make_data()
+
+    rows = tuple(
+        replace(
+            row,
+            transport_observed_interruptions=2,
+            transport_observed_recoveries=1,
+        )
+        if row.path_name == "ejtv"
+        else row
+        for row in original_data.rows
+    )
+
+    data = replace(original_data, rows=rows)
+
+    _, screen = render_transport(data, "ejtv")
+
+    assert "STABILITY" in screen
+    assert "Observed Recoveries" in screen
+    assert "Interruptions" in screen
+
+    import re
+
+    assert re.search(
+        r"Observed Recoveries\s+1(?:\s|$)",
+        screen,
+    )
+
+    assert re.search(
+        r"Interruptions\s+2(?:\s|$)",
+        screen,
+    )
+
+
+def test_stability_renders_unknown_counters_as_na():
+    data = make_data()
+
+    _, screen = render_transport(data, "ejtv")
+
+    import re
+
+    assert re.search(
+        r"Observed Recoveries\s+N/A",
+        screen,
+    )
+
+    assert re.search(
+        r"Interruptions\s+N/A",
+        screen,
+    )

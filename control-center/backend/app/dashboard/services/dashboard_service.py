@@ -7,6 +7,9 @@ from app.dashboard.models.incoming_panel import IncomingPanelData, IncomingRowDa
 from app.dashboard.services.incoming_transport_bitrate_window import (
     IncomingTransportBitrateStatistics,
 )
+from app.dashboard.services.incoming_path_stability_tracker import (
+    IncomingPathStability,
+)
 from app.noc.current_state.signal_health_current_state import (
     SignalHealthCurrentState,
 )
@@ -90,6 +93,7 @@ class DashboardService:
         ] = (),
         alarms: tuple[AlarmRecord, ...] = (),
         incoming_transport_bitrate_statistics: dict[str, IncomingTransportBitrateStatistics] | None = None,
+        incoming_path_stability: dict[str, IncomingPathStability] | None = None,
     ) -> IncomingPanelData:
         """Project canonical incoming-path evidence for presentation."""
 
@@ -348,6 +352,18 @@ class DashboardService:
                     ),
                     transport_ready=media_path.ready,
                     transport_available=media_path.available,
+                    transport_observed_interruptions=(
+                        incoming_path_stability[media_path.name].interruptions
+                        if incoming_path_stability is not None
+                        and media_path.name in incoming_path_stability
+                        else None
+                    ),
+                    transport_observed_recoveries=(
+                        incoming_path_stability[media_path.name].recoveries
+                        if incoming_path_stability is not None
+                        and media_path.name in incoming_path_stability
+                        else None
+                    ),
                     transport_online=media_path.online,
                     transport_available_since=media_path.available_time,
                     transport_online_since=media_path.online_time,
@@ -1382,6 +1398,7 @@ class DashboardService:
         source_configurations: dict[str, str] | None = None,
         expected_incoming_origins: dict[str, str] | None = None,
         incoming_transport_bitrate_statistics: dict[str, IncomingTransportBitrateStatistics] | None = None,
+        incoming_path_stability: dict[str, IncomingPathStability] | None = None,
         transport_quality_observations: tuple[TransportQualityObservation, ...] = (),
     ) -> DashboardData:
         """Construye el dashboard completo desde snapshot y medición."""
@@ -1462,6 +1479,7 @@ class DashboardService:
                 source_configurations=source_configurations,
                 expected_incoming_origins=expected_incoming_origins,
                 incoming_transport_bitrate_statistics=incoming_transport_bitrate_statistics,
+                incoming_path_stability=incoming_path_stability,
             )
             if session_snapshot is not None
             else None

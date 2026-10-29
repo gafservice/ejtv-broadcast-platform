@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from app.dashboard.services.incoming_path_stability_tracker import (
+    IncomingPathStabilityTracker,
+)
+
 from copy import deepcopy
 from contextlib import ExitStack
 from datetime import datetime
@@ -354,6 +358,10 @@ class DashboardApplication:
             else IncomingTransportBitrateWindow(window_seconds=60)
         )
 
+        self._incoming_path_stability_tracker = (
+            IncomingPathStabilityTracker()
+        )
+
         self._previous_snapshot: MediaMTXSnapshot | None = None
         self._previous_session_snapshot: SessionSnapshot | None = None
         self._previous_system_resources: SystemResources | None = None
@@ -593,6 +601,10 @@ class DashboardApplication:
             snapshot,
         )
 
+        stability_candidate = deepcopy(
+            self._incoming_path_stability_tracker
+        )
+
         # Build a transaction candidate without mutating committed history.
         incoming_window_candidate = deepcopy(
             self._incoming_transport_bitrate_window
@@ -607,6 +619,15 @@ class DashboardApplication:
         incoming_window_candidate.reconcile_paths(
             tuple(path.name for path in incoming_paths)
         )
+
+        incoming_path_stability = {}
+        for path in incoming_paths:
+            incoming_path_stability[path.name] = (
+                stability_candidate.observe(
+                    path_name=path.name,
+                    available=path.available,
+                )
+            )
 
         previous_paths = (
             {
@@ -973,6 +994,10 @@ class DashboardApplication:
             'transport_quality_observations'
         ] = transport_quality_observations
 
+        snapshot_kwargs[
+            'incoming_path_stability'
+        ] = incoming_path_stability
+
         snapshot_input = DashboardSnapshotInput(**snapshot_kwargs)
 
         dashboard_data = self._dashboard_snapshot_service.build_snapshot(
@@ -1040,6 +1065,10 @@ class DashboardApplication:
 
         self._incoming_transport_bitrate_window = (
             incoming_window_candidate
+        )
+
+        self._incoming_path_stability_tracker = (
+            stability_candidate
         )
 
         return dashboard_data
