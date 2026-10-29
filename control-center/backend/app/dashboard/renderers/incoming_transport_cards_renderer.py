@@ -207,6 +207,62 @@ class IncomingTransportCardsRenderer:
         return "YES" if value else "NO"
 
     @staticmethod
+    def _format_path_availability_duration(
+        *,
+        available,
+        available_since,
+        reference_at,
+    ) -> str:
+        """Duration of reported path availability, not media continuity."""
+
+        if available is not True:
+            return "N/A"
+
+        if available_since is None or reference_at is None:
+            return "N/A"
+
+        for value in (available_since, reference_at):
+            if (
+                not hasattr(value, "utcoffset")
+                or not hasattr(value, "tzinfo")
+                or value.tzinfo is None
+                or value.utcoffset() is None
+            ):
+                return "N/A"
+
+        try:
+            seconds = (
+                reference_at - available_since
+            ).total_seconds()
+        except (TypeError, OverflowError):
+            return "N/A"
+
+        if seconds < 0:
+            return "N/A"
+
+        total = int(seconds)
+
+        days, remainder = divmod(total, 86400)
+        hours, remainder = divmod(remainder, 3600)
+        minutes, seconds = divmod(remainder, 60)
+
+        parts = []
+
+        if days:
+            parts.append(f"{days}d")
+
+        if hours:
+            parts.append(f"{hours}h")
+
+        if minutes:
+            parts.append(f"{minutes}m")
+
+        if seconds or not parts:
+            parts.append(f"{seconds}s")
+
+        return " ".join(parts)
+
+    @staticmethod
     def _format_observed_at(value) -> str:
         if value is None:
             return "N/A"
@@ -446,7 +502,18 @@ class IncomingTransportCardsRenderer:
         stability = self._card(
             "STABILITY",
             (
-                ("Uptime", "N/A"),
+                (
+                    "Path Available For",
+                    self._format_path_availability_duration(
+                        available=selected.transport_available,
+                        available_since=getattr(
+                            selected,
+                            "transport_available_since",
+                            None,
+                        ),
+                        reference_at=data.reference_at,
+                    ),
+                ),
                 ("Reconnections", "N/A"),
                 ("Interruptions", "N/A"),
                 ("Availability", self._format_availability(selected.transport_available)),
