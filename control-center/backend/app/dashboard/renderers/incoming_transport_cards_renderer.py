@@ -262,6 +262,16 @@ class IncomingTransportCardsRenderer:
 
         available = self._available
 
+        rtt_value = "N/A"
+
+        if selected_quality_observation is not None:
+            attributed_rtt = self._select_srt_ingress_rtt_attributed(
+                selected_quality_observation
+            )
+
+            if attributed_rtt is not None:
+                rtt_value = f"{attributed_rtt.value:.2f} ms"
+
         bitrate = (
             f"{selected.bitrate_receive_mbps:.2f} Mbps"
             if selected.bitrate_receive_mbps is not None
@@ -305,7 +315,7 @@ class IncomingTransportCardsRenderer:
                 ("Receive", bitrate),
                 ("Transport Health", transport_health),
                 ("Packet Loss", "N/A"),
-                ("RTT", "N/A"),
+                ("RTT", rtt_value),
             ):
                 compact_table.add_row(label, value)
 
@@ -352,7 +362,7 @@ class IncomingTransportCardsRenderer:
         latency = self._card(
             "LATENCY",
             (
-                ("RTT", "N/A"),
+                ("RTT", rtt_value),
                 ("SRT Latency", "N/A"),
                 ("Network One-Way", "N/A"),
                 ("Reception Delay", "N/A"),
