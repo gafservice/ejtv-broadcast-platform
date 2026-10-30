@@ -211,3 +211,62 @@ def test_missing_source_identity_remains_na():
         "Reception Delay",
         "N/A",
     )
+
+
+@pytest.mark.parametrize(
+    "role,connection_id,source_id,expected",
+    [
+        (SessionRole.PUBLISHER, SOURCE_ID, SOURCE_ID, "12 packets"),
+        (SessionRole.READER, SOURCE_ID, SOURCE_ID, "N/A"),
+        (SessionRole.UNKNOWN, SOURCE_ID, SOURCE_ID, "N/A"),
+        (SessionRole.PUBLISHER, "other-connection", SOURCE_ID, "N/A"),
+        (SessionRole.PUBLISHER, SOURCE_ID, None, "N/A"),
+    ],
+)
+def test_retransmissions_rendered_text_contract(
+    role,
+    connection_id,
+    source_id,
+    expected,
+):
+    """Only attributable ingress retransmissions reach PACKET QUALITY."""
+
+    observation = TransportQualityObservation(
+        service_id="impact",
+        path_name="impact",
+        source_type="srtConn",
+        source_id=source_id,
+        observed_at=OBSERVED_AT,
+        availability=EvidenceAvailability.AVAILABLE,
+        metrics=(
+            make_metric(
+                "srt.connection.receive.retransmitted_packets",
+                12,
+                "packets",
+                role=role,
+                connection_id=connection_id,
+            ),
+        ),
+    )
+
+    output = render_text(observation)
+
+    assert_field(output, "Retransmissions", expected)
+
+
+def test_retransmissions_missing_metric_remains_na():
+    """Missing retransmission evidence must not become zero."""
+
+    observation = TransportQualityObservation(
+        service_id="impact",
+        path_name="impact",
+        source_type="srtConn",
+        source_id=SOURCE_ID,
+        observed_at=OBSERVED_AT,
+        availability=EvidenceAvailability.UNAVAILABLE,
+        metrics=(),
+    )
+
+    output = render_text(observation)
+
+    assert_field(output, "Retransmissions", "N/A")

@@ -97,6 +97,11 @@ class TransportQualityProducer:
                 "srt.connection.receive.tsbpd_delay",
                 "ms",
             ),
+            (
+                "srt_conns_packets_received_retrans",
+                "srt.connection.receive.retransmitted_packets",
+                "packets",
+            ),
         )
 
         for family, metric_name, unit in receive_families:
@@ -118,7 +123,10 @@ class TransportQualityProducer:
                     continue
 
                 if (
-                    family == "srt_conns_packets_received_loss"
+                    family in (
+                        "srt_conns_packets_received_loss",
+                        "srt_conns_packets_received_retrans",
+                    )
                     and not sample.value.is_integer()
                 ):
                     continue

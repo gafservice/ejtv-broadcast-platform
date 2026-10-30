@@ -381,6 +381,7 @@ class IncomingTransportCardsRenderer:
                 rtt_value = f"{attributed_rtt.value:.2f} ms"
 
         packet_loss_value = "N/A"
+        retransmissions_value = "N/A"
         reception_delay_value = "N/A"
 
         if selected_quality_observation is not None:
@@ -396,8 +397,19 @@ class IncomingTransportCardsRenderer:
                 unit="ms",
             )
 
+            retransmissions = self._select_srt_ingress_receive_metric(
+                selected_quality_observation,
+                metric_name="srt.connection.receive.retransmitted_packets",
+                unit="packets",
+            )
+
             if packet_loss is not None:
                 packet_loss_value = f"{int(packet_loss.value)} packets"
+
+            if retransmissions is not None:
+                retransmissions_value = (
+                    f"{int(retransmissions.value)} packets"
+                )
 
             if reception_delay is not None:
                 reception_delay_value = f"{reception_delay.value:.2f} ms"
@@ -483,7 +495,7 @@ class IncomingTransportCardsRenderer:
             "PACKET QUALITY",
             (
                 ("Packet Loss", packet_loss_value),
-                ("Retransmissions", "N/A"),
+                ("Retransmissions", retransmissions_value),
                 ("Jitter", "N/A"),
                 ("TS Continuity", "N/A"),
             ),
