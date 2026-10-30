@@ -1,0 +1,15 @@
+\section{4. Señales y casos operacionales}
+\begin{tabularx}{\textwidth}{|L{0.24\textwidth}|L{0.32\textwidth}|Y|}\hline
+\rowcolor{Navy}\THead{Elemento} & \THead{Función actual} & \THead{Relevancia} \\ \hline
+ENLACE & Señal principal de la plataforma & Representa el alcance corporativo de EBP. \\ \hline
+\rowgray EJTV & Señal principal y origen de la necesidad inicial & Constituye el primer caso de uso que motivó el proyecto. \\ \hline
+Cable Centro - Zona Sur & Primer Reader/receptor real & Demuestra distribución hacia un receptor externo. \\ \hline
+\rowgray IMPACT & Fuente/cliente de prueba y diagnóstico & Permite validar transporte y comportamiento de una señal real. \\ \hline
+Otros proveedores & Fuentes potenciales adicionales & La arquitectura permite incorporar nuevas señales y destinos. \\ \hline
+\end{tabularx}
+
+\subsection{Cable Centro}
+La incorporación de Cable Centro como primer Reader real constituye un hito operacional: permite demostrar la transición desde una señal disponible dentro del servidor hacia una distribución efectiva a un receptor externo ubicado en la Zona Sur del país.
+
+\subsection{IMPACT}
+IMPACT se utiliza para validación y diagnóstico. Sobre esta señal se han realizado mediciones de SRT, bitrate, H.264, MPEG-TS, GOP y comportamiento HLS. La prueba controlada CBR OFF a CBR ON permanece pendiente de coordinación con el cliente; el estado de referencia previo al cambio ya fue documentado.

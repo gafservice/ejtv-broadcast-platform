@@ -1,0 +1,13 @@
+\section{8. Identificación de conexiones y Readers}
+Como parte de las capacidades ya implementadas, EBP permite conocer quién se conecta al servidor, mediante qué mecanismo se establece la sesión y desde dónde se origina la conexión según la evidencia disponible. Esta información complementa la supervisión de Readers y sesiones y aporta trazabilidad operacional sobre el consumo de las señales.
+
+\begin{tabularx}{\textwidth}{|L{0.34\textwidth}|Y|}\hline
+\rowcolor{Navy}\THead{Información disponible} & \THead{Utilidad operacional} \\ \hline
+Reader o sesión conectada & Identificar qué receptor o cliente mantiene una sesión con la plataforma. \\ \hline
+\rowgray Señal asociada & Relacionar la conexión con el contenido o path que está siendo consumido. \\ \hline
+Protocolo utilizado & Conocer el mecanismo de transporte o entrega utilizado por la conexión. \\ \hline
+\rowgray Origen de la conexión & Observar la dirección de origen y demás datos disponibles para ubicar técnicamente desde dónde se establece la sesión. \\ \hline
+Estado y tráfico & Relacionar la conexión con su actividad, Health y movimiento de datos disponibles en el sistema. \\ \hline
+\end{tabularx}
+
+Esta capacidad permite que la plataforma no se limite a distribuir contenido, sino que conserve información operacional sobre sus consumidores y facilite la investigación de conexiones, incidencias y comportamiento de los Readers.

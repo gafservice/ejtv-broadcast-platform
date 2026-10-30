@@ -1,0 +1,12 @@
+\section{7. Usuarios y formas de acceso al NOC}
+La supervisión de EBP no está concebida únicamente como un proceso interno del servidor. El NOC contempla interfaces de acceso para que los usuarios autorizados puedan consultar y administrar la información operacional de acuerdo con su función y nivel técnico.
+
+\begin{tabularx}{\textwidth}{|L{0.20\textwidth}|L{0.27\textwidth}|Y|}\hline
+\rowcolor{Navy}\THead{Interfaz} & \THead{Usuarios previstos} & \THead{Función dentro de la operación} \\ \hline
+NOC Terminal & Ingeniería y administradores técnicos & Interfaz de supervisión técnica detallada. Permite observar el estado del servidor, señales, Readers, eventos, alarmas, Health y demás evidencia operacional desde el entorno de terminal. \\ \hline
+\rowgray NOC Web & Operadores, administradores y usuarios autorizados & Interfaz visual mediante navegador orientada a facilitar la consulta y supervisión de EBP sin requerir acceso directo a la terminal del servidor. Su alcance continuará evolucionando conforme avance la interfaz web. \\ \hline
+\end{tabularx}
+
+Esta separación permite mantener una herramienta técnica de alta profundidad para Ingeniería y, paralelamente, desarrollar una interfaz web más accesible para la operación cotidiana y otros perfiles autorizados.
+
+\begin{callout}EBP $\rightarrow$ NOC $\rightarrow$ NOC Terminal / NOC Web $\rightarrow$ usuarios autorizados\end{callout}

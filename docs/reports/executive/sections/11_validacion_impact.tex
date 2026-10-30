@@ -1,0 +1,16 @@
+\section{11. Caso de validación técnica: IMPACT}
+IMPACT ha permitido validar el comportamiento de EBP con una señal real y conservar evidencia previa a cambios en el encoder del cliente. El estado de referencia CBR OFF presenta los siguientes resultados:
+
+\begin{tabularx}{\textwidth}{|L{0.44\textwidth}|Y|}\hline
+\rowcolor{Navy}\THead{Indicador} & \THead{Resultado observado} \\ \hline
+Video & H.264 Main Level 4 - 1920x1080 - aproximadamente 30 fps \\ \hline
+\rowgray GOP & 60 frames - aproximadamente 2 segundos \\ \hline
+Estructura I/P/B & I + 59P + 0B \\ \hline
+\rowgray Bitrate medio de entrada & 6.192816 Mbps \\ \hline
+Rango de bitrate & 5.933749 - 6.390533 Mbps \\ \hline
+\rowgray Errores FFmpeg de timestamp/paquete & 0 observados \\ \hline
+Captura pasiva SRT & 27.593 paquetes; 0 descartes del kernel \\ \hline
+\rowgray Observación HLS & Variación de part duration entre 200 y 234 ms \\ \hline
+\end{tabularx}
+
+La evidencia disponible muestra un GOP estable, mientras que se observa variación temporal del bitrate y una oscilación en la duración de partes HLS. La causa raíz de esta última observación aún no se considera demostrada. La comparación CBR OFF/ON se mantiene como prueba pendiente para aislar esa variable.

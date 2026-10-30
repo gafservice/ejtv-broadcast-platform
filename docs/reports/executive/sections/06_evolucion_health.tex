@@ -1,0 +1,19 @@
+\section{6. Evolución prevista de los sistemas de Health y análisis de señales}
+Como complemento de los sistemas de Health ya implementados para la infraestructura, los protocolos, las sesiones y los Readers, se tiene previsto ampliar el análisis hacia el contenido audiovisual de las señales entrantes. El objetivo es que EBP pueda evaluar no solamente si existe una conexión o si circulan datos, sino también si la señal recibida conserva las condiciones audiovisuales necesarias para su operación.
+
+\begin{tabularx}{\textwidth}{|L{0.34\textwidth}|Y|}\hline
+\rowcolor{Navy}\THead{Análisis previsto} & \THead{Condición que se busca detectar} \\ \hline
+Presencia de video & Determinar si la señal entrante contiene video utilizable o si el componente de video ha desaparecido. \\ \hline
+\rowgray Presencia de audio & Determinar si existe audio y detectar una eventual pérdida de este componente. \\ \hline
+Congelamiento de imagen & Identificar una señal que continúa conectada pero cuya imagen permanece congelada. \\ \hline
+\rowgray Pantalla negra & Detectar condiciones en las que el flujo continúa presente, pero el contenido de video se encuentra en negro. \\ \hline
+Continuidad audiovisual & Relacionar el estado del transporte con la continuidad efectiva del audio y del video. \\ \hline
+\rowgray Condiciones de red & Incorporar evidencia de red para reconocer degradaciones que puedan afectar la recepción o distribución de la señal. \\ \hline
+Localización de la incidencia & Correlacionar la evidencia disponible para ayudar a determinar si una falla se origina en la infraestructura de EBP, en la red, en la fuente o en el extremo del cliente. \\ \hline
+\end{tabularx}
+
+Esta evolución busca reducir la diferencia entre una conexión técnicamente activa y una señal realmente saludable. Por ejemplo, una sesión podría continuar conectada y transmitiendo datos mientras el video está congelado, el audio ha desaparecido o la imagen permanece en negro. El análisis de contenido permitiría que estas condiciones formen parte de la supervisión operacional.
+
+La identificación del origen de una incidencia se plantea mediante correlación de evidencia y no únicamente mediante el estado de una conexión. Esto permitirá disponer de más elementos para distinguir problemas internos de EBP, condiciones de red y situaciones asociadas a la fuente o al receptor del cliente.
+
+\begin{callout}La evolución del Health apunta a responder dos preguntas operacionales: ¿la señal está técnicamente conectada? y ¿el contenido de audio y video está realmente en condiciones correctas?\end{callout}

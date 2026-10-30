@@ -1,0 +1,17 @@
+\section{5. Supervisión operacional mediante el NOC}
+La distribución de contenido requiere una capa de supervisión que permita conocer el estado de la infraestructura y de las sesiones. El NOC desarrollado como parte de EBP cumple esa función y proporciona una vista operacional centralizada.
+
+\begin{tabularx}{\textwidth}{|L{0.34\textwidth}|Y|}\hline
+\rowcolor{Navy}\THead{Área supervisada} & \THead{Información disponible} \\ \hline
+Infraestructura & Estado del servidor, CPU, memoria, disco e interfaces de red. \\ \hline
+\rowgray Señales & Disponibilidad de los flujos y paths administrados por MediaMTX. \\ \hline
+Sesiones y Readers & Conexiones activas, señal asociada y protocolo utilizado. \\ \hline
+\rowgray Tráfico & Movimiento de datos y mediciones temporales disponibles. \\ \hline
+Health & Estados HEALTHY, DEGRADED, CRITICAL o UNKNOWN según evidencia modelada. \\ \hline
+\rowgray Eventos y alarmas & Cambios operacionales y condiciones que requieren atención. \\ \hline
+Historia & Persistencia de evidencia para consulta y análisis posterior. \\ \hline
+\end{tabularx}
+
+Se ha implementado especialización de Health para SRT, RTMP, RTSP, HLS y WebRTC. La integración WebRTC alcanza la visualización en Connected Clients. Durante el cierre de esta etapa, la regresión completa del backend alcanzó 3.394 pruebas superadas.
+
+\begin{callout}El NOC constituye la capa de supervisión de EBP. Su función es aportar evidencia sobre el estado de la plataforma y facilitar la identificación del punto donde se presenta una incidencia.\end{callout}

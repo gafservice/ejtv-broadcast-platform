@@ -1,0 +1,56 @@
+\documentclass[10pt,letterpaper]{article}
+\usepackage[margin=0.72in,top=0.70in,bottom=0.65in]{geometry}
+\usepackage{fontspec}
+\setmainfont{DejaVu Sans}
+\usepackage[spanish,es-nodecimaldot]{babel}
+\usepackage{xcolor}
+\usepackage{colortbl}
+\usepackage{array,tabularx,longtable,booktabs}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\usepackage{titlesec}
+\usepackage{tcolorbox}
+\usepackage{microtype}
+\usepackage{ragged2e}
+\usepackage{hyperref}
+\hypersetup{hidelinks}
+
+\definecolor{Navy}{HTML}{163A5F}
+\definecolor{Blue}{HTML}{2B6D9C}
+\definecolor{Sky}{HTML}{DDEEF8}
+\definecolor{Pale}{HTML}{F5F7F9}
+\definecolor{Green}{HTML}{E5F2E2}
+\definecolor{Gray}{HTML}{5C6670}
+\definecolor{Dark}{HTML}{20262D}
+\definecolor{Line}{HTML}{B9C5CF}
+
+\color{Dark}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4.5pt}
+\renewcommand{\arraystretch}{1.22}
+
+\titleformat{\section}{\color{Navy}\bfseries\fontsize{15}{18}\selectfont}{}{0pt}{}
+\titlespacing*{\section}{0pt}{9pt}{6pt}
+\titleformat{\subsection}{\color{Blue}\bfseries\fontsize{11}{13}\selectfont}{}{0pt}{}
+\titlespacing*{\subsection}{0pt}{5pt}{3pt}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[R]{\footnotesize\color{Gray}Enlace Broadcast Platform (EBP) \;|\; Informe Ejecutivo de Avance}
+\fancyfoot[L]{\scriptsize\color{Gray}17 de septiembre de 2026}
+\fancyfoot[R]{\scriptsize\color{Gray}Página \thepage}
+\renewcommand{\headrulewidth}{0.3pt}
+\renewcommand{\footrulewidth}{0.3pt}
+\setlength{\headheight}{14pt}
+
+\newtcolorbox{callout}{
+colback=Green,colframe=Blue,boxrule=0.6pt,arc=0pt,
+left=7pt,right=7pt,top=6pt,bottom=6pt,
+fontupper=\bfseries\color{Navy}
+}
+
+\newcommand{\THead}[1]{\textbf{\color{white}#1}}
+\newcommand{\rowgray}{\rowcolor{Pale}}
+\newcolumntype{Y}{>{\RaggedRight\arraybackslash}X}
+\newcolumntype{L}[1]{>{\RaggedRight\arraybackslash}p{#1}}
